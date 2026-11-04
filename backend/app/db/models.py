@@ -440,3 +440,89 @@ class Classification(Base):
     unverified_acknowledged: Mapped[bool] = mapped_column(Boolean, default=False)
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     superseded_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+
+
+# ---------- Набор мер объекта ----------
+
+
+class Adaptation(Base):
+    """Версия адаптации набора мер объекта: черновик → утверждена → заменена.
+
+    Последняя версия объекта — текущая. Пересборка базового набора или правка
+    адаптации после утверждения открывает новую версию-черновик; утверждённая
+    остаётся в истории со снимком набора на момент утверждения.
+    """
+
+    __tablename__ = "adaptations"
+    __table_args__ = (Index("ux_adaptations_version", "object_id", "version", unique=True),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    object_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("objects.id", ondelete="CASCADE"))
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    version: Mapped[int] = mapped_column(Integer)
+    # По какой утверждённой классификации собран базовый набор.
+    classification_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("classifications.id", ondelete="SET NULL")
+    )
+    profile_id: Mapped[str] = mapped_column(String(64))
+    level: Mapped[str] = mapped_column(String(16))
+    level_label: Mapped[str] = mapped_column(String(200))
+    # draft | approved | superseded
+    status: Mapped[str] = mapped_column(String(16), default="draft")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    created_by_name: Mapped[str | None] = mapped_column(String(200))
+    # Кто менял адаптацию в этой версии (id строками): им утверждать нельзя.
+    editors: Mapped[list] = mapped_column(JsonType, default=list)
+    edits: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    approved_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    approved_by_name: Mapped[str | None] = mapped_column(String(200))
+    approval_comment: Mapped[str | None] = mapped_column(String(2000))
+    # Утверждающий подтвердил, что состав мер не сверен методистом.
+    unverified_acknowledged: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Снимок адаптации на момент утверждения:
+    # [{measure_id, origin, adaptation, reason, compensating}].
+    snapshot: Mapped[list | None] = mapped_column(JsonType)
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ObjectMeasure(Base):
+    """Мера в наборе объекта: из базового набора или добавленная при адаптации."""
+
+    __tablename__ = "object_measures"
+    __table_args__ = (
+        Index("ux_object_measures_measure", "object_id", "profile_id", "measure_id", unique=True),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    object_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("objects.id", ondelete="CASCADE"))
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    profile_id: Mapped[str] = mapped_column(String(64))
+    measure_id: Mapped[str] = mapped_column(String(32))
+    # Копия из справочника на момент включения — если меру потом уберут из справочника.
+    group_code: Mapped[str] = mapped_column(String(16))
+    title: Mapped[str] = mapped_column(String(500))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    # baseline — из базового набора по классу; added — дополнение при адаптации.
+    origin: Mapped[str] = mapped_column(String(16))
+    # none | excluded | compensated
+    adaptation: Mapped[str] = mapped_column(String(16), default="none")
+    # Обоснование исключения, компенсации или дополнения.
+    adaptation_reason: Mapped[str | None] = mapped_column(String(4000))
+    compensating_ids: Mapped[list] = mapped_column(JsonType, default=list)
+    # implemented | partial | not_implemented | not_applicable | unassessed
+    status: Mapped[str] = mapped_column(String(16), default="unassessed")
+    # auto — есть проверки «Сканера»; manual — организационная; mixed — оба способа.
+    method: Mapped[str] = mapped_column(String(8))
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    comment: Mapped[str | None] = mapped_column(String(4000))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    adapted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    adapted_by_name: Mapped[str | None] = mapped_column(String(200))
+    status_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status_by_name: Mapped[str | None] = mapped_column(String(200))

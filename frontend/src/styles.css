@@ -1680,3 +1680,211 @@ fieldset.field {
   background: var(--warn-soft);
   color: var(--text);
 }
+
+/* ---------- Набор мер объекта ---------- */
+
+.measure-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s3);
+}
+
+.measure-kpi {
+  gap: 6px;
+}
+
+.measure-kpi .actions {
+  margin-top: auto;
+  padding-top: var(--s1);
+}
+
+.measure-kpi-main .kpi-value {
+  color: var(--accent-text);
+}
+
+/* Полоса реализации: реализовано · частично · не реализовано · не оценено. */
+.impl-bar {
+  display: flex;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-xs);
+  background: var(--surface-3);
+}
+
+.impl-bar > span {
+  height: 100%;
+}
+
+.impl-bar-implemented {
+  background: var(--ok);
+}
+
+.impl-bar-partial {
+  background: var(--sev-medium);
+}
+
+.impl-bar-not_implemented {
+  background: var(--sev-critical);
+}
+
+.impl-bar-unassessed {
+  background: var(--border-strong);
+}
+
+.search-field {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 220px;
+}
+
+.search-field svg {
+  position: absolute;
+  left: 10px;
+  color: var(--text-3);
+  pointer-events: none;
+}
+
+.search-field .input {
+  padding-left: 30px;
+}
+
+.toolbar-end {
+  margin-left: auto;
+}
+
+.measures-table td:nth-child(2) {
+  min-width: 280px;
+}
+
+.measure-note {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.measure-toolbar .toolbar-select {
+  max-width: 340px;
+}
+
+.table tr.row-excluded .measure-title {
+  color: var(--text-3);
+  text-decoration: line-through;
+  text-decoration-color: var(--border-strong);
+}
+
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.seg-btn {
+  height: 30px;
+  padding: 0 var(--s2);
+  border: 0;
+  border-right: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.seg-btn:last-child {
+  border-right: 0;
+}
+
+.seg-btn[aria-checked="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 500;
+}
+
+.drawer-form {
+  width: 100%;
+}
+
+.drawer-form .field .chips {
+  margin-bottom: 6px;
+}
+
+.pick-list {
+  display: flex;
+  max-height: 280px;
+  flex-direction: column;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.pick-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s1);
+  padding: 8px var(--s2);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.pick-item:last-child {
+  border-bottom: 0;
+}
+
+.pick-item:hover {
+  background: var(--surface-2);
+}
+
+.pick-item.picked {
+  background: var(--accent-soft);
+}
+
+.pick-item input {
+  flex: none;
+}
+
+.plan-list h3 {
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.plan-list ul {
+  display: flex;
+  max-height: 180px;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  font-size: 13px;
+}
+
+.plan-list .pill {
+  margin-left: 6px;
+}
+
+@media (max-width: 1200px) {
+  .measure-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .measure-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .search-field {
+    width: 100%;
+  }
+
+  .toolbar-end {
+    margin-left: 0;
+  }
+
+}
