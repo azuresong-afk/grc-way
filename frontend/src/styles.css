@@ -2559,3 +2559,7 @@ fieldset.field {
     width: 100%;
   }
 }
+
+.drawer-form .textarea {
+  width: 100%;
+}
