@@ -6,6 +6,7 @@ import {
   Menu,
   ScrollText,
   Search,
+  Server,
   ShieldCheck,
   Users,
 } from "lucide-react";
@@ -28,6 +29,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { to: "/summary", label: "Сводка", icon: <LayoutDashboard size={18} /> },
   { to: "/projects", label: "Проекты", icon: <FolderKanban size={18} />, perm: "view" },
+  { to: "/objects", label: "Объекты", icon: <Server size={18} />, perm: "view" },
   { to: "/refs", label: "Справочники", icon: <BookOpen size={18} /> },
 ];
 

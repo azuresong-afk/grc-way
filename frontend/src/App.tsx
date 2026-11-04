@@ -4,9 +4,12 @@ import { RequireAuth, RequirePerm } from "./lib/auth";
 import { ProjectProvider } from "./lib/project";
 import { AuditPage } from "./pages/AuditPage";
 import { LoginPage } from "./pages/LoginPage";
+import { ObjectPage } from "./pages/ObjectPage";
+import { ObjectsPage } from "./pages/ObjectsPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { RefsPage } from "./pages/RefsPage";
+import { ScannerSyncPage } from "./pages/ScannerSyncPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { SummaryPage } from "./pages/SummaryPage";
 import { UsersPage } from "./pages/UsersPage";
@@ -42,7 +45,24 @@ export function App() {
             </RequirePerm>
           }
         />
+        <Route
+          path="objects"
+          element={
+            <RequirePerm perm="view">
+              <ObjectsPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="objects/:id"
+          element={
+            <RequirePerm perm="view">
+              <ObjectPage />
+            </RequirePerm>
+          }
+        />
         <Route path="refs" element={<RefsPage />} />
+        <Route path="refs/scanner" element={<ScannerSyncPage />} />
         <Route
           path="admin/users"
           element={

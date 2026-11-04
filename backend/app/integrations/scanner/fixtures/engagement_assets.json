@@ -1,0 +1,346 @@
+[
+ {
+  "id": 1,
+  "engagement_id": 1,
+  "address": "10.10.1.10",
+  "hostname": "srv-db01.uchet.local",
+  "owner": "Отдел ИТ",
+  "criticality": "critical",
+  "notes": null,
+  "tags": [
+   "гис-учёт"
+  ],
+  "groups": [
+   {
+    "id": 1,
+    "name": "Серверный сегмент"
+   }
+  ],
+  "created_at": "2026-10-20T09:00:00Z",
+  "os_guess": "Astra Linux SE 1.8",
+  "os_family": "linux",
+  "os_family_label": "Linux",
+  "last_run_id": 7,
+  "finding_counts": {},
+  "findings_total": 0,
+  "checked_run_id": 7,
+  "source": "discovered",
+  "first_seen_at": "2026-10-20T09:00:00Z",
+  "last_seen_at": "2026-11-02T14:30:00Z"
+ },
+ {
+  "id": 2,
+  "engagement_id": 1,
+  "address": "10.10.1.11",
+  "hostname": "srv-app01.uchet.local",
+  "owner": "Отдел ИТ",
+  "criticality": "high",
+  "notes": null,
+  "tags": [
+   "гис-учёт"
+  ],
+  "groups": [
+   {
+    "id": 1,
+    "name": "Серверный сегмент"
+   }
+  ],
+  "created_at": "2026-10-20T09:00:00Z",
+  "os_guess": "Astra Linux SE 1.8",
+  "os_family": "linux",
+  "os_family_label": "Linux",
+  "last_run_id": 7,
+  "finding_counts": {},
+  "findings_total": 0,
+  "checked_run_id": 7,
+  "source": "discovered",
+  "first_seen_at": "2026-10-20T09:00:00Z",
+  "last_seen_at": "2026-11-02T14:30:00Z"
+ },
+ {
+  "id": 3,
+  "engagement_id": 1,
+  "address": "10.10.1.12",
+  "hostname": "srv-app02.uchet.local",
+  "owner": "Отдел ИТ",
+  "criticality": "high",
+  "notes": null,
+  "tags": [
+   "гис-учёт"
+  ],
+  "groups": [
+   {
+    "id": 1,
+    "name": "Серверный сегмент"
+   }
+  ],
+  "created_at": "2026-10-20T09:00:00Z",
+  "os_guess": "Astra Linux SE 1.8",
+  "os_family": "linux",
+  "os_family_label": "Linux",
+  "last_run_id": 7,
+  "finding_counts": {},
+  "findings_total": 0,
+  "checked_run_id": 7,
+  "source": "discovered",
+  "first_seen_at": "2026-10-20T09:00:00Z",
+  "last_seen_at": "2026-11-02T14:30:00Z"
+ },
+ {
+  "id": 4,
+  "engagement_id": 1,
+  "address": "10.10.1.20",
+  "hostname": "srv-ad01.uchet.local",
+  "owner": "Отдел ИТ",
+  "criticality": "critical",
+  "notes": null,
+  "tags": [
+   "гис-учёт"
+  ],
+  "groups": [
+   {
+    "id": 1,
+    "name": "Серверный сегмент"
+   }
+  ],
+  "created_at": "2026-10-20T09:00:00Z",
+  "os_guess": "Windows Server 2019",
+  "os_family": "windows",
+  "os_family_label": "Windows",
+  "last_run_id": 7,
+  "finding_counts": {},
+  "findings_total": 0,
+  "checked_run_id": 7,
+  "source": "discovered",
+  "first_seen_at": "2026-10-20T09:00:00Z",
+  "last_seen_at": "2026-11-02T14:30:00Z"
+ },
+ {
+  "id": 5,
+  "engagement_id": 1,
+  "address": "10.10.2.5",
+  "hostname": "web01.uchet.local",
+  "owner": "Отдел ИТ",
+  "criticality": "high",
+  "notes": null,
+  "tags": [
+   "гис-учёт"
+  ],
+  "groups": [
+   {
+    "id": 2,
+    "name": "ДМЗ"
+   }
+  ],
+  "created_at": "2026-10-20T09:00:00Z",
+  "os_guess": "РЕД ОС 7.3",
+  "os_family": "linux",
+  "os_family_label": "Linux",
+  "last_run_id": 7,
+  "finding_counts": {},
+  "findings_total": 0,
+  "checked_run_id": 7,
+  "source": "discovered",
+  "first_seen_at": "2026-10-20T09:00:00Z",
+  "last_seen_at": "2026-11-02T14:30:00Z"
+ },
+ {
+  "id": 6,
+  "engagement_id": 1,
+  "address": "10.10.2.6",
+  "hostname": "proxy01.uchet.local",
+  "owner": "Отдел ИТ",
+  "criticality": "medium",
+  "notes": null,
+  "tags": [
+   "гис-учёт"
+  ],
+  "groups": [
+   {
+    "id": 2,
+    "name": "ДМЗ"
+   }
+  ],
+  "created_at": "2026-10-20T09:00:00Z",
+  "os_guess": "Debian 12",
+  "os_family": "linux",
+  "os_family_label": "Linux",
+  "last_run_id": 7,
+  "finding_counts": {},
+  "findings_total": 0,
+  "checked_run_id": 7,
+  "source": "discovered",
+  "first_seen_at": "2026-10-20T09:00:00Z",
+  "last_seen_at": "2026-11-02T14:30:00Z"
+ },
+ {
+  "id": 7,
+  "engagement_id": 1,
+  "address": "10.10.3.101",
+  "hostname": "arm-101.uchet.local",
+  "owner": "Отдел ИТ",
+  "criticality": "medium",
+  "notes": null,
+  "tags": [
+   "гис-учёт"
+  ],
+  "groups": [
+   {
+    "id": 3,
+    "name": "АРМ пользователей"
+   }
+  ],
+  "created_at": "2026-10-20T09:00:00Z",
+  "os_guess": "Windows 10 Pro",
+  "os_family": "windows",
+  "os_family_label": "Windows",
+  "last_run_id": 7,
+  "finding_counts": {},
+  "findings_total": 0,
+  "checked_run_id": 7,
+  "source": "discovered",
+  "first_seen_at": "2026-10-20T09:00:00Z",
+  "last_seen_at": "2026-11-02T14:30:00Z"
+ },
+ {
+  "id": 8,
+  "engagement_id": 1,
+  "address": "10.10.3.102",
+  "hostname": "arm-102.uchet.local",
+  "owner": "Отдел ИТ",
+  "criticality": "medium",
+  "notes": null,
+  "tags": [
+   "гис-учёт"
+  ],
+  "groups": [
+   {
+    "id": 3,
+    "name": "АРМ пользователей"
+   }
+  ],
+  "created_at": "2026-10-20T09:00:00Z",
+  "os_guess": "Windows 10 Pro",
+  "os_family": "windows",
+  "os_family_label": "Windows",
+  "last_run_id": 7,
+  "finding_counts": {},
+  "findings_total": 0,
+  "checked_run_id": 7,
+  "source": "discovered",
+  "first_seen_at": "2026-10-20T09:00:00Z",
+  "last_seen_at": "2026-11-02T14:30:00Z"
+ },
+ {
+  "id": 9,
+  "engagement_id": 1,
+  "address": "10.10.3.103",
+  "hostname": "arm-103.uchet.local",
+  "owner": "Отдел ИТ",
+  "criticality": "medium",
+  "notes": null,
+  "tags": [
+   "гис-учёт"
+  ],
+  "groups": [
+   {
+    "id": 3,
+    "name": "АРМ пользователей"
+   }
+  ],
+  "created_at": "2026-10-20T09:00:00Z",
+  "os_guess": "Astra Linux SE 1.8",
+  "os_family": "linux",
+  "os_family_label": "Linux",
+  "last_run_id": 7,
+  "finding_counts": {},
+  "findings_total": 0,
+  "checked_run_id": 7,
+  "source": "discovered",
+  "first_seen_at": "2026-10-20T09:00:00Z",
+  "last_seen_at": "2026-11-02T14:30:00Z"
+ },
+ {
+  "id": 10,
+  "engagement_id": 1,
+  "address": "10.10.3.104",
+  "hostname": "arm-104.uchet.local",
+  "owner": "Отдел ИТ",
+  "criticality": "medium",
+  "notes": null,
+  "tags": [
+   "гис-учёт"
+  ],
+  "groups": [
+   {
+    "id": 3,
+    "name": "АРМ пользователей"
+   }
+  ],
+  "created_at": "2026-10-20T09:00:00Z",
+  "os_guess": "Astra Linux SE 1.8",
+  "os_family": "linux",
+  "os_family_label": "Linux",
+  "last_run_id": 7,
+  "finding_counts": {},
+  "findings_total": 0,
+  "checked_run_id": 7,
+  "source": "discovered",
+  "first_seen_at": "2026-10-20T09:00:00Z",
+  "last_seen_at": "2026-11-02T14:30:00Z"
+ },
+ {
+  "id": 11,
+  "engagement_id": 1,
+  "address": "10.20.0.15",
+  "hostname": "buh-pc15",
+  "owner": "Бухгалтерия",
+  "criticality": "low",
+  "notes": null,
+  "tags": [],
+  "groups": [
+   {
+    "id": 4,
+    "name": "Бухгалтерия"
+   }
+  ],
+  "created_at": "2026-10-20T09:00:00Z",
+  "os_guess": "Windows 11 Pro",
+  "os_family": "windows",
+  "os_family_label": "Windows",
+  "last_run_id": 7,
+  "finding_counts": {},
+  "findings_total": 0,
+  "checked_run_id": 7,
+  "source": "discovered",
+  "first_seen_at": "2026-10-20T09:00:00Z",
+  "last_seen_at": "2026-11-02T14:30:00Z"
+ },
+ {
+  "id": 12,
+  "engagement_id": 1,
+  "address": "10.20.0.16",
+  "hostname": null,
+  "owner": "Бухгалтерия",
+  "criticality": "low",
+  "notes": null,
+  "tags": [],
+  "groups": [
+   {
+    "id": 4,
+    "name": "Бухгалтерия"
+   }
+  ],
+  "created_at": "2026-10-20T09:00:00Z",
+  "os_guess": null,
+  "os_family": null,
+  "os_family_label": null,
+  "last_run_id": null,
+  "finding_counts": {},
+  "findings_total": 0,
+  "checked_run_id": null,
+  "source": "manual",
+  "first_seen_at": "2026-10-20T09:00:00Z",
+  "last_seen_at": null
+ }
+]

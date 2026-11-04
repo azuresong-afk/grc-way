@@ -1,4 +1,4 @@
-"""Модели: пользователи, роли, журнал аудита."""
+"""Модели: пользователи и аудит, проекты, справочники, объекты."""
 
 from __future__ import annotations
 
@@ -165,8 +165,11 @@ class RefProfile(Base):
     default_level: Mapped[str | None] = mapped_column(String(16))
     dynamic: Mapped[str | None] = mapped_column(String(64))
     position: Mapped[int] = mapped_column(Integer, default=0)
+    # Хэш YAML-файла, из которого профиль загружен последним (reference/profiles).
     source_hash: Mapped[str] = mapped_column(String(64))
     imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Когда профиль последний раз обновлён из API «Сканера» (экран разницы).
+    scanner_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class RefGroup(Base):
@@ -243,3 +246,122 @@ class RefRevision(Base):
     changed_by_name: Mapped[str | None] = mapped_column(String(200))
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     comment: Mapped[str | None] = mapped_column(String(1000))
+
+
+class RefSyncDiff(Base):
+    """Сравнение справочника с ответом «Сканера» (GET /compliance/profiles).
+
+    Ответ «Сканера» хранится целиком: применяется ровно то, что показано на экране
+    разницы. Перед применением разница пересчитывается и сверяется по отпечатку —
+    если справочник успел измениться, применение отклоняется.
+    """
+
+    __tablename__ = "ref_sync_diffs"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    created_by_name: Mapped[str | None] = mapped_column(String(200))
+    # live | fixture и адрес «Сканера» / имя фикстуры.
+    mode: Mapped[str] = mapped_column(String(16))
+    source: Mapped[str] = mapped_column(String(500))
+    payload: Mapped[list] = mapped_column(JsonType)
+    payload_hash: Mapped[str] = mapped_column(String(64))
+    diff: Mapped[dict] = mapped_column(JsonType)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    # pending — ждёт решения; applied — применено; superseded — есть более новое сравнение.
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    applied_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    applied_by_name: Mapped[str | None] = mapped_column(String(200))
+    applied: Mapped[dict | None] = mapped_column(JsonType)
+
+
+# ---------- Объекты ----------
+
+
+class AssessedObject(Base):
+    """Объект оценки: ГИС, ИСПДн, значимый объект КИИ или иная система внутри проекта."""
+
+    __tablename__ = "objects"
+    __table_args__ = (Index("ix_objects_project", "project_id", "status"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(8))  # gis | ispdn | kii | other
+    name: Mapped[str] = mapped_column(String(300))
+    # Нормативный режим: 117 | 21 | 239; None — не выбран (для «иной» системы).
+    regime: Mapped[str | None] = mapped_column(String(8))
+    purpose: Mapped[str | None] = mapped_column(String(4000))
+    boundaries: Mapped[str | None] = mapped_column(String(4000))
+    # [{system, owner, direction (in|out|both), channel, description}]
+    interconnections: Mapped[list] = mapped_column(JsonType, default=list)
+    internet: Mapped[bool] = mapped_column(Boolean, default=False)
+    # [{name, position, role, phone, email}]
+    responsible: Mapped[list] = mapped_column(JsonType, default=list)
+    status: Mapped[str] = mapped_column(String(16), default="active")  # active | archived
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # Когда состав последний раз сверялся с активами «Сканера».
+    scanner_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    segments: Mapped[list[ObjectSegment]] = relationship(
+        cascade="all, delete-orphan", lazy="selectin", order_by="ObjectSegment.position"
+    )
+    hosts: Mapped[list[ObjectHost]] = relationship(
+        cascade="all, delete-orphan", lazy="selectin", order_by="ObjectHost.address"
+    )
+
+
+class ObjectSegment(Base):
+    """Сегмент объекта (ЛВС, ДМЗ, площадка). Может соответствовать группе активов «Сканера»."""
+
+    __tablename__ = "object_segments"
+    __table_args__ = (Index("ix_object_segments_object", "object_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    object_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("objects.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(String(2000))
+    # Имя группы активов «Сканера»: хосты этой группы при синхронизации попадают сюда.
+    scanner_group: Mapped[str | None] = mapped_column(String(200))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class ObjectHost(Base):
+    """Хост в составе объекта. Ключ сопоставления с активами «Сканера» — (project, address)."""
+
+    __tablename__ = "object_hosts"
+    __table_args__ = (
+        Index("ux_object_hosts_address", "object_id", "address", unique=True),
+        Index("ix_object_hosts_project_address", "project_id", "address"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    object_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("objects.id", ondelete="CASCADE"))
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    segment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("object_segments.id", ondelete="SET NULL")
+    )
+    # IP-адрес в каноническом виде (как host_key «Сканера»).
+    address: Mapped[str] = mapped_column(String(64))
+    hostname: Mapped[str | None] = mapped_column(String(255))
+    role: Mapped[str | None] = mapped_column(String(300))
+    os: Mapped[str | None] = mapped_column(String(200))
+    os_family: Mapped[str | None] = mapped_column(String(32))
+    # manual — добавлен вручную; scanner — из активов «Сканера».
+    source: Mapped[str] = mapped_column(String(16))
+    scanner_asset_id: Mapped[int | None] = mapped_column(Integer)
+    # Данные актива на момент последней синхронизации (только для показа).
+    scanner_groups: Mapped[list] = mapped_column(JsonType, default=list)
+    criticality: Mapped[str | None] = mapped_column(String(16))
+    owner: Mapped[str | None] = mapped_column(String(200))
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Последняя синхронизация не нашла адрес среди активов «Сканера».
+    scanner_missing: Mapped[bool] = mapped_column(Boolean, default=False)
+    synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
