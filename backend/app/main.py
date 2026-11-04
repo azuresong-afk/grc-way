@@ -18,6 +18,7 @@ from app.api import (
     refs,
     refs_sync,
     scanner_import,
+    summary,
     users,
 )
 from app.core.config import get_settings
@@ -56,6 +57,7 @@ def create_app() -> FastAPI:
         refs_sync,
         scanner_import,
         evidence,
+        summary,
     ):
         app.include_router(module.router)
     return app
