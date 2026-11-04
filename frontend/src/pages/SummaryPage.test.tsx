@@ -63,6 +63,8 @@ const SUMMARY: ProjectSummary = {
     confirmed: 1,
     unverified: 96,
     unverified_tables: ["117", "21"],
+    szi: { total: 5, bad: 1, expiring: 1, check: 0, uncertified: 0 },
+    szi_expiry_days: 90,
   },
   objects: [
     {
@@ -97,6 +99,7 @@ const SUMMARY: ProjectSummary = {
       to_confirm: 18,
       confirmed: 1,
       unverified: 96,
+      szi: { total: 5, bad: 1, expiring: 1, check: 0, uncertified: 0 },
     },
     {
       id: "o2",
@@ -118,6 +121,7 @@ const SUMMARY: ProjectSummary = {
       to_confirm: 0,
       confirmed: 0,
       unverified: 0,
+      szi: { total: 0, bad: 0, expiring: 0, check: 0, uncertified: 0 },
     },
   ],
 };
@@ -162,6 +166,9 @@ it("сводка: показатели проекта, «требует свер
   expect(within(row).getByText("Требует сверки")).toBeInTheDocument();
   expect(within(row).getByText("№2 · прогон №7")).toBeInTheDocument();
   expect(within(row).getByText("ручной оценки: 74")).toBeInTheDocument();
+  expect(within(row).getByText("недействительны: 1").closest("a")).toHaveAttribute("href", "/objects/o1?tab=szi");
+  expect(within(row).getByText("истекают: 1")).toBeInTheDocument();
+  expect(screen.getByText("недействительны 1 · истекают за 90 дн. 1")).toBeInTheDocument();
 
   const pdn = screen.getByRole("link", { name: "ИСПДн «Бухгалтерия»" }).closest("tr")!;
   expect(within(pdn).getByText("Класс не утверждён")).toBeInTheDocument();

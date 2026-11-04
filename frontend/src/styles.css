@@ -2193,7 +2193,7 @@ fieldset.field {
 }
 
 .summary-kpis {
-  grid-template-columns: minmax(0, 1.618fr) repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1.618fr) repeat(5, minmax(0, 1fr));
 }
 
 .summary-kpi-main {
@@ -2627,4 +2627,54 @@ fieldset.field {
 .pill .lucide,
 .pill svg {
   vertical-align: -2px;
+}
+
+/* ---------- СЗИ (задача 2.5) ---------- */
+
+.kpi-value.danger {
+  color: var(--danger);
+}
+
+.text-warn {
+  color: var(--warn);
+}
+
+.tag.tag-muted {
+  background: var(--surface-3);
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 260px;
+}
+
+.input-row {
+  display: flex;
+  gap: var(--s1);
+}
+
+.input-row .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.szi-table td:first-child {
+  min-width: 220px;
+}
+
+.szi-list li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.szi-list li:last-child {
+  border-bottom: 0;
 }

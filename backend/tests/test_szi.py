@@ -254,6 +254,8 @@ def test_registry_import_diff_and_apply(client, env, session):
         "withdrawn": 1,
         "validity": 1,
     }
+    st = client.get("/szi-registry/status", headers=h["viewer"]).json()
+    assert (st["active"], st["withdrawn"], st["expired"], st["expiring"]) == (6, 1, 0, 0)
     gone = session.get(SziCert, "9903")
     session.refresh(gone)
     assert gone.withdrawn_at is not None

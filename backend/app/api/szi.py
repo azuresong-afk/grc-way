@@ -13,7 +13,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -52,6 +52,8 @@ class RegistryStatus(BaseModel):
     withdrawn: int
     # Действующие записи реестра, срок которых уже истёк (для справки).
     expired: int
+    # Действующие записи, срок которых истекает в ближайшие expiry_days дней.
+    expiring: int
     pending_id: uuid.UUID | None
     expiry_days: int
 
@@ -281,8 +283,16 @@ def registry_status(_: CurrentUser, session: DbSession) -> RegistryStatus:
             )
         ).all()
     )
-    expired = session.scalar(
-        select(func.count()).where(SziCert.withdrawn_at.is_(None), SziCert.valid_to < date.today())
+    today = date.today()
+    days = get_settings().szi_expiry_days
+    active = SziCert.withdrawn_at.is_(None)
+    expired = session.scalar(select(func.count()).where(active, SziCert.valid_to < today))
+    expiring = session.scalar(
+        select(func.count()).where(
+            active,
+            SziCert.valid_to >= today,
+            SziCert.valid_to <= today + timedelta(days=days),
+        )
     )
     pending = session.scalar(
         select(SziImport.id)
@@ -298,8 +308,9 @@ def registry_status(_: CurrentUser, session: DbSession) -> RegistryStatus:
         active=counts.get(True, 0),
         withdrawn=counts.get(False, 0),
         expired=expired or 0,
+        expiring=expiring or 0,
         pending_id=pending,
-        expiry_days=get_settings().szi_expiry_days,
+        expiry_days=days,
     )
 
 
@@ -513,7 +524,7 @@ def list_certs(
             conds.append(SziCert.cert_number == n)
         stmt = stmt.where(or_(*conds))
     today = date.today()
-    soon = date.fromordinal(today.toordinal() + get_settings().szi_expiry_days)
+    soon = today + timedelta(days=get_settings().szi_expiry_days)
     if validity == "expired":
         stmt = stmt.where(SziCert.valid_to < today)
     elif validity == "expiring":

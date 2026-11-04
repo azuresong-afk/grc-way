@@ -14,6 +14,7 @@ import { RefsPage } from "./pages/RefsPage";
 import { ScannerSyncPage } from "./pages/ScannerSyncPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { SummaryPage } from "./pages/SummaryPage";
+import { SziRegistryPage } from "./pages/SziRegistryPage";
 import { ThreatRefsPage } from "./pages/ThreatRefsPage";
 import { UsersPage } from "./pages/UsersPage";
 
@@ -69,6 +70,7 @@ export function App() {
         <Route path="refs/classification" element={<ClassTablesPage />} />
         <Route path="refs/threats" element={<ThreatRefsPage />} />
         <Route path="refs/bdu" element={<BduPage />} />
+        <Route path="refs/szi" element={<SziRegistryPage />} />
         <Route
           path="admin/users"
           element={
