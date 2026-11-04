@@ -1,7 +1,7 @@
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
-    GRC_REFERENCE_DIR=/srv/reference GRC_EVIDENCE_DIR=/data/evidence GRC_BDU_DIR=/data/bdu
+    GRC_REFERENCE_DIR=/srv/reference GRC_EVIDENCE_DIR=/data/evidence GRC_BDU_DIR=/data/bdu GRC_SZI_DIR=/data/szi
 WORKDIR /srv
 
 RUN groupadd --system grc && useradd --system --gid grc --home /srv grc
@@ -15,7 +15,7 @@ COPY backend/alembic.ini ./
 COPY backend/alembic ./alembic
 COPY reference ./reference
 COPY backend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh && mkdir -p /data/evidence /data/bdu && chown -R grc:grc /data
+RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh && mkdir -p /data/evidence /data/bdu /data/szi && chown -R grc:grc /data
 
 USER grc
 EXPOSE 8000

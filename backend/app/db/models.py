@@ -883,3 +883,117 @@ class ThreatModelThreat(Base):
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_by_name: Mapped[str | None] = mapped_column(String(200))
+
+
+# ---------- СЗИ ----------
+
+
+class SziImport(Base):
+    """Загрузка реестра сертифицированных СЗИ (CSV/XLSX): сравнение → применение.
+
+    Как у БДУ: файл хранится в томе под sha256, при применении разбирается заново,
+    и если сравнение изменилось, применение отклоняется.
+    """
+
+    __tablename__ = "szi_imports"
+    __table_args__ = (Index("ix_szi_imports_created", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    file_name: Mapped[str] = mapped_column(String(255))
+    file_sha256: Mapped[str] = mapped_column(String(64))
+    file_size: Mapped[int] = mapped_column(BigInteger)
+    file_ext: Mapped[str] = mapped_column(String(8))  # csv | xlsx
+    export_version: Mapped[date | None] = mapped_column(Date)
+    version_source: Mapped[str] = mapped_column(String(16))  # user | title | file | none
+    status: Mapped[str] = mapped_column(String(16))  # pending | applied | superseded
+    summary: Mapped[dict] = mapped_column(JsonType)
+    items: Mapped[list] = mapped_column(JsonType)
+    warnings: Mapped[list] = mapped_column(JsonType)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    created_by_name: Mapped[str | None] = mapped_column(String(200))
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    applied_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    applied_by_name: Mapped[str | None] = mapped_column(String(200))
+    applied: Mapped[dict | None] = mapped_column(JsonType)
+
+
+class SziCert(Base):
+    """Запись реестра сертифицированных СЗИ: один сертификат ФСТЭК России.
+
+    Ключ — номер сертификата. Пропавшая из реестра запись не удаляется, а
+    помечается исключённой: на неё ссылаются СЗИ объектов.
+    """
+
+    __tablename__ = "szi_registry"
+    __table_args__ = (Index("ix_szi_registry_valid_to", "valid_to"),)
+
+    cert_number: Mapped[str] = mapped_column(String(32), primary_key=True)
+    name: Mapped[str] = mapped_column(String(2000))
+    registered_on: Mapped[date | None] = mapped_column(Date)
+    valid_to: Mapped[date | None] = mapped_column(Date)
+    # Текст ячейки «Срок действия», если в нём не только дата.
+    valid_to_raw: Mapped[str | None] = mapped_column(String(500))
+    requirements: Mapped[str | None] = mapped_column(Text)
+    scheme: Mapped[str | None] = mapped_column(Text)
+    lab: Mapped[str | None] = mapped_column(Text)
+    cert_body: Mapped[str | None] = mapped_column(Text)
+    applicant: Mapped[str | None] = mapped_column(Text)
+    applicant_details: Mapped[str | None] = mapped_column(Text)
+    support_until: Mapped[date | None] = mapped_column(Date)
+    support_raw: Mapped[str | None] = mapped_column(String(1000))
+    note: Mapped[str | None] = mapped_column(Text)
+    # active | suspended | terminated — по тексту примечания (эвристика, требует сверки).
+    cert_status: Mapped[str] = mapped_column(String(16), default="active")
+    # Уровень доверия и профили защиты, найденные в «Наименованиях документов»
+    # (эвристика: в реестре это свободный текст).
+    trust_level: Mapped[int | None] = mapped_column(Integer)
+    profiles: Mapped[list] = mapped_column(JsonType, default=list)
+    row_hash: Mapped[str] = mapped_column(String(64))
+    first_version: Mapped[date | None] = mapped_column(Date)
+    changed_version: Mapped[date | None] = mapped_column(Date)
+    first_import_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    changed_import_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    withdrawn_import_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ObjectSzi(Base):
+    """Средство защиты информации на объекте.
+
+    Номер сертификата сопоставляется с реестром (SziCert): срок действия, уровень
+    доверия и состояние сертификата берутся оттуда, если запись есть; иначе —
+    введённые вручную. measure_ids — коды мер набора объекта, которые закрывает СЗИ.
+    """
+
+    __tablename__ = "object_szi"
+    __table_args__ = (
+        Index("ix_object_szi_object", "object_id"),
+        Index("ix_object_szi_cert", "cert_number"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    object_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("objects.id", ondelete="CASCADE"))
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(300))
+    # Вид средства (код из app/domain/szi.py: fw, av, nsd, …).
+    kind: Mapped[str] = mapped_column(String(16))
+    vendor: Mapped[str | None] = mapped_column(String(300))
+    version: Mapped[str | None] = mapped_column(String(100))
+    cert_number: Mapped[str | None] = mapped_column(String(32))
+    # Введено вручную; при наличии записи в реестре действуют её значения.
+    cert_valid_to: Mapped[date | None] = mapped_column(Date)
+    trust_level: Mapped[int | None] = mapped_column(Integer)
+    protection_class: Mapped[str | None] = mapped_column(String(200))
+    # Где установлено: хосты, сегменты, количество лицензий.
+    placement: Mapped[str | None] = mapped_column(String(2000))
+    measure_ids: Mapped[list] = mapped_column(JsonType, default=list)
+    comment: Mapped[str | None] = mapped_column(String(2000))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    created_by_name: Mapped[str | None] = mapped_column(String(200))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    updated_by_name: Mapped[str | None] = mapped_column(String(200))

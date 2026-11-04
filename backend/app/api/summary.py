@@ -26,6 +26,7 @@ from app.api.deps import DbSession, require
 from app.api.measures import StatsOut
 from app.api.objects import ClassBrief, current_classes
 from app.api.projects import get_project_for
+from app.api.szi import SziCounts, count_states, szi_states
 from app.core.config import get_settings
 from app.core.rbac import Perm
 from app.db.models import (
@@ -34,6 +35,7 @@ from app.db.models import (
     Classification,
     ObjectHost,
     ObjectMeasure,
+    ObjectSzi,
     Project,
     ProjectMember,
     RefClassificationTable,
@@ -42,6 +44,7 @@ from app.db.models import (
     User,
 )
 from app.domain.measures import Bucket, Item, Stats, compute_stats, effective_status
+from app.domain.szi import CertState
 
 router = APIRouter(tags=["summary"])
 Viewer = Annotated[User, Depends(require(Perm.VIEW))]
@@ -92,6 +95,8 @@ class ObjectSummary(BaseModel):
     confirmed: int
     # Меры набора, сопоставление которых не сверено методистом.
     unverified: int
+    # СЗИ объекта и состояние их сертификатов (задача 2.5).
+    szi: SziCounts
 
 
 class ProjectKpi(BaseModel):
@@ -106,6 +111,8 @@ class ProjectKpi(BaseModel):
     confirmed: int
     unverified: int
     unverified_tables: list[str]
+    szi: SziCounts
+    szi_expiry_days: int
 
 
 class SummaryOut(BaseModel):
@@ -209,6 +216,12 @@ def project_summary(session: Session, project: Project, partial_weight: float) -
             for c in session.scalars(select(Classification).where(Classification.id.in_(cls_ids))):
                 class_rows[c.object_id] = c
 
+    szi_rows: dict[uuid.UUID, list[CertState]] = defaultdict(list)
+    if ids:
+        all_szi = list(session.scalars(select(ObjectSzi).where(ObjectSzi.object_id.in_(ids))))
+        for r, st in zip(all_szi, szi_states(session, all_szi), strict=True):
+            szi_rows[r.object_id].append(st)
+
     verified = _verified_refs(session, {m.profile_id for ms in measures.values() for m in ms})
 
     total = Stats()
@@ -285,6 +298,7 @@ def project_summary(session: Session, project: Project, partial_weight: float) -
                     if m.adaptation != "excluded"
                     and m.measure_id not in verified.get(m.profile_id, set())
                 ),
+                szi=count_states(szi_rows.get(o.id, [])),
             )
         )
 
@@ -317,6 +331,8 @@ def project_summary(session: Session, project: Project, partial_weight: float) -
             confirmed=sum(r.confirmed for r in rows),
             unverified=sum(r.unverified for r in rows),
             unverified_tables=sorted(tables),
+            szi=count_states([st for sts in szi_rows.values() for st in sts]),
+            szi_expiry_days=get_settings().szi_expiry_days,
         ),
         objects=rows,
     )

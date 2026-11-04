@@ -21,7 +21,10 @@
    мастера заполнены методистом, перечень актуальных угроз с обоснованием,
    находки «Сканера» с БДУ привязаны к угрозе УБИ.006 как подтверждение
    актуальности — черновик ждёт утверждения. Импорт прогона №8 вручную покажет,
-   что находка Log4j устранена.
+   что находка Log4j устранена;
+9. реестр сертифицированных СЗИ — образец (app/integrations/szi/sample.py, не данные
+   ФСТЭК): первая версия применена, вторая ждёт применения; на ГИС пять СЗИ с
+   привязкой к мерам — действующие, истекающий, истёкший и с оконченной поддержкой.
 
 «Сканер» всегда берётся из фикстур (`GET /runs/{id}/compliance`, `/coverage`
 и `/findings` прогонов №6–8), даже если GRC_SCANNER_MODE=live: демо не ходит в сеть.
@@ -45,7 +48,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password, password_problem
-from app.db.models import BduImport, BduThreat, Project, RefProfile, User, utcnow
+from app.db.models import BduImport, BduThreat, Project, RefProfile, SziImport, User, utcnow
 from app.db.session import get_engine
 from app.integrations.scanner.client import FixtureScannerClient, get_scanner_client
 
@@ -310,16 +313,85 @@ def run(app: FastAPI, session: Session, password: str | None = None) -> Result:
         result.notes.append(
             "БДУ: загружены образцы выгрузок, вторая выгрузка уязвимостей ждёт применения"
         )
+    tok = _check(
+        TestClient(app).post("/auth/token", json={"username": "demo-meth", "password": password})
+    )
+    meth = {"Authorization": f"Bearer {tok['access_token']}"}
     known = set(session.scalars(select(BduThreat.code).where(BduThreat.code.in_(THREAT_DECISIONS))))
     if known == set(THREAT_DECISIONS) and result.object_id:
-        meth = _check(
-            TestClient(app).post(
-                "/auth/token", json={"username": "demo-meth", "password": password}
-            )
-        )
-        _threat_model(TestClient(app), {"Authorization": f"Bearer {meth['access_token']}"}, result)
+        _threat_model(TestClient(app), meth, result)
         result.notes.append("модель угроз ГИС: черновик заполнен, ждёт утверждения")
+    if _load_szi_samples(session):
+        result.notes.append("реестр СЗИ: загружен образец, вторая версия ждёт применения")
+    if result.object_id:
+        _szi(TestClient(app), meth, result.object_id)
+        result.notes.append("СЗИ ГИС: пять средств, одно истекает, у одного срок истёк")
     return result
+
+
+# Наименование, вид, номер сертификата (образец), меры, размещение.
+DEMO_SZI = [
+    ("Пример-МЭ 3", "fw", "9901", ["МСЭ.1", "МСЭ.2", "МСЭ.3"], "Периметр и граница ДМЗ, 2 шт."),
+    ("Пример-АВЗ", "av", "9902", ["АВЗ.1", "АВЗ.2", "АВЗ.3"], "Все АРМ и серверы, 10 лицензий"),
+    ("Пример-СОВ", "ids", "9904", ["СОВ.1", "СОВ.2"], "Сенсоры на периметре и в сегменте серверов"),
+    ("Пример-НСД", "nsd", "9903", ["ИАФ.1", "УПД.1"], "АРМ операторов (10.10.3.101–104)"),
+    ("Пример-ОС", "os", "9906", [], "Серверы приложений 10.10.1.10–12"),
+]
+
+
+def _szi(c: Any, meth: dict[str, str], object_id: str) -> None:
+    codes = {m["measure_id"] for m in _check(c.get(f"/objects/{object_id}/measures", headers=meth))}
+    for name, kind, number, measures, placement in DEMO_SZI:
+        body = {
+            "name": name,
+            "kind": kind,
+            "cert_number": number,
+            "measure_ids": [m for m in measures if m in codes],
+            "placement": placement,
+        }
+        _check(c.post(f"/objects/{object_id}/szi", headers=meth, json=body), 201)
+
+
+def _load_szi_samples(session: Session) -> bool:
+    """Образец реестра СЗИ: те же шаги, что в API (загрузка — право администратора)."""
+    from app.core.config import get_settings
+    from app.domain import szi
+    from app.domain.evidence_files import store
+    from app.integrations.szi.sample import registry_csv, registry_xlsx
+
+    if session.scalar(select(SziImport.id).limit(1)) is not None:
+        return False
+    settings = get_settings()
+    limit = settings.szi_max_mb * 1024 * 1024
+    for name, data, ext, apply in (
+        ("reestr-szi.xlsx", registry_xlsx(1), "xlsx", True),
+        ("reestr-szi.csv", registry_csv(2), "csv", False),
+    ):
+        stored = store([data], name, settings.szi_dir, limit)
+        parsed = szi.parse_file(stored.path, ext)
+        diff = szi.compute_diff(session, parsed, file_sha256=stored.sha256)
+        row = SziImport(
+            file_name=name,
+            file_sha256=stored.sha256,
+            file_size=stored.size,
+            file_ext=ext,
+            export_version=parsed.version,
+            version_source=parsed.version_source,
+            status="pending",
+            summary=diff["summary"],
+            items=diff["items"],
+            warnings=diff["warnings"],
+            fingerprint=diff["fingerprint"],
+            created_by_name="Демо-данные",
+        )
+        session.add(row)
+        session.flush()
+        if apply:
+            res = szi.apply(session, parsed, row, version=parsed.version)
+            row.status, row.applied_at = "applied", utcnow()
+            row.applied_by_name, row.applied = "Демо-данные", res.as_dict()
+    session.commit()
+    return True
 
 
 def _threat_model(c: Any, meth: dict[str, str], result: Result) -> None:
