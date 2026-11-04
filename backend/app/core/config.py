@@ -21,6 +21,16 @@ class Settings(BaseSettings):
     # Режим разработки: разрешает пустой secret_key и SQLite.
     dev_mode: bool = False
 
+    # Срок жизни токена доступа в режиме local, минуты.
+    token_ttl_minutes: int = 480
+    # Пауза после N неудачных входов подряд для одного имени.
+    login_max_failures: int = 5
+    login_lockout_seconds: int = 300
+
+    # Первый администратор: создаётся при старте, если пользователей ещё нет.
+    bootstrap_admin: str = "admin"
+    bootstrap_admin_password: str = ""
+
     # Пути, под которыми продукт виден в платформе (для манифеста).
     base_path: str = "/grc/"
     api_base: str = "/api/grc/"

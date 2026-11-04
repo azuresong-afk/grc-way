@@ -177,7 +177,7 @@ code,
   place-items: center;
   width: 32px;
   height: 32px;
-  border-radius: 50%;
+  border-radius: var(--radius-sm);
   background: var(--accent-soft);
   color: var(--accent-text);
   font-size: 12px;
@@ -243,7 +243,7 @@ code,
   margin-left: auto;
   padding: 1px 6px;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   font-family: var(--mono);
   font-size: 11px;
 }
@@ -449,7 +449,7 @@ code,
   align-items: center;
   gap: 6px;
   padding: 2px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   background: var(--muted-soft);
   color: var(--text-2);
   font-size: 12px;
@@ -508,7 +508,7 @@ code,
 .tag {
   display: inline-block;
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: var(--accent-soft);
   color: var(--accent-text);
   font-family: var(--mono);
@@ -579,7 +579,7 @@ code,
   width: 55px;
   height: 55px;
   margin-bottom: var(--s1);
-  border-radius: 50%;
+  border-radius: var(--radius);
   background: var(--surface-2);
   color: var(--text-3);
 }
@@ -704,6 +704,211 @@ code,
 
 .table tr.selected td {
   background: var(--accent-soft);
+}
+
+/* ---------- Фильтр-чипы ---------- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+}
+
+.chip {
+  height: 30px;
+  padding: 0 var(--s2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chip[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+/* ---------- Ячейки таблиц ---------- */
+
+.cell-title {
+  font-weight: 500;
+}
+
+.cell-sub {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.cell-actions {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.cell-details {
+  max-width: 420px;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--text-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s1);
+  padding: var(--s1) 20px;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.icon-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.alert-text {
+  flex: 1;
+}
+
+.alert .btn {
+  margin: -4px 0;
+}
+
+/* ---------- Формы ---------- */
+
+.form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+fieldset.field {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: var(--s1) 0;
+  cursor: pointer;
+}
+
+.check input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+
+.check b {
+  display: block;
+  font-weight: 500;
+}
+
+.check small {
+  display: block;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.input:disabled {
+  color: var(--text-3);
+}
+
+/* ---------- Модальное окно ---------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: var(--s3);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.modal {
+  display: flex;
+  width: min(560px, 100%);
+  max-height: calc(100vh - 2 * var(--s3));
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s2) 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-head h2 {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.modal-body {
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s1);
+  padding: var(--s2) 20px;
+  border-top: 1px solid var(--border);
+}
+
+/* ---------- Вход ---------- */
+
+.login-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: var(--s3);
+}
+
+.login-card {
+  display: flex;
+  width: min(380px, 100%);
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s4) var(--s3);
+}
+
+.login-card .brand {
+  padding: 0;
+}
+
+.login-card h1 {
+  margin-top: var(--s1);
+  font-size: 26px;
+  font-weight: 600;
+}
+
+.login-card .btn-primary {
+  margin-top: var(--s1);
+}
+
+.user-card .icon-btn {
+  flex: none;
 }
 
 /* ---------- Адаптивность ---------- */

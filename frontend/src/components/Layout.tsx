@@ -1,22 +1,55 @@
-import { LayoutDashboard, Menu, Search, ShieldCheck } from "lucide-react";
+import {
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  ScrollText,
+  Search,
+  ShieldCheck,
+  Users,
+} from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { useAuth } from "../lib/auth";
+import { initials } from "../lib/format";
+import { roleList } from "../lib/roles";
 import { ThemeToggle } from "./ThemeToggle";
 
 interface NavItem {
   to: string;
   label: string;
   icon: ReactNode;
+  perm?: string;
 }
 
 // Пункты меню добавляются вместе с экранами (см. docs/roadmap.md, этап 1).
 const NAV: NavItem[] = [{ to: "/summary", label: "Сводка", icon: <LayoutDashboard size={18} /> }];
 
+const ADMIN_NAV: NavItem[] = [
+  { to: "/admin/users", label: "Пользователи и роли", icon: <Users size={18} />, perm: "users.manage" },
+  { to: "/admin/audit", label: "Журнал аудита", icon: <ScrollText size={18} />, perm: "audit.view" },
+];
+
+function NavItems({ items }: { items: NavItem[] }) {
+  return items.map((item) => (
+    <NavLink
+      key={item.to}
+      to={item.to}
+      className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
+    >
+      {item.icon}
+      {item.label}
+    </NavLink>
+  ));
+}
+
 export function Layout() {
+  const { me, can, logout } = useAuth();
   const [navOpen, setNavOpen] = useState(false);
   const location = useLocation();
 
   useEffect(() => setNavOpen(false), [location.pathname]);
+
+  const adminItems = ADMIN_NAV.filter((i) => !i.perm || can(i.perm));
 
   return (
     <div className={`shell${navOpen ? " nav-open" : ""}`}>
@@ -31,18 +64,29 @@ export function Layout() {
           </div>
         </div>
         <nav className="nav">
-          {NAV.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
-            >
-              {item.icon}
-              {item.label}
-            </NavLink>
-          ))}
+          <NavItems items={NAV.filter((i) => !i.perm || can(i.perm))} />
+          {adminItems.length > 0 && (
+            <>
+              <div className="nav-group-title">Администрирование</div>
+              <NavItems items={adminItems} />
+            </>
+          )}
         </nav>
         <div className="sidebar-foot">
+          {me && (
+            <div className="user-card">
+              <div className="avatar" aria-hidden="true">
+                {initials(me.display_name)}
+              </div>
+              <div className="user-meta">
+                <div className="user-name">{me.display_name}</div>
+                <div className="user-roles">{roleList(me.roles)}</div>
+              </div>
+              <button type="button" className="icon-btn" aria-label="Выйти" title="Выйти" onClick={logout}>
+                <LogOut size={15} />
+              </button>
+            </div>
+          )}
           <ThemeToggle />
         </div>
       </aside>

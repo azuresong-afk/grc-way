@@ -1,10 +1,13 @@
 """Точка входа API «Аттестации»."""
 
+import secrets
+
 from fastapi import FastAPI
 
 from app import __version__
-from app.api import health, manifest
+from app.api import audit_log, auth, health, manifest, users
 from app.core.config import get_settings
+from app.core.security import LoginThrottle, TokenSigner
 
 
 def create_app() -> FastAPI:
@@ -20,6 +23,11 @@ def create_app() -> FastAPI:
         redoc_url=None,
         openapi_url="/openapi.json" if settings.dev_mode else None,
     )
-    app.include_router(health.router)
-    app.include_router(manifest.router)
+    # В режиме разработки без ключа — случайный: токены живут до перезапуска.
+    secret = settings.secret_key or secrets.token_hex(32)
+    app.state.signer = TokenSigner(secret, settings.token_ttl_minutes * 60)
+    app.state.throttle = LoginThrottle(settings.login_max_failures, settings.login_lockout_seconds)
+
+    for module in (health, manifest, auth, users, audit_log):
+        app.include_router(module.router)
     return app
