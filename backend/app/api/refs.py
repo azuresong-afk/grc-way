@@ -46,6 +46,7 @@ class ProfileOut(BaseModel):
     default_level: str | None
     dynamic: str | None
     imported_at: datetime
+    scanner_synced_at: datetime | None
     total: int
     unverified: int
     groups: list[GroupOut]
@@ -168,6 +169,7 @@ def list_profiles(_: CurrentUser, session: DbSession) -> list[ProfileOut]:
                 default_level=p.default_level,
                 dynamic=p.dynamic,
                 imported_at=p.imported_at,
+                scanner_synced_at=p.scanner_synced_at,
                 groups=gs,
                 total=sum(g.total for g in gs),
                 unverified=sum(g.unverified for g in gs),

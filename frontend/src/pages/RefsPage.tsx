@@ -1,6 +1,6 @@
-import { BookOpen, CheckCheck, ExternalLink, Pencil } from "lucide-react";
+import { BookOpen, CheckCheck, ExternalLink, GitCompareArrows, Pencil } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Drawer } from "../components/Drawer";
 import { EmptyState } from "../components/EmptyState";
 import { Modal } from "../components/Modal";
@@ -27,6 +27,7 @@ interface Profile {
   levels: string[];
   dynamic: string | null;
   imported_at: string;
+  scanner_synced_at: string | null;
   total: number;
   unverified: number;
   groups: Group[];
@@ -151,6 +152,11 @@ export function RefsPage() {
           <div className="crumbs">Справочники</div>
           <h1>Профили мер</h1>
         </div>
+        <div className="actions">
+          <Link to="/refs/scanner" className="btn">
+            <GitCompareArrows size={15} /> Обновление из «Сканера»
+          </Link>
+        </div>
       </div>
 
       {profiles && (
@@ -184,7 +190,7 @@ export function RefsPage() {
               </>
             )}
             <br />
-            Меры импортированы из «Сканера» {formatDateTime(profile.imported_at)}. Не сверено
+            Меры импортированы из «Сканера» {formatDateTime(profile.scanner_synced_at ?? profile.imported_at)}. Не сверено
             методистом: {formatNumber(profile.unverified)} из {formatNumber(profile.total)}.
           </span>
         </div>

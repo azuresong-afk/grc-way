@@ -165,8 +165,11 @@ class RefProfile(Base):
     default_level: Mapped[str | None] = mapped_column(String(16))
     dynamic: Mapped[str | None] = mapped_column(String(64))
     position: Mapped[int] = mapped_column(Integer, default=0)
+    # Хэш YAML-файла, из которого профиль загружен последним (reference/profiles).
     source_hash: Mapped[str] = mapped_column(String(64))
     imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Когда профиль последний раз обновлён из API «Сканера» (экран разницы).
+    scanner_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class RefGroup(Base):
@@ -243,3 +246,32 @@ class RefRevision(Base):
     changed_by_name: Mapped[str | None] = mapped_column(String(200))
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     comment: Mapped[str | None] = mapped_column(String(1000))
+
+
+class RefSyncDiff(Base):
+    """Сравнение справочника с ответом «Сканера» (GET /compliance/profiles).
+
+    Ответ «Сканера» хранится целиком: применяется ровно то, что показано на экране
+    разницы. Перед применением разница пересчитывается и сверяется по отпечатку —
+    если справочник успел измениться, применение отклоняется.
+    """
+
+    __tablename__ = "ref_sync_diffs"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    created_by_name: Mapped[str | None] = mapped_column(String(200))
+    # live | fixture и адрес «Сканера» / имя фикстуры.
+    mode: Mapped[str] = mapped_column(String(16))
+    source: Mapped[str] = mapped_column(String(500))
+    payload: Mapped[list] = mapped_column(JsonType)
+    payload_hash: Mapped[str] = mapped_column(String(64))
+    diff: Mapped[dict] = mapped_column(JsonType)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    # pending — ждёт решения; applied — применено; superseded — есть более новое сравнение.
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    applied_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    applied_by_name: Mapped[str | None] = mapped_column(String(200))
+    applied: Mapped[dict | None] = mapped_column(JsonType)

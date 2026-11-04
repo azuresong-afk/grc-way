@@ -35,6 +35,21 @@ class Settings(BaseSettings):
     # Каталог справочников (YAML). В Docker — /srv/reference.
     reference_dir: Path = Path(__file__).resolve().parents[3] / "reference"
 
+    # «Сканер»: live — ходить в его REST API; fixture — отдавать сохранённый ответ
+    # (тесты, демо, стенд без «Сканера»).
+    scanner_mode: Literal["live", "fixture"] = "fixture"
+    # Адрес API «Сканера» без завершающего «/», например http://scanner:8000.
+    scanner_url: str = ""
+    # Сервисная учётная запись с ролью auditor (только чтение) — или готовый токен.
+    scanner_username: str = ""
+    scanner_password: str = ""
+    scanner_token: str = ""
+    scanner_timeout_seconds: float = 20.0
+    # Файл с корневыми сертификатами для HTTPS «Сканера»; пусто — системные.
+    scanner_ca_file: str = ""
+    # Каталог с фикстурами для scanner_mode=fixture; пусто — встроенные.
+    scanner_fixture_dir: Path | None = None
+
     # Пути, под которыми продукт виден в платформе (для манифеста).
     base_path: str = "/grc/"
     api_base: str = "/api/grc/"
