@@ -7,7 +7,11 @@
   о сверке снимается;
 - мера, исправленная в интерфейсе (origin=local), не трогается — расхождение
   попадает в отчёт загрузки;
-- меры, пропавшие из файла, не удаляются: удаление — только через экран разницы.
+- меры, пропавшие из файла, не удаляются: удаление — только через экран разницы;
+- если файл профиля не менялся с прошлой загрузки, профиль не трогается вовсе:
+  иначе перезапуск откатил бы обновление из API «Сканера» (refs/sync.py) к
+  устаревшему YAML. Каталог проверок из файла дополняет только новые проверки и
+  справочные поля (рекомендации, источники), которых нет в API.
 
 Запуск вручную: python -m app.refs.loader
 """
@@ -87,9 +91,9 @@ def _source_for(profile: dict[str, Any]) -> dict[str, Any]:
 def _load_checks(session: Session, path: Path, report: LoadReport) -> None:
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     for item in data.get("checks", []):
-        row = session.get(RefCheck, item["id"]) or RefCheck(id=item["id"])
-        row.title = item["title"]
-        row.platform = item.get("platform", "any")
+        row = session.get(RefCheck, item["id"])
+        if row is None:
+            row = RefCheck(id=item["id"], title=item["title"], platform=item.get("platform", "any"))
         row.remediation = item.get("remediation")
         row.doc = item.get("doc")
         row.sources = {k: v for k, v in item.items() if k not in _CHECK_META}
@@ -101,7 +105,13 @@ def _load_profile(session: Session, path: Path, report: LoadReport) -> None:
     raw = path.read_bytes()
     data = yaml.safe_load(raw.decode("utf-8"))
     pid = data["id"]
-    prof = session.get(RefProfile, pid) or RefProfile(id=pid)
+    digest = hashlib.sha256(raw).hexdigest()
+    prof = session.get(RefProfile, pid)
+    if prof is not None and prof.source_hash == digest:
+        report.profiles += 1
+        report.unchanged += sum(len(g.get("controls") or []) for g in data.get("groups") or [])
+        return
+    prof = prof or RefProfile(id=pid)
     prof.title = data["title"]
     prof.short = data.get("short") or data["title"]
     prof.document = data.get("document")
@@ -111,9 +121,8 @@ def _load_profile(session: Session, path: Path, report: LoadReport) -> None:
     prof.default_level = data.get("default_level")
     prof.dynamic = data.get("dynamic")
     prof.position = PROFILE_ORDER.index(pid) if pid in PROFILE_ORDER else len(PROFILE_ORDER)
-    if prof.source_hash != (digest := hashlib.sha256(raw).hexdigest()):
-        prof.source_hash = digest
-        prof.imported_at = utcnow()
+    prof.source_hash = digest
+    prof.imported_at = utcnow()
     session.add(prof)
     session.flush()
     report.profiles += 1
