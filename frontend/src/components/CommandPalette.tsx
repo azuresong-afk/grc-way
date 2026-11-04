@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  Bug,
   CornerDownLeft,
   FolderKanban,
   LayoutDashboard,
@@ -36,6 +37,7 @@ const ACTIONS: Action[] = [
   { id: "refs", label: "Справочник мер", hint: "профили и сверка", to: "/refs", icon: <BookOpen size={15} /> },
   { id: "tables", label: "Таблицы классификации", hint: "№117, №21, №239", to: "/refs/classification", icon: <Table2 size={15} /> },
   { id: "threats", label: "Методика оценки угроз", hint: "У1–У3, Н1–Н4, тактики", to: "/refs/threats", icon: <ShieldAlert size={15} /> },
+  { id: "bdu", label: "БДУ ФСТЭК России", hint: "угрозы УБИ и уязвимости", to: "/refs/bdu", icon: <Bug size={15} /> },
   { id: "scanner", label: "Обновить справочник из «Сканера»", hint: "сравнение профилей", to: "/refs/scanner", icon: <RefreshCw size={15} />, perm: "refs.manage" },
   { id: "users", label: "Пользователи и роли", hint: "администрирование", to: "/admin/users", icon: <Users size={15} />, perm: "users.manage" },
   { id: "audit", label: "Журнал аудита", hint: "администрирование", to: "/admin/audit", icon: <ScrollText size={15} />, perm: "audit.view" },

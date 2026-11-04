@@ -13,7 +13,10 @@
    прогон №8 (хост 10.10.3.103 недоступен) остаётся для импорта вручную;
 5. одна организационная мера оценена вручную (интервью) и подтверждена,
    остальные организационные ждут ручной оценки;
-6. второй объект — ИСПДн «Бухгалтерия» из 2 хостов, ещё не классифицирован.
+6. второй объект — ИСПДн «Бухгалтерия» из 2 хостов, ещё не классифицирован;
+7. образцы выгрузок БДУ (app/integrations/bdu/sample.py — не данные ФСТЭК):
+   угрозы и уязвимости применены, вторая выгрузка уязвимостей ждёт применения —
+   видно сравнение и отметку «требует пересчёта». Только если БДУ ещё не загружали.
 
 «Сканер» всегда берётся из фикстур (`GET /runs/{id}/compliance` и `/coverage`
 прогонов №6–8), даже если GRC_SCANNER_MODE=live: демо не ходит в сеть.
@@ -37,7 +40,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password, password_problem
-from app.db.models import Project, RefProfile, User
+from app.db.models import BduImport, Project, RefProfile, User, utcnow
 from app.db.session import get_engine
 from app.integrations.scanner.client import FixtureScannerClient, get_scanner_client
 
@@ -146,9 +149,59 @@ def run(app: FastAPI, session: Session, password: str | None = None) -> Result:
 
     app.dependency_overrides[get_scanner_client] = FixtureScannerClient
     try:
-        return _populate(TestClient(app), password)
+        result = _populate(TestClient(app), password)
     finally:
         app.dependency_overrides.pop(get_scanner_client, None)
+    if _load_bdu_samples(session):
+        result.notes.append(
+            "БДУ: загружены образцы выгрузок, вторая выгрузка уязвимостей ждёт применения"
+        )
+    return result
+
+
+def _load_bdu_samples(session: Session) -> bool:
+    """Образцы БДУ. Загрузка выгрузок — право администратора, а демо-администратора нет,
+    поэтому здесь те же шаги, что в API, без него: файл в том, сравнение, применение."""
+    from app.core.config import get_settings
+    from app.domain import bdu_import
+    from app.domain.bdu import parse_file
+    from app.domain.evidence_files import store
+    from app.integrations.bdu.sample import thrlist_xlsx, vullist_xlsx
+
+    if session.scalar(select(BduImport.id).limit(1)) is not None:
+        return False
+    settings = get_settings()
+    steps = [
+        ("thrlist.xlsx", thrlist_xlsx(1), True),
+        ("vullist.xlsx", vullist_xlsx(1), True),
+        ("vullist.xlsx", vullist_xlsx(2), False),
+    ]
+    for name, data, apply in steps:
+        stored = store([data], name, settings.bdu_dir, settings.bdu_max_mb * 1024 * 1024)
+        parsed = parse_file(stored.path)
+        diff = bdu_import.compute_diff(session, parsed, file_sha256=stored.sha256)
+        row = BduImport(
+            kind=parsed.kind,
+            file_name=name,
+            file_sha256=stored.sha256,
+            file_size=stored.size,
+            export_version=parsed.version,
+            version_source=parsed.version_source,
+            status="pending",
+            summary=diff["summary"],
+            items=diff["items"],
+            warnings=diff["warnings"],
+            fingerprint=diff["fingerprint"],
+            created_by_name="Демо-данные",
+        )
+        session.add(row)
+        session.flush()
+        if apply:
+            res = bdu_import.apply(session, parsed, row, version=parsed.version)
+            row.status, row.applied_at = "applied", utcnow()
+            row.applied_by_name, row.applied = "Демо-данные", res.as_dict()
+    session.commit()
+    return True
 
 
 def _populate(c: Any, password: str) -> Result:
@@ -319,6 +372,8 @@ def main() -> int:
         print(f"демо-данные: проект «{DEMO_PROJECT}» уже есть — ничего не изменено")
         return 0
     print(f"демо-данные: создан проект «{DEMO_PROJECT}» и объект «{DEMO_OBJECT}» (К2, 10 хостов)")
+    for note in r.notes:
+        print(f"демо-данные: {note}")
     print("вход (пароль у всех один):")
     for username, (name, _) in DEMO_USERS.items():
         print(f"  {username:<12} {name}")

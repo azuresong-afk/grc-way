@@ -15,7 +15,11 @@ PASSWORD = "demo-password-123"  # noqa: S105 — тестовый пароль
 
 
 @pytest.fixture
-def demo_env(client, session, tmp_path, login):
+def demo_env(client, session, tmp_path, login, monkeypatch):
+    from app.core.config import get_settings
+
+    monkeypatch.setenv("GRC_BDU_DIR", str(tmp_path / "bdu"))
+    get_settings.cache_clear()
     shutil.copytree(REFERENCE, tmp_path / "reference")
     load_reference(session, tmp_path / "reference")
     r = demo.run(client.app, session, PASSWORD)
@@ -137,3 +141,11 @@ def test_search(client, demo_env, make_user, login):
     other = client.get("/search", headers=login("stranger"), params={"q": "учёт"}).json()
     assert other["items"] == []
     assert find("учёт", project_id=r.object_id) == []
+
+
+def test_demo_bdu_samples(client, demo_env):
+    _, h = demo_env
+    st = client.get("/bdu/status", headers=h["demo-viewer"]).json()
+    assert st["threats"]["active"] == 6 and st["vulns"]["active"] == 6
+    pending = client.get(f"/bdu/imports/{st['vulns']['pending_id']}", headers=h["demo-viewer"])
+    assert pending.json()["summary"]["criticality"] == 1
