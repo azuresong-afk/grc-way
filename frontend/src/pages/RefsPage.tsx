@@ -1,4 +1,4 @@
-import { BookOpen, CheckCheck, ExternalLink, GitCompareArrows, Pencil } from "lucide-react";
+import { BookOpen, CheckCheck, ExternalLink, GitCompareArrows, Pencil, Table2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Drawer } from "../components/Drawer";
@@ -153,6 +153,9 @@ export function RefsPage() {
           <h1>Профили мер</h1>
         </div>
         <div className="actions">
+          <Link to="/refs/classification" className="btn">
+            <Table2 size={15} /> Таблицы классификации
+          </Link>
           <Link to="/refs/scanner" className="btn">
             <GitCompareArrows size={15} /> Обновление из «Сканера»
           </Link>

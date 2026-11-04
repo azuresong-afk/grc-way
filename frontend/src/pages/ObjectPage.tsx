@@ -38,16 +38,18 @@ import {
   type SyncResult,
 } from "../lib/objects";
 import { useProject } from "../lib/project";
+import { ClassificationTab } from "./ClassificationTab";
 import { RegimeField } from "./ObjectsPage";
 
-type Tab = "description" | "composition";
+type Tab = "description" | "classification" | "composition";
+const TABS: Tab[] = ["description", "classification", "composition"];
 
 export function ObjectPage() {
   const { id = "" } = useParams();
   const { can } = useAuth();
   const { current, projects, select } = useProject();
   const [params, setParams] = useSearchParams();
-  const tab: Tab = params.get("tab") === "composition" ? "composition" : "description";
+  const tab: Tab = TABS.find((t) => t === params.get("tab")) ?? "description";
   const [obj, setObj] = useState<ObjectFull | null>(null);
   const [hosts, setHosts] = useState<Host[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -156,6 +158,20 @@ export function ObjectPage() {
           type="button"
           role="tab"
           className="tab"
+          aria-selected={tab === "classification"}
+          onClick={() => setTab("classification")}
+        >
+          Классификация
+          {obj.classification && (
+            <span className={`count${obj.classification.status === "draft" ? " count-warn" : ""}`}>
+              {obj.classification.short}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className="tab"
           aria-selected={tab === "composition"}
           onClick={() => setTab("composition")}
         >
@@ -165,6 +181,9 @@ export function ObjectPage() {
       </div>
 
       {tab === "description" && <DescriptionTab obj={obj} />}
+      {tab === "classification" && (
+        <ClassificationTab obj={obj} editable={known && obj.status === "active"} onChanged={reloadObject} />
+      )}
       {tab === "composition" && (
         <CompositionTab
           obj={obj}

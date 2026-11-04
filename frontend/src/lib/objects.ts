@@ -38,6 +38,14 @@ export interface ObjectBrief {
   host_count: number;
   segment_count: number;
   updated_at: string;
+  // Утверждённая классификация по текущему режиму, иначе последний черновик.
+  classification?: {
+    id: string;
+    result: string;
+    short: string;
+    result_label: string;
+    status: "approved" | "draft";
+  } | null;
 }
 
 export interface ObjectFull extends ObjectBrief {

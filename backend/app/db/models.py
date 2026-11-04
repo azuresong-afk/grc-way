@@ -365,3 +365,78 @@ class ObjectHost(Base):
     scanner_missing: Mapped[bool] = mapped_column(Boolean, default=False)
     synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+# ---------- Классификация ----------
+
+
+class RefClassificationTable(Base):
+    """Таблица классификации режима (117 — класс ГИС, 21 — УЗ ПДн, 239 — категория КИИ).
+
+    Определение — данные (см. app/domain/classification.py), мастер их только
+    интерпретирует. Каждая правка — новая ревизия, прежнее определение — в ref_revisions.
+    """
+
+    __tablename__ = "ref_classification_tables"
+
+    regime: Mapped[str] = mapped_column(String(8), primary_key=True)
+    title: Mapped[str] = mapped_column(String(300))
+    # Метка версии из файла (например, 117-stub-1); номер ревизии — в revision.
+    version: Mapped[str] = mapped_column(String(64))
+    definition: Mapped[dict] = mapped_column(JsonType)
+    definition_hash: Mapped[str] = mapped_column(String(64))
+    # {document, clause, appendix, url, note}
+    source: Mapped[dict] = mapped_column(JsonType, default=dict)
+    origin: Mapped[str] = mapped_column(String(16))  # stub | official | local
+    verified_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    verified_by_name: Mapped[str | None] = mapped_column(String(200))
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    # Хэш YAML-файла последней загрузки: неизменённый файл при старте не трогается.
+    source_hash: Mapped[str] = mapped_column(String(64))
+    imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+
+
+class Classification(Base):
+    """Расчёт класса / уровня защищённости / категории объекта.
+
+    Новая классификация — новая запись; прежние сохраняются. Запись хранит снимок
+    определения таблицы, по которому считали, — расчёт воспроизводим, даже если
+    таблицу потом исправили.
+    """
+
+    __tablename__ = "classifications"
+    __table_args__ = (Index("ix_classifications_object", "object_id", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    object_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("objects.id", ondelete="CASCADE"))
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    regime: Mapped[str] = mapped_column(String(8))
+    inputs: Mapped[dict] = mapped_column(JsonType)
+    result: Mapped[str] = mapped_column(String(32))
+    result_label: Mapped[str] = mapped_column(String(200))
+    # Промежуточные значения шагов и трасса: какая строка таблицы сработала.
+    step_values: Mapped[dict] = mapped_column(JsonType, default=dict)
+    trace: Mapped[list] = mapped_column(JsonType, default=list)
+    justification: Mapped[str | None] = mapped_column(String(10000))
+    table_version: Mapped[str] = mapped_column(String(64))
+    table_revision: Mapped[int] = mapped_column(Integer)
+    table_hash: Mapped[str] = mapped_column(String(64))
+    table_snapshot: Mapped[dict] = mapped_column(JsonType)
+    # Таблица на момент расчёта не была сверена методистом.
+    table_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    # draft — черновик; approved — утверждена; superseded — заменена более новой.
+    status: Mapped[str] = mapped_column(String(16), default="draft")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    created_by_name: Mapped[str | None] = mapped_column(String(200))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    approved_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    approved_by_name: Mapped[str | None] = mapped_column(String(200))
+    approval_comment: Mapped[str | None] = mapped_column(String(2000))
+    # Утверждающий явно подтвердил использование несверенной таблицы.
+    unverified_acknowledged: Mapped[bool] = mapped_column(Boolean, default=False)
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    superseded_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
