@@ -1993,6 +1993,162 @@ fieldset.field {
   gap: 4px;
 }
 
+/* ---------- Ручные доказательства и подтверждение (1.10) ---------- */
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s1);
+  width: 100%;
+}
+
+.evidence-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.evidence-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 13px;
+}
+
+.evidence-card.is-withdrawn {
+  background: transparent;
+  border-style: dashed;
+}
+
+.evidence-card.is-withdrawn .evidence-card-summary {
+  color: var(--text-3);
+  text-decoration: line-through;
+  text-decoration-color: var(--border-strong);
+}
+
+.evidence-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.evidence-card-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  font-size: 12px;
+}
+
+.evidence-card-summary {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.evidence-file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.evidence-file-name {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.evidence-details {
+  margin: 0;
+  color: var(--text-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.props-compact {
+  row-gap: 2px;
+  font-size: 12px;
+}
+
+.evidence-withdrawn {
+  width: 100%;
+  font-size: 13px;
+}
+
+.evidence-withdrawn summary {
+  margin-bottom: var(--s1);
+  color: var(--text-3);
+  cursor: pointer;
+}
+
+.evidence-form {
+  padding: var(--s2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.file-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.file-pick-name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.confirm-box {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s1);
+  width: 100%;
+  padding: var(--s2);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+.confirm-box.is-confirmed {
+  background: var(--ok-soft);
+}
+
+.confirm-box.is-confirmed > svg {
+  flex: none;
+  color: var(--ok);
+}
+
+.confirmed-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--ok);
+}
+
+.evidence-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
 @media (max-width: 960px) {
   .scanner-stats {
     grid-template-columns: repeat(3, minmax(0, 1fr));

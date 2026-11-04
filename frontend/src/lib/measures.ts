@@ -38,6 +38,11 @@ export interface ObjectMeasure {
   auto_status: Exclude<MeasureStatus, "not_applicable"> | null;
   auto_note: string | null;
   auto_snapshot_id: string | null;
+  confirmed_at: string | null;
+  confirmed_by_name: string | null;
+  confirmed_status: MeasureStatus | null;
+  confirm_comment: string | null;
+  manual_evidence: number;
   updated_at: string;
 }
 
@@ -116,6 +121,8 @@ export interface MeasureSet {
   unverified: number;
   approve_blockers: string[];
   snapshot: SnapshotBrief | null;
+  confirmed: number;
+  to_confirm: number;
 }
 
 export interface PlanItem {
@@ -219,11 +226,11 @@ export function adaptationNote(m: ObjectMeasure): string | null {
   return null;
 }
 
-/** Статус поставлен вручную и расходится с предложением «Сканера». */
+/** Статус поставлен вручную (или подтверждён) и расходится с предложением «Сканера». */
 export function differsFromScanner(m: ObjectMeasure): boolean {
   return (
     m.auto_status !== null &&
-    m.status_source === "manual" &&
+    (m.status_source === "manual" || m.confirmed_at !== null) &&
     m.status !== m.auto_status
   );
 }

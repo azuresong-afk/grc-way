@@ -129,6 +129,11 @@ function measure(over: Partial<ObjectMeasure>): ObjectMeasure {
     auto_status: null,
     auto_note: null,
     auto_snapshot_id: null,
+    confirmed_at: null,
+    confirmed_by_name: null,
+    confirmed_status: null,
+    confirm_comment: null,
+    manual_evidence: 0,
     updated_at: "2026-11-04T10:00:00Z",
     ...over,
   };
@@ -199,6 +204,8 @@ function setOf(over: Partial<MeasureSet> = {}): MeasureSet {
     unverified: 3,
     approve_blockers: [],
     snapshot: null,
+    confirmed: 0,
+    to_confirm: 1,
     ...over,
   };
 }
@@ -560,4 +567,207 @@ it("карточка меры показывает нарушения по хо�
       use_auto: true,
     }),
   );
+});
+
+// ---------- Ручная оценка (1.10) ----------
+
+const VU = MEASURES[1];
+
+function manualEvidence(over: Record<string, unknown> = {}) {
+  return {
+    id: "e5",
+    kind: "file",
+    status: null,
+    summary: "Положение о защите информации",
+    data: { category: "document" },
+    snapshot: null,
+    file: {
+      id: "f1",
+      name: "Положение.pdf",
+      ext: "pdf",
+      mime: "application/pdf",
+      size: 245760,
+      sha256: "ab".repeat(32),
+    },
+    created_at: "2026-11-04T12:00:00Z",
+    created_by_name: "Козлов К. К.",
+    withdrawn_at: null,
+    withdrawn_by_name: null,
+    withdraw_reason: null,
+    in_confirmation: false,
+    ...over,
+  };
+}
+
+it("эксперт прикладывает файл к организационной мере", async () => {
+  let sent: FormData | null = null;
+  fakeApi({
+    ...BASE,
+    "GET /me": () => json(EXP),
+    "GET /objects/o1/measure-set": () => json(setOf()),
+    "GET /objects/o1/measures": () => json(MEASURES),
+    "GET /objects/o1/adaptations": () => json([]),
+    "GET /object-measures/m2/evidence": () => json([]),
+    "POST /object-measures/m2/evidence": (init) => {
+      sent = init?.body as FormData;
+      return json(manualEvidence(), 201);
+    },
+  });
+  renderAt("/objects/o1?tab=measures");
+
+  fireEvent.click(await screen.findByText("Выявление угроз"));
+  const drawer = await screen.findByRole("dialog");
+  expect(
+    await within(drawer).findByText(/Доказательств нет/),
+  ).toBeInTheDocument();
+  // Без статуса подтверждать нечего.
+  expect(
+    within(drawer).getByText("Сначала поставьте статус меры."),
+  ).toBeInTheDocument();
+
+  fireEvent.click(within(drawer).getByRole("button", { name: /Добавить/ }));
+  const submit = within(drawer).getByRole("button", {
+    name: "Добавить доказательство",
+  });
+  expect(submit).toBeDisabled();
+  const file = new File(["%PDF-1.7"], "Положение.pdf", {
+    type: "application/pdf",
+  });
+  fireEvent.change(within(drawer).getByLabelText("Файл доказательства"), {
+    target: { files: [file] },
+  });
+  fireEvent.change(within(drawer).getByLabelText("Что подтверждает"), {
+    target: { value: "Положение о защите информации" },
+  });
+  fireEvent.click(submit);
+  await waitFor(() => expect(sent).not.toBeNull());
+  const form = sent as unknown as FormData;
+  expect(form.get("kind")).toBe("file");
+  expect(form.get("category")).toBe("document");
+  expect(form.get("summary")).toBe("Положение о защите информации");
+  expect((form.get("file") as File).name).toBe("Положение.pdf");
+});
+
+it("интервью уходит JSON с датой и опрошенными", async () => {
+  const calls = fakeApi({
+    ...BASE,
+    "GET /me": () => json(EXP),
+    "GET /objects/o1/measure-set": () => json(setOf()),
+    "GET /objects/o1/measures": () => json(MEASURES),
+    "GET /objects/o1/adaptations": () => json([]),
+    "GET /object-measures/m2/evidence": () => json([]),
+    "POST /object-measures/m2/evidence": () =>
+      json(manualEvidence({ kind: "interview", file: null }), 201),
+  });
+  renderAt("/objects/o1?tab=measures");
+
+  fireEvent.click(await screen.findByText("Выявление угроз"));
+  const drawer = await screen.findByRole("dialog");
+  fireEvent.click(
+    await within(drawer).findByRole("button", { name: /Добавить/ }),
+  );
+  fireEvent.click(within(drawer).getByRole("radio", { name: "Интервью" }));
+  fireEvent.change(within(drawer).getByLabelText("Дата"), {
+    target: { value: "2026-11-02" },
+  });
+  fireEvent.change(within(drawer).getByLabelText("Кого опрашивали"), {
+    target: { value: "Петров П. П., администратор" },
+  });
+  fireEvent.change(within(drawer).getByLabelText("Что подтверждает"), {
+    target: { value: "Журнал инцидентов ведётся" },
+  });
+  fireEvent.click(
+    within(drawer).getByRole("button", { name: "Добавить доказательство" }),
+  );
+  await waitFor(() =>
+    expect(calls.find((c) => c.method === "POST")?.body).toEqual({
+      kind: "interview",
+      summary: "Журнал инцидентов ведётся",
+      held_on: "2026-11-02",
+      participants: "Петров П. П., администратор",
+      place: null,
+      details: null,
+    }),
+  );
+});
+
+it("мера с доказательством подтверждается, отзыв предупреждает о снятии подтверждения", async () => {
+  const assessed = {
+    ...VU,
+    status: "implemented" as const,
+    effective_status: "implemented" as const,
+    manual_evidence: 1,
+  };
+  const calls = fakeApi({
+    ...BASE,
+    "GET /me": () => json(EXP),
+    "GET /objects/o1/measure-set": () => json(setOf()),
+    "GET /objects/o1/measures": () => json([MEASURES[0], assessed]),
+    "GET /objects/o1/adaptations": () => json([]),
+    "GET /object-measures/m2/evidence": () =>
+      json([manualEvidence({ in_confirmation: true })]),
+    "POST /object-measures/m2/confirm": () =>
+      json({ ...assessed, confirmed_at: "2026-11-04T13:00:00Z" }),
+    "POST /evidence/e5/withdraw": () => json(manualEvidence()),
+  });
+  renderAt("/objects/o1?tab=measures");
+
+  fireEvent.click(await screen.findByText("Выявление угроз"));
+  const drawer = await screen.findByRole("dialog");
+  expect(await within(drawer).findByText("Положение.pdf")).toBeInTheDocument();
+  expect(within(drawer).getByText("240 КБ")).toBeInTheDocument();
+  fireEvent.click(
+    within(drawer).getByRole("button", { name: /Подтвердить «Реализована»/ }),
+  );
+  await waitFor(() =>
+    expect(
+      calls.find((c) => c.path === "/object-measures/m2/confirm")?.body,
+    ).toEqual({ status: "implemented", comment: null }),
+  );
+
+  fireEvent.click(within(drawer).getByRole("button", { name: /Отозвать/ }));
+  const dialogs = await screen.findAllByRole("dialog");
+  const modal = dialogs[dialogs.length - 1] as HTMLElement;
+  expect(
+    within(modal).getByText(/подтверждение будет снято/),
+  ).toBeInTheDocument();
+  const go = within(modal).getByRole("button", { name: "Отозвать" });
+  expect(go).toBeDisabled();
+  fireEvent.change(within(modal).getByLabelText("Причина"), {
+    target: { value: "Не та редакция" },
+  });
+  fireEvent.click(go);
+  await waitFor(() =>
+    expect(calls.find((c) => c.path === "/evidence/e5/withdraw")?.body).toEqual(
+      { reason: "Не та редакция" },
+    ),
+  );
+});
+
+it("подтверждённая мера видна в таблице, фильтр «Ждут подтверждения»", async () => {
+  fakeApi({
+    ...BASE,
+    "GET /me": () => json(EXP),
+    "GET /objects/o1/measure-set": () =>
+      json(setOf({ confirmed: 1, to_confirm: 1 })),
+    "GET /objects/o1/measures": () =>
+      json([
+        measure({
+          confirmed_at: "2026-11-04T13:00:00Z",
+          confirmed_status: "implemented",
+          confirmed_by_name: "Козлов К. К.",
+        }),
+        { ...VU, status: "not_implemented", manual_evidence: 2 },
+      ]),
+    "GET /objects/o1/adaptations": () => json([]),
+  });
+  renderAt("/objects/o1?tab=measures");
+
+  expect(await screen.findByText("подтверждена")).toBeInTheDocument();
+  expect(
+    screen.getByText(/подтверждено 1 · ждут подтверждения 1/),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Ждут подтверждения" }));
+  expect(screen.queryByText("Контроль конфигураций")).not.toBeInTheDocument();
+  expect(screen.getByText("Выявление угроз")).toBeInTheDocument();
 });

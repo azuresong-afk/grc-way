@@ -14,6 +14,7 @@ import { formatDateTime, formatNumber } from "../lib/format";
 import {
   STATUS_LABELS,
   STATUS_PILL,
+  differsFromScanner,
   formatPercent,
   type ObjectMeasure,
 } from "../lib/measures";
@@ -621,10 +622,7 @@ export function MeasureEvidence({
 
   const scanner = (list ?? []).filter((e) => e.kind === "scanner");
   const last = scanner[0];
-  const differs =
-    m.auto_status !== null &&
-    m.status_source === "manual" &&
-    m.status !== m.auto_status;
+  const differs = differsFromScanner(m);
 
   return (
     <div className="drawer-section">
@@ -674,8 +672,11 @@ export function MeasureEvidence({
           {differs && (
             <div className="alert alert-warn">
               <span className="alert-text">
-                Статус поставлен вручную ({STATUS_LABELS[m.status]}) и
-                расходится с предложением «Сканера».
+                {m.status_source === "manual"
+                  ? "Статус поставлен вручную"
+                  : "Статус подтверждён"}{" "}
+                ({STATUS_LABELS[m.status]}) и расходится с предложением
+                «Сканера».
               </span>
               {canAssess && (
                 <button
