@@ -11,3 +11,6 @@ dist/
 *.tsbuildinfo
 # Файлы доказательств при запуске без Docker
 backend/data/
+
+# Резервные копии (make backup)
+/backup/

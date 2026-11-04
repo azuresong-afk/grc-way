@@ -34,6 +34,9 @@ services:
     env_file: .env
     environment:
       POSTGRES_HOST: db
+      # Задаётся здесь, а не только в entrypoint, чтобы команды через
+      # `docker compose exec app …` (make demo, alembic) шли в ту же БД.
+      GRC_DATABASE_URL: ${GRC_DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:-grc}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-grc}}
     volumes:
       - app-data:/data
     ports:
