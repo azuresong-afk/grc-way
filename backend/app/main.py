@@ -8,6 +8,7 @@ from app import __version__
 from app.api import (
     audit_log,
     auth,
+    bdu,
     classification,
     evidence,
     health,
@@ -56,6 +57,7 @@ def create_app() -> FastAPI:
         measures,
         refs,
         threat_refs,
+        bdu,
         refs_sync,
         scanner_import,
         evidence,

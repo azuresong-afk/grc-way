@@ -2378,3 +2378,81 @@ fieldset.field {
     padding-top: var(--s2);
   }
 }
+
+/* ---------- БДУ ФСТЭК ---------- */
+
+.bdu-kpis .kpi-label .mono {
+  color: var(--text-3);
+}
+
+.bdu-table td.bdu-title {
+  min-width: 320px;
+}
+
+.small {
+  font-size: 12px;
+}
+
+.cia {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.cia-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cia-mark.on {
+  border-color: transparent;
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.bdu-import-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.bdu-import-head h2 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.plain-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.error-text {
+  color: var(--danger);
+}
+
+@media (max-width: 600px) {
+  .bdu-table td.bdu-title {
+    min-width: 220px;
+  }
+
+  .bdu-import-head {
+    flex-direction: column;
+  }
+}
+
+.drawer .props {
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+
+.drawer .props dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
