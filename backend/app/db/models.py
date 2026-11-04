@@ -652,3 +652,38 @@ class Evidence(Base):
     withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     withdrawn_by_name: Mapped[str | None] = mapped_column(String(200))
     withdraw_reason: Mapped[str | None] = mapped_column(String(1000))
+
+
+class RefThreatItem(Base):
+    """Запись справочника Методики оценки угроз (ФСТЭК России, 2021).
+
+    Виды записей (kind): consequence_type — вид негативных последствий У1–У3;
+    consequence — пример последствия (родитель — вид); capability — уровень
+    возможностей нарушителя Н1–Н4; intruder — вид нарушителя (attrs.capability —
+    типовой уровень, attrs.category — внешний/внутренний); tactic — тактика Т1–Т10;
+    technique — техника (родитель — тактика).
+    """
+
+    __tablename__ = "ref_threat_items"
+    __table_args__ = (Index("ix_ref_threat_items_kind", "kind", "position"),)
+
+    code: Mapped[str] = mapped_column(String(32), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(32))
+    parent_code: Mapped[str | None] = mapped_column(String(32))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    title: Mapped[str] = mapped_column(String(1000))
+    description: Mapped[str | None] = mapped_column(String(4000))
+    attrs: Mapped[dict] = mapped_column(JsonType, default=dict)
+    # {document, clause, appendix, url, note}
+    source: Mapped[dict] = mapped_column(JsonType, default=dict)
+    origin: Mapped[str] = mapped_column(String(16))  # stub | official | local
+    verified_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    verified_by_name: Mapped[str | None] = mapped_column(String(200))
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    # Хэш записи в файле при последней загрузке: неизменённая в файле запись при
+    # старте не трогается (и не откатывает правку из интерфейса). NULL — запись
+    # добавлена в интерфейсе.
+    file_hash: Mapped[str | None] = mapped_column(String(64))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
