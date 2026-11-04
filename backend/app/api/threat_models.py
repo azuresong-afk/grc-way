@@ -9,6 +9,9 @@
 - Утверждение: право approve, все шаги заполнены и без проблем, несверенные
   записи справочника Методики — только с явным подтверждением. В snapshot
   фиксируются записи справочника и угрозы БДУ на момент утверждения.
+- Находки «Сканера» с БДУ (задача 2.4): привязываются к угрозе черновика по
+  dedup_key из текущего снимка объекта; для каждой привязки видно, есть ли
+  находка в текущем снимке. Неактуальная угроза с такими находками не утверждается.
 """
 
 from __future__ import annotations
@@ -25,11 +28,13 @@ from sqlalchemy.orm import Session
 from app import audit
 from app.api.deps import DbSession, client_ip, require
 from app.api.objects import _editable, get_object_for
+from app.api.snapshots import _latest_snapshot
 from app.core.rbac import Perm, SelfApprovalError, ensure_not_own_work
 from app.db.models import (
     AssessedObject,
     BduImport,
     BduThreat,
+    BduVuln,
     RefThreatItem,
     ThreatModel,
     ThreatModelThreat,
@@ -37,6 +42,8 @@ from app.db.models import (
     utcnow,
 )
 from app.domain.bdu import threat_code
+from app.domain.threat_findings import FindingsView, host_objects, link_entry, suggested_threats
+from app.domain.threat_findings import check as check_findings
 from app.domain.threat_model import (
     DATA_STEPS,
     ModelError,
@@ -137,6 +144,7 @@ class StepProgressOut(BaseModel):
     done: bool
     count: int
     problems: list[str]
+    warnings: list[str]
 
 
 class ProgressOut(BaseModel):
@@ -167,6 +175,23 @@ class ModelBrief(BaseModel):
     relevant: int
 
 
+class LinkedFindingOut(BaseModel):
+    dedup_key: str
+    host: str | None
+    port: int | None
+    title: str | None
+    severity: str | None
+    vuln_id: str | None
+    bdu_ids: list[str]
+    cve_ids: list[str]
+    cvss: float | None
+    snapshot_number: int | None
+    linked_at: datetime | None
+    linked_by_name: str | None
+    # present — находка есть в текущем снимке объекта; absent — нет; unknown — не с чем сравнить.
+    state: str
+
+
 class ThreatOut(BaseModel):
     code: str
     title: str | None
@@ -186,9 +211,64 @@ class ThreatOut(BaseModel):
     consequences: list[str]
     methods: list[str]
     tactics: list[str]
-    linked_findings: list[Any]
+    linked_findings: list[LinkedFindingOut]
+    # Привязанных находок, которые есть в текущем снимке: угроза подтверждена.
+    confirmed: int
     updated_at: datetime
     updated_by_name: str | None
+
+
+class FindingsSummaryOut(BaseModel):
+    snapshot_id: uuid.UUID | None
+    snapshot_number: int | None
+    imported: bool
+    total: int
+    unlinked: int
+    # Угроз, подтверждённых находками текущего снимка.
+    confirmed_threats: int
+
+
+class BduRefOut(BaseModel):
+    bdu_id: str
+    title: str | None
+    in_bdu: bool
+    withdrawn: bool
+    cvss3_score: float | None
+
+
+class FindingRowOut(BaseModel):
+    dedup_key: str
+    module: str | None
+    host: str
+    port: int | None
+    finding_type: str | None
+    title: str
+    severity: str | None
+    vuln_id: str | None
+    cve_ids: list[str]
+    bdu_ids: list[str]
+    cvss: float | None
+    status: str | None
+    detected_at: datetime | None
+    software: str | None
+    software_version: str | None
+    bdu: list[BduRefOut]
+    # Угрозы модели, к которым привязана находка.
+    linked: list[str]
+    # Объекты воздействия шага 2, в которые входит хост находки.
+    objects: list[str]
+    # Подсказка: угрозы модели с объектом воздействия, где есть хост находки.
+    suggested: list[str]
+
+
+class FindingsOut(FindingsSummaryOut):
+    items: list[FindingRowOut]
+
+
+class LinkIn(BaseModel):
+    dedup_keys: list[Annotated[str, Field(min_length=8, max_length=128)]] = Field(
+        min_length=1, max_length=500
+    )
 
 
 class ModelDetail(ModelBrief):
@@ -199,6 +279,7 @@ class ModelDetail(ModelBrief):
     unverified_refs: list[str]
     bdu_version: date | None
     snapshot: dict[str, Any] | None
+    findings: FindingsSummaryOut
 
 
 class StepIn(BaseModel):
@@ -309,10 +390,25 @@ def _referenced(m: ThreatModel) -> set[str]:
     return out
 
 
-def _progress(session: Session, m: ThreatModel, obj: AssessedObject) -> Progress:
+def _findings_view(session: Session, obj: AssessedObject) -> FindingsView:
+    """Находки текущего (последнего) снимка «Сканера» объекта."""
+    snap = _latest_snapshot(session, obj)
+    if snap is None:
+        return FindingsView.empty()
+    return FindingsView.of(str(snap.id), snap.number, snap.findings)
+
+
+def _links(t: ThreatModelThreat) -> list[dict[str, Any]]:
+    return list(t.linked_findings or [])
+
+
+def _progress(
+    session: Session, m: ThreatModel, obj: AssessedObject, view: FindingsView | None = None
+) -> Progress:
     refs, _ = _refs(session)
     bdu = _bdu_rows(session, [t.threat_code for t in m.threats])
-    return progress(
+    view = view if view is not None else _findings_view(session, obj)
+    prog = progress(
         m.steps or {},
         [_threat_dict(t) for t in m.threats],
         refs=refs,
@@ -320,6 +416,31 @@ def _progress(session: Session, m: ThreatModel, obj: AssessedObject) -> Progress
         bdu={
             c: {"title": r.title, "withdrawn": r.withdrawn_at is not None} for c, r in bdu.items()
         },
+    )
+    problems, warnings = check_findings(
+        [
+            {"code": t.threat_code, "relevant": t.relevant, "linked_findings": _links(t)}
+            for t in m.threats
+        ],
+        view,
+    )
+    step = next(x for x in prog.steps if x.key == "threats")
+    step.problems += problems
+    step.warnings += warnings
+    return prog
+
+
+def _findings_summary(m: ThreatModel, view: FindingsView) -> FindingsSummaryOut:
+    linked = {x["dedup_key"] for t in m.threats for x in _links(t)}
+    return FindingsSummaryOut(
+        snapshot_id=uuid.UUID(view.snapshot_id) if view.snapshot_id else None,
+        snapshot_number=view.snapshot_number,
+        imported=view.imported,
+        total=len(view.by_key),
+        unlinked=sum(1 for k in view.by_key if k not in linked),
+        confirmed_threats=sum(
+            1 for t in m.threats if any(view.state(x["dedup_key"]) == "present" for x in _links(t))
+        ),
     )
 
 
@@ -346,7 +467,29 @@ def _brief(m: ThreatModel) -> ModelBrief:
     )
 
 
-def _threat_out(t: ThreatModelThreat, b: BduThreat | None) -> ThreatOut:
+def _linked_out(t: ThreatModelThreat, view: FindingsView) -> list[LinkedFindingOut]:
+    return [
+        LinkedFindingOut(
+            dedup_key=x["dedup_key"],
+            host=x.get("host"),
+            port=x.get("port"),
+            title=x.get("title"),
+            severity=x.get("severity"),
+            vuln_id=x.get("vuln_id"),
+            bdu_ids=list(x.get("bdu_ids") or []),
+            cve_ids=list(x.get("cve_ids") or []),
+            cvss=x.get("cvss"),
+            snapshot_number=x.get("snapshot_number"),
+            linked_at=x.get("linked_at"),
+            linked_by_name=x.get("linked_by_name"),
+            state=view.state(x["dedup_key"]),
+        )
+        for x in _links(t)
+    ]
+
+
+def _threat_out(t: ThreatModelThreat, b: BduThreat | None, view: FindingsView) -> ThreatOut:
+    linked = _linked_out(t, view)
     return ThreatOut(
         code=t.threat_code,
         title=b.title if b else None,
@@ -366,7 +509,8 @@ def _threat_out(t: ThreatModelThreat, b: BduThreat | None) -> ThreatOut:
         consequences=list(t.consequences or []),
         methods=list(t.methods or []),
         tactics=list(t.tactics or []),
-        linked_findings=list(t.linked_findings or []),
+        linked_findings=linked,
+        confirmed=sum(1 for x in linked if x.state == "present"),
         updated_at=t.updated_at,
         updated_by_name=t.updated_by_name,
     )
@@ -378,14 +522,16 @@ def _detail(session: Session, m: ThreatModel) -> ModelDetail:
     _, rows = _refs(session)
     bdu = _bdu_rows(session, [t.threat_code for t in m.threats])
     unverified = sorted(c for c in _referenced(m) if c in rows and rows[c].verified_at is None)
+    view = _findings_view(session, obj)
     return ModelDetail(
         **_brief(m).model_dump(),
         steps={k: (m.steps or {}).get(k) or {"items": []} for k in DATA_STEPS},
-        threats=[_threat_out(t, bdu.get(t.threat_code)) for t in m.threats],
-        progress=ProgressOut(**_progress(session, m, obj).as_dict()),
+        threats=[_threat_out(t, bdu.get(t.threat_code), view) for t in m.threats],
+        progress=ProgressOut(**_progress(session, m, obj, view).as_dict()),
         unverified_refs=unverified,
         bdu_version=_bdu_version(session),
         snapshot=m.snapshot,
+        findings=_findings_summary(m, view),
     )
 
 
@@ -762,13 +908,200 @@ def remove_threat(
     return _detail(session, m)
 
 
+# ---------- Находки «Сканера» (задача 2.4) ----------
+
+
+@router.get("/threat-models/{model_id}/findings", response_model=FindingsOut)
+def list_findings(model_id: uuid.UUID, user: Viewer, session: DbSession) -> FindingsOut:
+    """Находки с БДУ текущего снимка объекта: к каким угрозам привязаны, что подсказать."""
+    m = _get_model(session, model_id, user)
+    obj = session.get(AssessedObject, m.object_id)
+    assert obj is not None  # noqa: S101 — внешний ключ
+    view = _findings_view(session, obj)
+    linked: dict[str, list[str]] = {}
+    for t in m.threats:
+        for x in _links(t):
+            linked.setdefault(x["dedup_key"], []).append(t.threat_code)
+    hosts = host_objects(m.steps or {})
+    threats = [
+        {"code": t.threat_code, "relevant": t.relevant, "objects": list(t.objects or [])}
+        for t in m.threats
+    ]
+    ids = sorted({b for f in view.by_key.values() for b in f.get("bdu_ids") or []})
+    vulns = (
+        {v.bdu_id: v for v in session.scalars(select(BduVuln).where(BduVuln.bdu_id.in_(ids)))}
+        if ids
+        else {}
+    )
+
+    def bdu_ref(i: str) -> BduRefOut:
+        v = vulns.get(i)
+        return BduRefOut(
+            bdu_id=i,
+            title=v.title if v else None,
+            in_bdu=v is not None,
+            withdrawn=v is not None and v.withdrawn_at is not None,
+            cvss3_score=v.cvss3_score if v else None,
+        )
+
+    items = [
+        FindingRowOut(
+            dedup_key=f["dedup_key"],
+            module=f.get("module"),
+            host=f["host"],
+            port=f.get("port"),
+            finding_type=f.get("finding_type"),
+            title=f.get("title") or f.get("vuln_id") or f["dedup_key"][:12],
+            severity=f.get("severity"),
+            vuln_id=f.get("vuln_id"),
+            cve_ids=list(f.get("cve_ids") or []),
+            bdu_ids=list(f.get("bdu_ids") or []),
+            cvss=f.get("cvss"),
+            status=f.get("status"),
+            detected_at=f.get("detected_at"),
+            software=f.get("software"),
+            software_version=f.get("software_version"),
+            bdu=[bdu_ref(i) for i in f.get("bdu_ids") or []],
+            linked=linked.get(f["dedup_key"], []),
+            objects=hosts.get(f["host"], []),
+            suggested=[
+                c
+                for c in suggested_threats(f, threats, hosts)
+                if c not in linked.get(f["dedup_key"], [])
+            ],
+        )
+        for f in view.by_key.values()
+    ]
+    return FindingsOut(**_findings_summary(m, view).model_dump(), items=items)
+
+
+@router.post("/threat-models/{model_id}/threats/{code}/findings", response_model=ModelDetail)
+def link_findings(
+    model_id: uuid.UUID,
+    code: str,
+    body: LinkIn,
+    request: Request,
+    user: Editor,
+    session: DbSession,
+) -> ModelDetail:
+    """Привязать находки текущего снимка к угрозе как подтверждение актуальности."""
+    m = _draft_for_edit(session, model_id, user)
+    t = _get_threat(m, code)
+    obj = session.get(AssessedObject, m.object_id)
+    assert obj is not None  # noqa: S101 — внешний ключ
+    view = _findings_view(session, obj)
+    if view.snapshot_number is None:
+        raise HTTPException(409, detail="У объекта нет снимков «Сканера» — привязывать нечего")
+    if not view.imported:
+        raise HTTPException(
+            409,
+            detail=(
+                f"Снимок №{view.snapshot_number} сделан до импорта находок — "
+                "импортируйте прогон «Сканера» заново"
+            ),
+        )
+    keys = list(dict.fromkeys(body.dedup_keys))
+    missing = [k for k in keys if k not in view.by_key]
+    if missing:
+        raise HTTPException(
+            422,
+            detail=(
+                f"Находок нет в текущем снимке №{view.snapshot_number}: "
+                + ", ".join(k[:12] for k in missing[:5])
+            ),
+        )
+    have = {x["dedup_key"] for x in _links(t)}
+    added = [k for k in keys if k not in have]
+    if added:
+        at = utcnow().isoformat()
+        t.linked_findings = [
+            *_links(t),
+            *(
+                link_entry(
+                    view.by_key[k],
+                    snapshot_number=view.snapshot_number,
+                    at=at,
+                    by=user.display_name,
+                )
+                for k in added
+            ),
+        ]
+        t.updated_at = utcnow()
+        t.updated_by_name = user.display_name
+        _touch(m, user)
+        audit.record(
+            session,
+            action="threat_model.finding.link",
+            actor=user,
+            entity="threat_model",
+            entity_id=m.id,
+            project_id=m.project_id,
+            ip=client_ip(request),
+            details={
+                "code": code,
+                "snapshot": view.snapshot_number,
+                "findings": [
+                    {
+                        "dedup_key": k,
+                        "host": view.by_key[k].get("host"),
+                        "bdu_ids": view.by_key[k].get("bdu_ids"),
+                    }
+                    for k in added
+                ],
+            },
+        )
+    session.commit()
+    return _detail(session, m)
+
+
+@router.delete(
+    "/threat-models/{model_id}/threats/{code}/findings/{dedup_key}", response_model=ModelDetail
+)
+def unlink_finding(
+    model_id: uuid.UUID,
+    code: str,
+    dedup_key: str,
+    request: Request,
+    user: Editor,
+    session: DbSession,
+) -> ModelDetail:
+    m = _draft_for_edit(session, model_id, user)
+    t = _get_threat(m, code)
+    links = _links(t)
+    gone = next((x for x in links if x["dedup_key"] == dedup_key), None)
+    if gone is None:
+        raise HTTPException(404, detail="Находка не привязана к угрозе")
+    t.linked_findings = [x for x in links if x["dedup_key"] != dedup_key]
+    t.updated_at = utcnow()
+    t.updated_by_name = user.display_name
+    _touch(m, user)
+    audit.record(
+        session,
+        action="threat_model.finding.unlink",
+        actor=user,
+        entity="threat_model",
+        entity_id=m.id,
+        project_id=m.project_id,
+        ip=client_ip(request),
+        details={
+            "code": code,
+            "dedup_key": dedup_key,
+            "host": gone.get("host"),
+            "bdu_ids": gone.get("bdu_ids"),
+        },
+    )
+    session.commit()
+    return _detail(session, m)
+
+
 # ---------- Утверждение ----------
 
 
-def _snapshot(session: Session, m: ThreatModel) -> dict[str, Any]:
+def _snapshot(session: Session, m: ThreatModel, view: FindingsView) -> dict[str, Any]:
     _, rows = _refs(session)
     bdu = _bdu_rows(session, [t.threat_code for t in m.threats])
     version = _bdu_version(session)
+    summary = _findings_summary(m, view)
     return {
         "refs": {
             c: {
@@ -789,6 +1122,21 @@ def _snapshot(session: Session, m: ThreatModel) -> dict[str, Any]:
             for c, b in sorted(bdu.items())
         },
         "bdu_version": version.isoformat() if version else None,
+        # Подтверждение угроз находками «Сканера» на момент утверждения.
+        "findings": {
+            "snapshot_id": view.snapshot_id,
+            "snapshot_number": view.snapshot_number,
+            "imported": view.imported,
+            "total": summary.total,
+            "unlinked": summary.unlinked,
+            "confirmed": {
+                t.threat_code: sorted(
+                    x["dedup_key"] for x in _links(t) if view.state(x["dedup_key"]) == "present"
+                )
+                for t in m.threats
+                if _links(t)
+            },
+        },
     }
 
 
@@ -826,7 +1174,8 @@ def approve_model(
         ensure_not_own_work(user.id, m.created_by, *(uuid.UUID(x) for x in m.editors or []))
     except SelfApprovalError as e:
         raise deny(403, "Нельзя утвердить модель, которую вы составляли или правили", "self") from e
-    prog = _progress(session, m, obj)
+    view = _findings_view(session, obj)
+    prog = _progress(session, m, obj, view)
     if not prog.ready:
         first = next(
             (f"{s.title}: {s.problems[0]}" if s.problems else f"{s.title}: шаг не заполнен")
@@ -861,7 +1210,7 @@ def approve_model(
     m.approved_by_name = user.display_name
     m.approval_comment = (body.comment or "").strip() or None
     m.unverified_acknowledged = bool(unverified)
-    m.snapshot = _snapshot(session, m)
+    m.snapshot = _snapshot(session, m, view)
     audit.record(
         session,
         action="threat_model.approve",
@@ -877,6 +1226,8 @@ def approve_model(
             "not_relevant": sorted(t.threat_code for t in m.threats if t.relevant is False),
             "unverified_acknowledged": m.unverified_acknowledged,
             "bdu_version": m.snapshot.get("bdu_version"),
+            "findings_snapshot": view.snapshot_number,
+            "confirmed": sorted(m.snapshot["findings"]["confirmed"]),
             "replaced": [str(p.id) for p in previous],
             "comment": m.approval_comment,
         },

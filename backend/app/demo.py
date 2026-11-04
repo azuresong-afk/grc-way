@@ -18,11 +18,13 @@
    угрозы и уязвимости применены, вторая выгрузка уязвимостей ждёт применения —
    видно сравнение и отметку «требует пересчёта». Только если БДУ ещё не загружали;
 8. модель угроз ГИС по Методике 2021 (если в БДУ есть угрозы образца): все шаги
-   мастера заполнены методистом, перечень актуальных угроз с обоснованием —
-   черновик ждёт утверждения.
+   мастера заполнены методистом, перечень актуальных угроз с обоснованием,
+   находки «Сканера» с БДУ привязаны к угрозе УБИ.006 как подтверждение
+   актуальности — черновик ждёт утверждения. Импорт прогона №8 вручную покажет,
+   что находка Log4j устранена.
 
-«Сканер» всегда берётся из фикстур (`GET /runs/{id}/compliance` и `/coverage`
-прогонов №6–8), даже если GRC_SCANNER_MODE=live: демо не ходит в сеть.
+«Сканер» всегда берётся из фикстур (`GET /runs/{id}/compliance`, `/coverage`
+и `/findings` прогонов №6–8), даже если GRC_SCANNER_MODE=live: демо не ходит в сеть.
 
 Запуск: `python -m app.demo` (в Docker — `make demo`). Повторный запуск ничего
 не меняет, если демо-проект уже есть. Пароль демо-пользователей — из
@@ -239,6 +241,12 @@ THREAT_DECISIONS: dict[str, _Decision] = {
         [], [], [], [], [],
     ),
 }  # fmt: skip
+# УБИ → уязвимости БДУ, чьи находки «Сканера» привязываются к угрозе. Находка с
+# BDU:2026-00042 (обход аутентификации на 10.10.1.10) оставлена без угрозы — видно
+# предупреждение «не привязаны к угрозам».
+THREAT_FINDINGS: dict[str, set[str]] = {
+    "УБИ.006": {"BDU:2021-06061", "BDU:2024-04835"},
+}
 
 
 class DemoError(RuntimeError):
@@ -331,6 +339,14 @@ def _threat_model(c: Any, meth: dict[str, str], result: Result) -> None:
             "tactics": tactics,
         }
         _check(c.patch(f"{url}/threats/{code}", headers=meth, json=body))
+    # Находки текущего снимка (прогон №7) с БДУ как подтверждение актуальности.
+    found = _check(c.get(f"{url}/findings", headers=meth))["items"]
+    for code, bdu_ids in THREAT_FINDINGS.items():
+        keys = [f["dedup_key"] for f in found if set(f["bdu_ids"]) & bdu_ids]
+        if keys:
+            _check(
+                c.post(f"{url}/threats/{code}/findings", headers=meth, json={"dedup_keys": keys})
+            )
 
 
 def _load_bdu_samples(session: Session) -> bool:

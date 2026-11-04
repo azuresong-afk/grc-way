@@ -48,6 +48,8 @@ export interface StepProgress {
   done: boolean;
   count: number;
   problems: string[];
+  /** Замечания, которые не мешают утверждению. */
+  warnings: string[];
 }
 
 export interface Progress {
@@ -83,9 +85,105 @@ export interface ModelThreat {
   consequences: string[];
   methods: string[];
   tactics: string[];
-  linked_findings: unknown[];
+  linked_findings: LinkedFinding[];
+  /** Привязанных находок, которые есть в текущем снимке «Сканера». */
+  confirmed: number;
   updated_at: string;
   updated_by_name: string | null;
+}
+
+export type Severity = "critical" | "high" | "medium" | "low" | "info";
+/** present — находка есть в текущем снимке; absent — нет; unknown — не с чем сравнить. */
+export type LinkState = "present" | "absent" | "unknown";
+
+/** Находка «Сканера» с БДУ, привязанная к угрозе (по dedup_key). */
+export interface LinkedFinding {
+  dedup_key: string;
+  host: string | null;
+  port: number | null;
+  title: string | null;
+  severity: string | null;
+  vuln_id: string | null;
+  bdu_ids: string[];
+  cve_ids: string[];
+  cvss: number | null;
+  snapshot_number: number | null;
+  linked_at: string | null;
+  linked_by_name: string | null;
+  state: LinkState;
+}
+
+export interface FindingsSummary {
+  snapshot_id: string | null;
+  snapshot_number: number | null;
+  imported: boolean;
+  total: number;
+  unlinked: number;
+  confirmed_threats: number;
+}
+
+export interface FindingRow {
+  dedup_key: string;
+  module: string | null;
+  host: string;
+  port: number | null;
+  finding_type: string | null;
+  title: string;
+  severity: string | null;
+  vuln_id: string | null;
+  cve_ids: string[];
+  bdu_ids: string[];
+  cvss: number | null;
+  status: string | null;
+  detected_at: string | null;
+  software: string | null;
+  software_version: string | null;
+  bdu: {
+    bdu_id: string;
+    title: string | null;
+    in_bdu: boolean;
+    withdrawn: boolean;
+    cvss3_score: number | null;
+  }[];
+  /** Угрозы модели, к которым привязана находка. */
+  linked: string[];
+  /** Объекты воздействия (шаг 2), в которые входит хост. */
+  objects: string[];
+  /** Подсказка: угрозы с объектом воздействия, где есть хост находки. */
+  suggested: string[];
+}
+
+export interface FindingsList extends FindingsSummary {
+  items: FindingRow[];
+}
+
+export const SEVERITY_LABELS: Record<Severity, string> = {
+  critical: "Критическая",
+  high: "Высокая",
+  medium: "Средняя",
+  low: "Низкая",
+  info: "Инфо",
+};
+
+export const SEVERITY_PILL: Record<Severity, string> = {
+  critical: "pill-danger",
+  high: "pill-danger",
+  medium: "pill-warn",
+  low: "pill-info",
+  info: "pill-muted",
+};
+
+export function severityLabel(s: string | null): string {
+  return (s && SEVERITY_LABELS[s as Severity]) || s || "—";
+}
+
+export function severityPill(s: string | null): string {
+  return (s && SEVERITY_PILL[s as Severity]) || "pill-muted";
+}
+
+/** «10.10.2.5:8080» или просто адрес, если порта нет. */
+export function hostPort(f: { host: string | null; port: number | null }): string {
+  return f.port ? `${f.host ?? "?"}:${f.port}` : (f.host ?? "?");
 }
 
 export interface ModelBrief {
@@ -119,7 +217,15 @@ export interface ModelDetail extends ModelBrief {
     refs: Record<string, { kind: string; title: string; revision: number; verified: boolean }>;
     bdu: Record<string, { title: string; changed_version: string | null }>;
     bdu_version: string | null;
+    findings?: {
+      snapshot_number: number | null;
+      imported: boolean;
+      total: number;
+      unlinked: number;
+      confirmed: Record<string, string[]>;
+    };
   } | null;
+  findings: FindingsSummary;
 }
 
 export interface Candidate {

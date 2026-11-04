@@ -169,3 +169,38 @@ class ScannerCoverage(_Model):
     summary: dict = Field(default_factory=dict)
     hosts: list[CoverageHost] = Field(default_factory=list)
     legacy: bool = False
+
+
+# ---------- Находки прогона (задача 2.4) ----------
+
+
+class FindingFalsePositive(_Model):
+    reason: str | None = Field(default=None, max_length=2000)
+
+
+class ScannerFinding(_Model):
+    """Находка — `FindingOut` из scanner/api/schemas.py (GET /runs/{id}/findings).
+
+    `dedup_key` = sha256(host|port|vuln_id|module) стабилен между прогонами: по нему
+    «Аттестация» связывает свои записи с находками.
+    """
+
+    id: int
+    dedup_key: str = Field(min_length=8, max_length=128)
+    module: str = Field(max_length=64)
+    host: str = Field(min_length=1, max_length=64)
+    port: int | None = None
+    finding_type: str = Field(max_length=32)
+    title: str = Field(max_length=2000)
+    severity: str = Field(max_length=16)
+    vuln_id: str | None = Field(default=None, max_length=200)
+    cve_ids: list[str] = Field(default_factory=list)
+    bdu_ids: list[str] = Field(default_factory=list)
+    cvss: float | None = None
+    status: str | None = Field(default=None, max_length=16)
+    detected_at: datetime | None = None
+    false_positive: FindingFalsePositive | None = None
+    software: str | None = Field(default=None, max_length=300)
+    software_version: str | None = Field(default=None, max_length=200)
+    confidence: str | None = Field(default=None, max_length=16)
+    source: str | None = Field(default=None, max_length=64)

@@ -158,6 +158,11 @@ def test_demo_threat_model_waits_for_approval(client, demo_env):
     m = client.get(f"/threat-models/{models[0]['id']}", headers=h["demo-viewer"]).json()
     assert m["progress"]["ready"], m["progress"]
     assert (m["considered"], m["relevant"]) == (6, 5)
+    # Находки прогона №7 с БДУ: три подтверждают УБИ.006, одна не привязана.
+    assert m["findings"]["snapshot_number"] == 2
+    assert (m["findings"]["total"], m["findings"]["unlinked"]) == (4, 1)
+    t = next(x for x in m["threats"] if x["code"] == "УБИ.006")
+    assert t["confirmed"] == 3
     r2 = client.post(
         f"/threat-models/{m['id']}/approve",
         headers=h["demo-boss"],

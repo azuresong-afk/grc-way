@@ -589,6 +589,9 @@ class ScannerSnapshot(Base):
     coverage: Mapped[dict] = mapped_column(JsonType)
     # Состав объекта на момент импорта (адреса) и итог по мерам объекта.
     object_hosts: Mapped[list] = mapped_column(JsonType, default=list)
+    # Находки прогона с идентификаторами БДУ на хостах объекта (задача 2.4), без
+    # ложных срабатываний; None — снимок сделан до того, как находки импортировались.
+    findings: Mapped[list | None] = mapped_column(JsonType)
     # {measures, implemented, partial, not_implemented, unassessed, applied, kept_manual}
     summary: Mapped[dict] = mapped_column(JsonType, default=dict)
     # sha256 ответов и состава — повторный импорт без изменений не создаёт дубль.

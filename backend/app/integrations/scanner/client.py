@@ -25,6 +25,7 @@ from app.integrations.scanner.schemas import (
     ScannerAsset,
     ScannerCompliance,
     ScannerCoverage,
+    ScannerFinding,
     ScannerProfile,
     ScannerRun,
 )
@@ -33,6 +34,10 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures"
 _PROFILES = TypeAdapter(list[ScannerProfile])
 _ASSETS = TypeAdapter(list[ScannerAsset])
 _RUNS = TypeAdapter(list[ScannerRun])
+_FINDINGS = TypeAdapter(list[ScannerFinding])
+# Находки с идентификаторами БДУ без ложных срабатываний — как в «Сканере»
+# GET /runs/{id}/findings?bdu_only=true&false_positives=exclude.
+FINDINGS_PARAMS = {"bdu_only": "true", "false_positives": "exclude"}
 # Сколько последних прогонов договора показывать для выбора.
 RUNS_LIMIT = 100
 
@@ -61,6 +66,8 @@ class ScannerClient(Protocol):
     def run_compliance(self, run_id: int, profile: str, level: str | None) -> ScannerCompliance: ...
 
     def run_coverage(self, run_id: int) -> ScannerCoverage: ...
+
+    def run_findings(self, run_id: int) -> list[ScannerFinding]: ...
 
 
 def _parse_profiles(data: Any) -> list[ScannerProfile]:
@@ -223,6 +230,15 @@ class FixtureScannerClient:
         )
         return _parse(ScannerCoverage, data, f"GET /runs/{run_id}/coverage")
 
+    def run_findings(self, run_id: int) -> list[ScannerFinding]:
+        """Находки прогона с БДУ без ложных срабатываний; нет файла — находок нет."""
+        path = self.directory / f"run_{run_id}_findings.json"
+        if not path.exists():
+            return []
+        data = self._read(path.name)
+        rows = _parse(_FINDINGS, data, f"GET /runs/{run_id}/findings")
+        return [f for f in rows if f.bdu_ids and f.false_positive is None]
+
 
 class LiveScannerClient:
     mode = "live"
@@ -368,6 +384,16 @@ class LiveScannerClient:
     def run_coverage(self, run_id: int) -> ScannerCoverage:
         data = self._get(f"/runs/{run_id}/coverage", not_found=f"В «Сканере» нет прогона №{run_id}")
         return _parse(ScannerCoverage, data, f"GET /runs/{run_id}/coverage")
+
+    def run_findings(self, run_id: int) -> list[ScannerFinding]:
+        data = self._get(
+            f"/runs/{run_id}/findings",
+            not_found=f"В «Сканере» нет прогона №{run_id}",
+            params=FINDINGS_PARAMS,
+        )
+        rows = _parse(_FINDINGS, data, f"GET /runs/{run_id}/findings")
+        # Фильтр повторяется у себя: старый «Сканер» мог не знать параметров.
+        return [f for f in rows if f.bdu_ids and f.false_positive is None]
 
 
 def get_scanner_client() -> ScannerClient:

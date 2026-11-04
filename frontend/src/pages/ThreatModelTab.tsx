@@ -5,11 +5,15 @@ import {
   CheckCheck,
   FilePlus2,
   History,
+  Info,
+  Link2,
   Plus,
+  Radar,
   Save,
   Search,
   ShieldAlert,
   Trash2,
+  Unlink,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -27,13 +31,19 @@ import {
   STATUS_PILL,
   STEP_HELP,
   ciaText,
+  hostPort,
   nextObjectKey,
+  severityLabel,
+  severityPill,
   suggestLinks,
   type Candidate,
   type DataStep,
+  type FindingRow,
+  type FindingsList,
   type ImpactObject,
   type IntruderItem,
   type LinkKey,
+  type LinkedFinding,
   type MethodItem,
   type ModelBrief,
   type ModelDetail,
@@ -202,6 +212,12 @@ export function ThreatModelTab({ obj, editable }: { obj: ObjectFull; editable: b
                     {model.relevant} <span className="muted">из {model.considered}</span>
                   </div>
                 </div>
+                <div>
+                  <span className="kpi-label">Подтверждено «Сканером»</span>
+                  <div className="kpi-value">
+                    {model.findings.confirmed_threats} <span className="muted">из {model.relevant}</span>
+                  </div>
+                </div>
               </div>
               <div
                 className="impl-bar"
@@ -276,6 +292,10 @@ export function ThreatModelTab({ obj, editable }: { obj: ObjectFull; editable: b
             </dd>
             <dt>Хостов объекта</dt>
             <dd>{formatNumber(hosts.length)}</dd>
+            <dt>Снимок «Сканера»</dt>
+            <dd>
+              <FindingsSource model={model} />
+            </dd>
           </dl>
         </section>
       </div>
@@ -429,6 +449,7 @@ function StepBody({
     <div className="card-pad form-stack">
       {view !== RESULT && <p className="muted tm-help">{STEP_HELP[view]}</p>}
       {step && step.problems.length > 0 && <Problems items={step.problems} />}
+      {step && step.warnings.length > 0 && <Notes items={step.warnings} />}
       {view === "consequences" && <ConsequencesStep {...props} nav={nav} />}
       {view === "objects" && <ObjectsStep {...props} nav={nav} />}
       {view === "intruders" && <IntrudersStep {...props} nav={nav} />}
@@ -457,6 +478,46 @@ function Problems({ items }: { items: string[] }) {
         )}
       </span>
     </div>
+  );
+}
+
+function Notes({ items }: { items: string[] }) {
+  return (
+    <div className="alert alert-info" role="note">
+      <Info size={14} />
+      <span className="alert-text">
+        {items.length === 1 ? (
+          items[0]
+        ) : (
+          <>
+            Замечания, утверждению не мешают:
+            <ul className="tm-problems">
+              {items.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          </>
+        )}
+      </span>
+    </div>
+  );
+}
+
+function FindingsSource({ model }: { model: ModelDetail | null }) {
+  const f = model?.findings;
+  if (!f || f.snapshot_number === null) return <span className="muted">снимков нет</span>;
+  if (!f.imported)
+    return (
+      <>
+        №{f.snapshot_number}
+        <div className="cell-sub">сделан до импорта находок — импортируйте прогон заново</div>
+      </>
+    );
+  return (
+    <>
+      №{f.snapshot_number} · находок с БДУ: {formatNumber(f.total)}
+      {f.unlinked > 0 && <div className="cell-sub">без угрозы: {formatNumber(f.unlinked)}</div>}
+    </>
   );
 }
 
@@ -943,10 +1004,48 @@ function DecisionPill({ t }: { t: Pick<ModelThreat, "relevant"> }) {
   return <span className="pill pill-warn">Не решено</span>;
 }
 
+/** Находки текущего снимка «Сканера» для модели; перечитываются после каждой правки модели. */
+function useFindings(model: ModelDetail): { data: FindingsList | null; error: string | null } {
+  const [data, setData] = useState<FindingsList | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    apiGet<FindingsList>(`/threat-models/${model.id}/findings`)
+      .then((d) => alive && setData(d))
+      .catch((e: Error) => alive && setError(e.message));
+    return () => {
+      alive = false;
+    };
+  }, [model.id, model.edits, model.findings.snapshot_id]);
+  return { data, error };
+}
+
+async function linkFindings(model: ModelDetail, code: string, keys: string[]): Promise<ModelDetail> {
+  return apiSend<ModelDetail>("POST", `/threat-models/${model.id}/threats/${encodeURIComponent(code)}/findings`, {
+    dedup_keys: keys,
+  });
+}
+
+function FindingsCell({ t }: { t: ModelThreat }) {
+  if (!t.linked_findings.length) return <span className="muted">—</span>;
+  const gone = t.linked_findings.length - t.confirmed;
+  return (
+    <>
+      {t.confirmed > 0 && (
+        <span className="pill pill-danger pill-tight" title="Находки «Сканера» в текущем снимке">
+          <Radar size={12} /> {t.confirmed}
+        </span>
+      )}
+      {gone > 0 && <div className="cell-sub">нет в снимке: {gone}</div>}
+    </>
+  );
+}
+
 function ThreatsStep({ model, refs, readOnly, onSaved, nav }: StepProps & Nav) {
   const [opened, setOpened] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const openedThreat = model.threats.find((t) => t.code === opened) ?? null;
+  const findings = useFindings(model);
   return (
     <>
       <div className="actions tm-threats-head">
@@ -970,6 +1069,7 @@ function ThreatsStep({ model, refs, readOnly, onSaved, nav }: StepProps & Nav) {
                 <th>Угроза</th>
                 <th>Нарушает</th>
                 <th>Решение</th>
+                <th>Находки</th>
                 <th>Обоснование</th>
               </tr>
             </thead>
@@ -993,6 +1093,9 @@ function ThreatsStep({ model, refs, readOnly, onSaved, nav }: StepProps & Nav) {
                   <td>
                     <DecisionPill t={t} />
                   </td>
+                  <td className="nowrap">
+                    <FindingsCell t={t} />
+                  </td>
                   <td className="cell-sub clamp-2">{t.justification ?? "—"}</td>
                 </tr>
               ))}
@@ -1000,6 +1103,14 @@ function ThreatsStep({ model, refs, readOnly, onSaved, nav }: StepProps & Nav) {
           </table>
         </div>
       )}
+      <FindingsPanel
+        model={model}
+        list={findings.data}
+        error={findings.error}
+        readOnly={readOnly}
+        onSaved={onSaved}
+        onOpen={setOpened}
+      />
       <div className="actions">{nav}</div>
       {adding && (
         <AddThreats
@@ -1018,11 +1129,317 @@ function ThreatsStep({ model, refs, readOnly, onSaved, nav }: StepProps & Nav) {
           model={model}
           refs={refs}
           readOnly={readOnly}
+          findings={findings.data}
           onClose={() => setOpened(null)}
           onSaved={onSaved}
         />
       )}
     </>
+  );
+}
+
+/** Находки «Сканера» с БДУ текущего снимка: привязка к угрозам модели. */
+function FindingsPanel({
+  model,
+  list,
+  error,
+  readOnly,
+  onSaved,
+  onOpen,
+}: {
+  model: ModelDetail;
+  list: FindingsList | null;
+  error: string | null;
+  readOnly: boolean;
+  onSaved: (m: ModelDetail) => void;
+  onOpen: (code: string) => void;
+}) {
+  const [picked, setPicked] = useState<string[]>([]);
+  const [target, setTarget] = useState("");
+  const [onlyFree, setOnlyFree] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const objName = new Map(model.steps.objects.items.map((o) => [o.key, o.name || o.key]));
+  const targets = model.threats.filter((t) => t.relevant !== false);
+
+  async function link(code: string, keys: string[]) {
+    setBusy(true);
+    setFailure(null);
+    try {
+      onSaved(await linkFindings(model, code, keys));
+      setPicked([]);
+    } catch (e) {
+      setFailure(e instanceof Error ? e.message : "Не удалось привязать");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  let body: ReactNode;
+  if (error) body = <ErrorAlert message={error} />;
+  else if (!list) body = <Loading />;
+  else if (list.snapshot_number === null)
+    body = <p className="muted">У объекта нет снимков «Сканера»: импортируйте прогон на вкладке «Меры».</p>;
+  else if (!list.imported)
+    body = (
+      <p className="muted">
+        Снимок №{list.snapshot_number} сделан до импорта находок. Импортируйте прогон «Сканера» заново — находки с БДУ
+        попадут в новый снимок.
+      </p>
+    );
+  else if (list.items.length === 0)
+    body = <p className="muted">В снимке №{list.snapshot_number} на хостах объекта нет находок с идентификаторами БДУ.</p>;
+  else {
+    const rows = onlyFree ? list.items.filter((f) => f.linked.length === 0) : list.items;
+    body = (
+      <>
+        {failure && <ErrorAlert message={failure} />}
+        <div className="chips">
+          <button type="button" className="chip" aria-pressed={onlyFree} onClick={() => setOnlyFree(!onlyFree)}>
+            Только без угрозы ({list.unlinked})
+          </button>
+        </div>
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                {!readOnly && <th aria-label="Выбор" />}
+                <th>Хост</th>
+                <th>Уязвимость</th>
+                <th>Опасность</th>
+                <th>Подтверждает угрозы</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((f) => (
+                <tr key={f.dedup_key}>
+                  {!readOnly && (
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={`Выбрать ${hostPort(f)} ${f.bdu_ids.join(", ")}`}
+                        checked={picked.includes(f.dedup_key)}
+                        onChange={() => setPicked(toggle(picked, f.dedup_key))}
+                      />
+                    </td>
+                  )}
+                  <td className="nowrap">
+                    <span className="mono">{hostPort(f)}</span>
+                    {f.objects.length > 0 && (
+                      <div className="cell-sub">{f.objects.map((k) => objName.get(k) ?? k).join("; ")}</div>
+                    )}
+                  </td>
+                  <td>
+                    <div className="cell-title">{f.title}</div>
+                    <div className="cell-sub">
+                      {f.bdu.map((b) => (
+                        <span key={b.bdu_id} title={b.title ?? "Нет в загруженной БДУ"}>
+                          {b.bdu_id}
+                          {!b.in_bdu && " (нет в БДУ)"}
+                          {b.withdrawn && " (исключена)"}{" "}
+                        </span>
+                      ))}
+                      {f.cve_ids.length > 0 && `· ${f.cve_ids.join(", ")}`}
+                      {f.software && ` · ${f.software}${f.software_version ? ` ${f.software_version}` : ""}`}
+                    </div>
+                  </td>
+                  <td className="nowrap">
+                    <span className={`pill ${severityPill(f.severity)}`}>{severityLabel(f.severity)}</span>
+                    {f.cvss !== null && <div className="cell-sub">CVSS {formatNumber(f.cvss)}</div>}
+                  </td>
+                  <td>
+                    <div className="chips">
+                      {f.linked.map((c) => (
+                        <button key={c} type="button" className="tag link-btn" onClick={() => onOpen(c)}>
+                          {c}
+                        </button>
+                      ))}
+                      {!readOnly &&
+                        f.suggested.map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            className="chip chip-suggest"
+                            disabled={busy}
+                            title="Хост находки входит в объект воздействия угрозы"
+                            onClick={() => link(c, [f.dedup_key])}
+                          >
+                            <Plus size={12} /> {c}
+                          </button>
+                        ))}
+                      {f.linked.length === 0 && (readOnly || f.suggested.length === 0) && (
+                        <span className="muted">не привязана</span>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {!readOnly && (
+          <div className="actions">
+            <select
+              className="select"
+              aria-label="Угроза для привязки"
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+            >
+              <option value="">Угроза…</option>
+              {targets.map((t) => (
+                <option key={t.code} value={t.code}>
+                  {t.code} {t.title ? `· ${t.title}` : ""}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={busy || !target || picked.length === 0}
+              onClick={() => link(target, picked)}
+            >
+              <Link2 size={14} /> Привязать выбранные{picked.length ? ` (${picked.length})` : ""}
+            </button>
+          </div>
+        )}
+        <small className="muted">
+          Связи «уязвимость БДУ → угроза» в выгрузках БДУ нет: находку привязывает методист. Подсказка «+ УБИ» — угрозы, у
+          которых хост находки входит в объект воздействия; это не правило Методики.
+        </small>
+      </>
+    );
+  }
+
+  return (
+    <div className="tm-findings">
+      <h3>
+        <Radar size={15} /> Находки «Сканера» с БДУ
+        {list?.snapshot_number != null && <span className="muted"> · снимок №{list.snapshot_number}</span>}
+      </h3>
+      {body}
+    </div>
+  );
+}
+
+const LINK_STATE: Record<LinkedFinding["state"], [string, string]> = {
+  present: ["pill-danger", "в снимке"],
+  absent: ["pill-ok", "нет в снимке"],
+  unknown: ["pill-muted", "не с чем сравнить"],
+};
+
+/** Подтверждение угрозы находками в карточке угрозы: привязанные и подходящие по объекту. */
+function ThreatFindings({
+  t,
+  model,
+  findings,
+  readOnly,
+  onSaved,
+}: {
+  t: ModelThreat;
+  model: ModelDetail;
+  findings: FindingsList | null;
+  readOnly: boolean;
+  onSaved: (m: ModelDetail) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const n = model.findings.snapshot_number;
+  const offer: FindingRow[] = readOnly ? [] : (findings?.items.filter((f) => f.suggested.includes(t.code)) ?? []);
+
+  async function run(fn: () => Promise<ModelDetail>) {
+    setBusy(true);
+    setError(null);
+    try {
+      onSaved(await fn());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось сохранить");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="drawer-section">
+      <h3>Подтверждение находками «Сканера»</h3>
+      {error && <ErrorAlert message={error} />}
+      {t.linked_findings.length === 0 && offer.length === 0 && <p className="muted">Находки не привязаны.</p>}
+      {t.linked_findings.length > 0 && (
+        <ul className="tm-links">
+          {t.linked_findings.map((x) => {
+            const [pill, label] = LINK_STATE[x.state];
+            return (
+              <li key={x.dedup_key}>
+                <div>
+                  <span className="mono">{hostPort(x)}</span> {x.title ?? x.vuln_id}
+                  <div className="cell-sub">
+                    {x.bdu_ids.join(", ")}
+                    {x.cvss !== null && ` · CVSS ${formatNumber(x.cvss)}`} · привязал {x.linked_by_name ?? "—"} по
+                    снимку №{x.snapshot_number ?? "?"}
+                  </div>
+                </div>
+                <span
+                  className={`pill pill-tight ${pill}`}
+                  title={x.state === "absent" ? "Устранена или хост не проверялся" : undefined}
+                >
+                  {label}
+                  {n !== null && x.state !== "unknown" ? ` №${n}` : ""}
+                </span>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    disabled={busy}
+                    aria-label={`Отвязать ${hostPort(x)}`}
+                    onClick={() =>
+                      run(() =>
+                        apiSend<ModelDetail>(
+                          "DELETE",
+                          `/threat-models/${model.id}/threats/${encodeURIComponent(t.code)}/findings/${x.dedup_key}`,
+                        ),
+                      )
+                    }
+                  >
+                    <Unlink size={14} />
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {t.relevant === false && t.confirmed > 0 && (
+        <div className="alert alert-warn">
+          <span className="alert-text">
+            <AlertTriangle size={14} /> Угроза признана неактуальной, но подтверждена находками текущего снимка —
+            пересмотрите решение или отвяжите находки.
+          </span>
+        </div>
+      )}
+      {offer.length > 0 && (
+        <>
+          <p className="cell-sub">Хост находки входит в объект воздействия угрозы:</p>
+          <ul className="tm-links">
+            {offer.map((f) => (
+              <li key={f.dedup_key}>
+                <div>
+                  <span className="mono">{hostPort(f)}</span> {f.title}
+                  <div className="cell-sub">{f.bdu_ids.join(", ")}</div>
+                </div>
+                <span className={`pill pill-tight ${severityPill(f.severity)}`}>{severityLabel(f.severity)}</span>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  disabled={busy}
+                  onClick={() => run(() => linkFindings(model, t.code, [f.dedup_key]))}
+                >
+                  <Link2 size={14} /> Привязать
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -1140,6 +1557,7 @@ function ThreatDrawer({
   model,
   refs,
   readOnly,
+  findings,
   onClose,
   onSaved,
 }: {
@@ -1147,6 +1565,7 @@ function ThreatDrawer({
   model: ModelDetail;
   refs: RefIndex;
   readOnly: boolean;
+  findings: FindingsList | null;
   onClose: () => void;
   onSaved: (m: ModelDetail) => void;
 }) {
@@ -1244,6 +1663,7 @@ function ThreatDrawer({
         </dl>
         {t.description && <p className="cell-sub">{t.description}</p>}
       </div>
+      <ThreatFindings t={t} model={model} findings={findings} readOnly={readOnly} onSaved={onSaved} />
       <form id="threat-form" className="drawer-section drawer-form form-stack" onSubmit={save}>
         {error && <ErrorAlert message={error} />}
         <div className="field">
@@ -1342,6 +1762,9 @@ function ResultStep({
           </div>
         )
       )}
+      {model.progress.steps.some((s) => s.warnings.length > 0) && (
+        <Notes items={model.progress.steps.flatMap((s) => s.warnings)} />
+      )}
       <h3>Перечень актуальных угроз</h3>
       {relevant.length === 0 ? (
         <p className="muted">Актуальных угроз нет.</p>
@@ -1355,6 +1778,7 @@ function ResultStep({
                 <th>Нарушители</th>
                 <th>Объекты воздействия</th>
                 <th>Последствия</th>
+                <th>Находки «Сканера»</th>
               </tr>
             </thead>
             <tbody>
@@ -1379,6 +1803,9 @@ function ResultStep({
                     <span title={t.consequences.map((c) => `${c} ${refs.title(c)}`).join("\n")}>
                       {t.consequences.join(", ")}
                     </span>
+                  </td>
+                  <td className="nowrap">
+                    <FindingsCell t={t} />
                   </td>
                 </tr>
               ))}

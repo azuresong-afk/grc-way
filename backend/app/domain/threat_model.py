@@ -51,6 +51,8 @@ class StepProgress:
     done: bool
     count: int
     problems: list[str] = field(default_factory=list)
+    # Замечания, которые не мешают утверждению (находки «Сканера» без угроз и т. п.).
+    warnings: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -59,6 +61,7 @@ class StepProgress:
             "done": self.done,
             "count": self.count,
             "problems": self.problems,
+            "warnings": self.warnings,
         }
 
 

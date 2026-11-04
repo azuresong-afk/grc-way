@@ -2563,3 +2563,68 @@ fieldset.field {
 .drawer-form .textarea {
   width: 100%;
 }
+
+/* ---------- Находки «Сканера» в модели угроз (2.4) ---------- */
+
+.tm-findings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding-top: var(--s2);
+  border-top: 1px solid var(--border);
+}
+
+.tm-findings h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.tm-findings .chips {
+  gap: 4px;
+}
+
+.tm-findings .table .chips {
+  flex-wrap: wrap;
+}
+
+.chip.chip-suggest {
+  height: 24px;
+  padding: 0 6px;
+  border-style: dashed;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.tm-findings .actions .select {
+  max-width: 360px;
+  min-width: 0;
+  flex: 1 1 200px;
+}
+
+.tm-links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tm-links li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--s2);
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.pill .lucide,
+.pill svg {
+  vertical-align: -2px;
+}
