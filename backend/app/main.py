@@ -8,6 +8,7 @@ from app import __version__
 from app.api import (
     audit_log,
     auth,
+    classification,
     health,
     manifest,
     objects,
@@ -38,6 +39,17 @@ def create_app() -> FastAPI:
     app.state.signer = TokenSigner(secret, settings.token_ttl_minutes * 60)
     app.state.throttle = LoginThrottle(settings.login_max_failures, settings.login_lockout_seconds)
 
-    for module in (health, manifest, auth, users, audit_log, projects, objects, refs, refs_sync):
+    for module in (
+        health,
+        manifest,
+        auth,
+        users,
+        audit_log,
+        projects,
+        objects,
+        classification,
+        refs,
+        refs_sync,
+    ):
         app.include_router(module.router)
     return app

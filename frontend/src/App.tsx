@@ -3,6 +3,7 @@ import { Layout } from "./components/Layout";
 import { RequireAuth, RequirePerm } from "./lib/auth";
 import { ProjectProvider } from "./lib/project";
 import { AuditPage } from "./pages/AuditPage";
+import { ClassTablesPage } from "./pages/ClassTablesPage";
 import { LoginPage } from "./pages/LoginPage";
 import { ObjectPage } from "./pages/ObjectPage";
 import { ObjectsPage } from "./pages/ObjectsPage";
@@ -63,6 +64,7 @@ export function App() {
         />
         <Route path="refs" element={<RefsPage />} />
         <Route path="refs/scanner" element={<ScannerSyncPage />} />
+        <Route path="refs/classification" element={<ClassTablesPage />} />
         <Route
           path="admin/users"
           element={

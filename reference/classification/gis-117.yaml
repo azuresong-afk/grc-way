@@ -1,0 +1,103 @@
+# Таблица классификации ГИС: класс защищённости К1–К3.
+#
+# ВНИМАНИЕ: официальный текст приказа ФСТЭК России №117 и методического
+# документа к нему в проект ещё не загружен. Структура и значения таблицы
+# перенесены из прежнего порядка (приказ ФСТЭК России №17, п. 14.2 и
+# приложение №1 в редакции после отмены класса К4): класс определяется по
+# уровню значимости информации (УЗ1–УЗ3) и масштабу системы. Все строки —
+# origin=stub, verified=null: в интерфейсе «требует сверки», в документах —
+# водяной знак «Проект». Методист сверяет таблицу с текстом №117 и исправляет
+# расхождения в интерфейсе («Справочники → Таблицы классификации»).
+#
+# Формат (общий для всех режимов, мастер его только интерпретирует):
+#   inputs  — исходные данные: key, label, help, group (шаг мастера), options
+#   steps   — расчёт по порядку; значение шага доступно следующим шагам
+#             method: first_match — первая строка, у которой все условия when
+#                     выполнены (when: {поле: [допустимые значения]}; пустой
+#                     when — строка «иначе»)
+#             method: max — наиболее строгое значение среди полей fields
+#                     в порядке order
+#   result  — ключ последнего шага и допустимые итоговые значения
+
+regime: "117"
+title: Класс защищённости ГИС
+version: "117-stub-1"
+origin: stub
+source:
+  document: Приказ ФСТЭК России от 11.04.2025 №117
+  clause: не указан — текст не загружен
+  url: https://fstec.ru/dokumenty/vse-dokumenty/spetsialnye-normativnye-dokumenty/trebovaniya-utverzhdeny-prikazom-fstek-rossii-ot-11-aprelya-2025-g-n-117
+  note: >-
+    Заглушка: структура и значения перенесены из приказа ФСТЭК России №17
+    (п. 14.2, приложение №1). Сверить с текстом приказа №117 и методического
+    документа от 12.04.2026.
+
+groups:
+  - {key: damage, title: Степень возможного ущерба}
+  - {key: scale, title: Масштаб системы}
+
+inputs:
+  - key: damage_confidentiality
+    group: damage
+    label: Ущерб от нарушения конфиденциальности
+    help: Степень возможного ущерба, если информация станет известна посторонним.
+    options: &damage
+      - {value: high, label: Высокая}
+      - {value: medium, label: Средняя}
+      - {value: low, label: Низкая}
+      - {value: none, label: Не требуется, help: "Свойство безопасности для этой информации не установлено"}
+  - key: damage_integrity
+    group: damage
+    label: Ущерб от нарушения целостности
+    help: Степень возможного ущерба при несанкционированном изменении или уничтожении информации.
+    options: *damage
+  - key: damage_availability
+    group: damage
+    label: Ущерб от нарушения доступности
+    help: Степень возможного ущерба при блокировании доступа к информации.
+    options: *damage
+  - key: scale
+    group: scale
+    label: Масштаб информационной системы
+    options:
+      - {value: federal, label: Федеральный, help: "Функционирует в масштабе Российской Федерации или федерального округа"}
+      - {value: regional, label: Региональный, help: "Функционирует в масштабе субъекта Российской Федерации"}
+      - {value: object, label: Объектовый, help: "Функционирует на объектах одного органа или организации"}
+
+steps:
+  - key: significance
+    label: Уровень значимости информации
+    method: first_match
+    values:
+      - {value: УЗ1, label: "УЗ1 — высокая значимость"}
+      - {value: УЗ2, label: "УЗ2 — средняя значимость"}
+      - {value: УЗ3, label: "УЗ3 — низкая значимость"}
+    rows:
+      - {id: uz1-c, when: {damage_confidentiality: [high]}, value: УЗ1, note: "Хотя бы для одного свойства ущерб высокий"}
+      - {id: uz1-i, when: {damage_integrity: [high]}, value: УЗ1, note: "Хотя бы для одного свойства ущерб высокий"}
+      - {id: uz1-a, when: {damage_availability: [high]}, value: УЗ1, note: "Хотя бы для одного свойства ущерб высокий"}
+      - {id: uz2-c, when: {damage_confidentiality: [medium]}, value: УЗ2, note: "Хотя бы для одного свойства ущерб средний, высокого нет"}
+      - {id: uz2-i, when: {damage_integrity: [medium]}, value: УЗ2, note: "Хотя бы для одного свойства ущерб средний, высокого нет"}
+      - {id: uz2-a, when: {damage_availability: [medium]}, value: УЗ2, note: "Хотя бы для одного свойства ущерб средний, высокого нет"}
+      - {id: uz3, when: {}, value: УЗ3, note: "Для всех свойств ущерб низкий или свойство не требуется"}
+  - key: class
+    label: Класс защищённости
+    method: first_match
+    rows:
+      - {id: k-uz1-fed, when: {significance: [УЗ1], scale: [federal]}, value: К1}
+      - {id: k-uz1-reg, when: {significance: [УЗ1], scale: [regional]}, value: К1}
+      - {id: k-uz1-obj, when: {significance: [УЗ1], scale: [object]}, value: К1}
+      - {id: k-uz2-fed, when: {significance: [УЗ2], scale: [federal]}, value: К1}
+      - {id: k-uz2-reg, when: {significance: [УЗ2], scale: [regional]}, value: К2}
+      - {id: k-uz2-obj, when: {significance: [УЗ2], scale: [object]}, value: К2}
+      - {id: k-uz3-fed, when: {significance: [УЗ3], scale: [federal]}, value: К2}
+      - {id: k-uz3-reg, when: {significance: [УЗ3], scale: [regional]}, value: К3}
+      - {id: k-uz3-obj, when: {significance: [УЗ3], scale: [object]}, value: К3}
+
+result:
+  key: class
+  label: Класс защищённости
+  values:
+    - {value: К1, label: "К1 — первый класс"}
+    - {value: К2, label: "К2 — второй класс"}
+    - {value: К3, label: "К3 — третий класс"}
