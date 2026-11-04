@@ -19,6 +19,7 @@ from app.api import (
     refs_sync,
     scanner_import,
     summary,
+    threat_refs,
     users,
 )
 from app.core.config import get_settings
@@ -54,6 +55,7 @@ def create_app() -> FastAPI:
         classification,
         measures,
         refs,
+        threat_refs,
         refs_sync,
         scanner_import,
         evidence,

@@ -18,6 +18,12 @@
 правили в интерфейсе (origin≠local), — новая ревизия и снятие отметки о сверке;
 неизменённый файл таблицу не трогает.
 
+Справочник Методики оценки угроз 2021 (reference/threats/*.yaml) загружается
+по записям: новая запись добавляется; запись, изменившаяся в файле, обновляется,
+если её не правили в интерфейсе (origin≠local), — новая ревизия и снятие
+отметки о сверке; запись, не менявшаяся в файле, не трогается. Записи,
+пропавшие из файла, и добавленные в интерфейсе не удаляются.
+
 Запуск вручную: python -m app.refs.loader
 """
 
@@ -42,10 +48,13 @@ from app.db.models import (
     RefMeasure,
     RefProfile,
     RefRevision,
+    RefThreatItem,
     utcnow,
 )
 from app.db.session import get_engine
 from app.domain.classification import definition_hash, validate
+from app.domain.threat_refs import item_hash
+from app.domain.threat_refs import parse as parse_threats
 
 CHECKS_FILE = "checks.yaml"
 PROFILE_ORDER = ["fstec-117", "fstec-21", "fstec-239", "cis-controls-v8", "cis-benchmark"]
@@ -64,10 +73,20 @@ class LoadReport:
     tables_added: int = 0
     tables_updated: int = 0
     tables_unchanged: int = 0
+    threats_added: int = 0
+    threats_updated: int = 0
+    threats_unchanged: int = 0
 
     @property
     def changed(self) -> bool:
-        return bool(self.added or self.updated or self.tables_added or self.tables_updated)
+        return bool(
+            self.added
+            or self.updated
+            or self.tables_added
+            or self.tables_updated
+            or self.threats_added
+            or self.threats_updated
+        )
 
     def summary(self) -> str:
         parts = [
@@ -76,6 +95,8 @@ class LoadReport:
             f"проверок {self.checks}",
             f"таблиц классификации добавлено {self.tables_added}, обновлено "
             f"{self.tables_updated}, без изменений {self.tables_unchanged}",
+            f"Методика угроз: записей добавлено {self.threats_added}, обновлено "
+            f"{self.threats_updated}, без изменений {self.threats_unchanged}",
         ]
         if self.local_conflicts:
             parts.append(f"изменены в интерфейсе, файл не применён: {len(self.local_conflicts)}")
@@ -279,6 +300,63 @@ def _load_table(session: Session, path: Path, report: LoadReport) -> None:
     report.tables_updated += 1
 
 
+_THREAT_FIELDS = ("kind", "parent_code", "position", "title", "description", "attrs", "source")
+
+
+def threat_snapshot(t: RefThreatItem) -> dict[str, Any]:
+    return {
+        **{k: getattr(t, k) for k in _THREAT_FIELDS},
+        "origin": t.origin,
+        "verified_by_name": t.verified_by_name,
+        "verified_at": t.verified_at.isoformat() if t.verified_at else None,
+    }
+
+
+def _load_threats(session: Session, path: Path, report: LoadReport) -> None:
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    for item in parse_threats(data):
+        digest = item_hash(item)
+        row = session.get(RefThreatItem, item["code"])
+        if row is None:
+            session.add(
+                RefThreatItem(
+                    **{k: item[k] for k in ("code", "origin", *_THREAT_FIELDS)},
+                    revision=1,
+                    file_hash=digest,
+                )
+            )
+            report.threats_added += 1
+            continue
+        if row.file_hash == digest:
+            report.threats_unchanged += 1
+            continue
+        row.file_hash = digest
+        if row.origin == "local":
+            report.local_conflicts.append(f"threat:{row.code}")
+            continue
+        if all(getattr(row, k) == item[k] for k in _THREAT_FIELDS):
+            report.threats_unchanged += 1
+            continue
+        session.add(
+            RefRevision(
+                entity="threat_item",
+                entity_key=row.code,
+                revision=row.revision,
+                data=threat_snapshot(row),
+                changed_by_name="загрузка справочников",
+                comment="Обновление из файла справочника",
+            )
+        )
+        for k in _THREAT_FIELDS:
+            setattr(row, k, item[k])
+        row.origin = item["origin"]
+        row.revision += 1
+        row.updated_at = utcnow()
+        row.updated_by = None
+        row.verified_by = row.verified_by_name = row.verified_at = None
+        report.threats_updated += 1
+
+
 def load_reference(session: Session, directory: Path) -> LoadReport:
     report = LoadReport()
     profiles_dir = directory / "profiles"
@@ -290,6 +368,8 @@ def load_reference(session: Session, directory: Path) -> LoadReport:
             _load_profile(session, path, report)
     for path in sorted((directory / "classification").glob("*.yaml")):
         _load_table(session, path, report)
+    for path in sorted((directory / "threats").glob("*.yaml")):
+        _load_threats(session, path, report)
     if report.changed:
         audit.record(
             session, action="refs.load", actor_name="system", details={"summary": report.summary()}
