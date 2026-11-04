@@ -17,8 +17,9 @@ import {
   useState,
   type FormEvent,
 } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Drawer } from "../components/Drawer";
+import { ImplBar } from "../components/ImplBar";
 import { EmptyState } from "../components/EmptyState";
 import { Modal } from "../components/Modal";
 import { ErrorAlert, Loading } from "../components/Status";
@@ -34,7 +35,6 @@ import {
   STATUS_ORDER,
   STATUS_PILL,
   adaptationNote,
-  barParts,
   differsFromScanner,
   formatPercent,
   type AdaptationKind,
@@ -88,7 +88,10 @@ export function MeasuresTab({
   const [group, setGroup] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
-  const [opened, setOpened] = useState<string | null>(null);
+  // ?measure=<id> — открыть карточку меры по ссылке (быстрый поиск Ctrl+K).
+  const [params, setParams] = useSearchParams();
+  const linked = params.get("measure");
+  const [opened, setOpened] = useState<string | null>(linked);
   const [rebuilding, setRebuilding] = useState(false);
   const [adding, setAdding] = useState(false);
   const [approving, setApproving] = useState(false);
@@ -115,6 +118,19 @@ export function MeasuresTab({
   }, [obj.id]);
 
   useEffect(load, [load]);
+
+  useEffect(() => {
+    if (linked) setOpened(linked);
+  }, [linked]);
+
+  const close = () => {
+    setOpened(null);
+    if (params.has("measure")) {
+      const next = new URLSearchParams(params);
+      next.delete("measure");
+      setParams(next, { replace: true });
+    }
+  };
 
   const reload = () => {
     load();
@@ -448,10 +464,10 @@ export function MeasuresTab({
           canAdapt={canAdapt}
           canAssess={canAssess}
           canUpload={canUpload}
-          onClose={() => setOpened(null)}
+          onClose={close}
           onChanged={() => reload()}
           onRemoved={() => {
-            setOpened(null);
+            close();
             reload();
           }}
         />
@@ -475,7 +491,6 @@ function StatCard({
   accent?: boolean;
   extra?: string;
 }) {
-  const parts = bucket ? barParts(bucket) : [];
   return (
     <div className={`card kpi measure-kpi${accent ? " measure-kpi-main" : ""}`}>
       <span className="kpi-label">
@@ -483,22 +498,7 @@ function StatCard({
         {hint && <span className="muted"> · {hint}</span>}
       </span>
       <span className="kpi-value">{formatPercent(bucket?.percent)}</span>
-      <div
-        className="impl-bar"
-        role="img"
-        aria-label={
-          parts.map((p) => `${p.label}: ${Math.round(p.value)} %`).join(", ") ||
-          "нет мер"
-        }
-      >
-        {parts.map((p) => (
-          <span
-            key={p.key}
-            className={`impl-bar-${p.key}`}
-            style={{ width: `${p.value}%` }}
-          />
-        ))}
-      </div>
+      <ImplBar bucket={bucket} />
       {bucket && (
         <span className="kpi-delta">
           {formatNumber(bucket.total)} мер в проценте
