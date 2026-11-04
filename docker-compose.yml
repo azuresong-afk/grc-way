@@ -1,0 +1,65 @@
+# «Аттестация»: cp .env.example .env, заполнить секреты, затем docker compose up --build
+name: grc
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-grc}
+      POSTGRES_USER: ${POSTGRES_USER:-grc}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${GRC_DB_PORT:-15434}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging: *logging
+
+  app:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_HOST: db
+    volumes:
+      - app-data:/data
+    ports:
+      - "127.0.0.1:${GRC_API_PORT:-18002}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    logging: *logging
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_BASE: ${VITE_BASE:-/}
+        VITE_API_BASE: ${VITE_API_BASE:-/api}
+    restart: unless-stopped
+    ports:
+      - "${GRC_WEB_PORT:-18082}:8080"
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging: *logging
+
+volumes:
+  db-data:
+  app-data:
