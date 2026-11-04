@@ -9,6 +9,7 @@ from app.api import (
     audit_log,
     auth,
     classification,
+    evidence,
     health,
     manifest,
     measures,
@@ -54,6 +55,7 @@ def create_app() -> FastAPI:
         refs,
         refs_sync,
         scanner_import,
+        evidence,
     ):
         app.include_router(module.router)
     return app

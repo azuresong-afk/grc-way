@@ -535,6 +535,15 @@ class ObjectMeasure(Base):
     auto_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("scanner_snapshots.id", ondelete="SET NULL")
     )
+    # Подтверждение итогового статуса испытателем. Снимается, когда меняется статус,
+    # меру исключают или отзывают доказательство, на которое оно опиралось.
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    confirmed_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    confirmed_by_name: Mapped[str | None] = mapped_column(String(200))
+    confirmed_status: Mapped[str | None] = mapped_column(String(16))
+    confirm_comment: Mapped[str | None] = mapped_column(String(2000))
+    # id доказательств, на которые опиралось подтверждение.
+    confirmed_evidence: Mapped[list] = mapped_column(JsonType, default=list)
 
 
 # ---------- Результаты «Сканера» ----------
@@ -588,9 +597,29 @@ class ScannerSnapshot(Base):
     imported_by_name: Mapped[str | None] = mapped_column(String(200))
 
 
+class EvidenceFile(Base):
+    """Файл доказательства. Содержимое — в томе под именем sha256 (app/domain/evidence_files.py);
+    одинаковое содержимое хранится один раз, записей может быть несколько."""
+
+    __tablename__ = "files"
+    __table_args__ = (Index("ix_files_sha256", "sha256"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    sha256: Mapped[str] = mapped_column(String(64))
+    # Имя, как его прислали (без пути); тип определён по содержимому.
+    name: Mapped[str] = mapped_column(String(255))
+    ext: Mapped[str] = mapped_column(String(8))
+    mime: Mapped[str] = mapped_column(String(100))
+    size: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    created_by_name: Mapped[str | None] = mapped_column(String(200))
+
+
 class Evidence(Base):
-    """Доказательство по мере объекта. В 1.9 — автоматическое из снимка «Сканера»;
-    ручные (файл, интервью, осмотр) — задача 1.10."""
+    """Доказательство по мере объекта: автоматическое из снимка «Сканера» (1.9)
+    или ручное — файл, интервью, осмотр (1.10). Ручное не удаляется, а отзывается."""
 
     __tablename__ = "evidence"
     __table_args__ = (
@@ -613,8 +642,13 @@ class Evidence(Base):
     # Предложенный статус (для scanner) и краткое пояснение.
     status: Mapped[str | None] = mapped_column(String(16))
     summary: Mapped[str] = mapped_column(String(1000))
-    # scanner: AutoResult + проверки и нарушения по хостам, рекомендации.
+    # scanner: AutoResult + проверки и нарушения по хостам, рекомендации;
+    # ручные: дата, участники, место, подробности, категория файла.
     data: Mapped[dict] = mapped_column(JsonType, default=dict)
+    file_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("files.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     created_by_name: Mapped[str | None] = mapped_column(String(200))
+    withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    withdrawn_by_name: Mapped[str | None] = mapped_column(String(200))
+    withdraw_reason: Mapped[str | None] = mapped_column(String(1000))

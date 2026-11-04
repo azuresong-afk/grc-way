@@ -9,3 +9,5 @@ build/
 node_modules/
 dist/
 *.tsbuildinfo
+# Файлы доказательств при запуске без Docker
+backend/data/

@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     # Вес меры «Частично» в проценте реализации (0 — считать нереализованной, 1 — реализованной).
     partial_weight: float = Field(default=0.5, ge=0, le=1)
 
+    # Файлы доказательств: том, имя файла — sha256 содержимого. В Docker — /data/evidence.
+    evidence_dir: Path = Path("./data/evidence")
+    # Предел размера одного файла доказательства, МБ.
+    evidence_max_mb: int = Field(default=50, ge=1, le=1024)
+
     # Пути, под которыми продукт виден в платформе (для манифеста).
     base_path: str = "/grc/"
     api_base: str = "/api/grc/"
