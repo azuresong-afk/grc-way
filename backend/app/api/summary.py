@@ -57,7 +57,7 @@ class SnapshotRef(BaseModel):
     run_name: str | None
     run_finished_at: datetime | None
     imported_at: datetime
-    # Сколько хостов объекта «Сканер» не смог проверить в этом прогоне.
+    # Пары «хост × модуль» прогона, которые не выполнены (покрытие неполное).
     coverage_gaps: int
 
 

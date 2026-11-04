@@ -13,6 +13,7 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
+import { CommandPalette } from "./CommandPalette";
 import { initials } from "../lib/format";
 import { roleList } from "../lib/roles";
 import { ProjectPicker } from "./ProjectPicker";
@@ -54,9 +55,22 @@ function NavItems({ items }: { items: NavItem[] }) {
 export function Layout() {
   const { me, can, logout } = useAuth();
   const [navOpen, setNavOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const location = useLocation();
 
   useEffect(() => setNavOpen(false), [location.pathname]);
+
+  // Ctrl+K (⌘K на macOS) открывает быстрый поиск; e.code — чтобы работало в русской раскладке.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.code === "KeyK" || e.key.toLowerCase() === "k")) {
+        e.preventDefault();
+        setSearchOpen((v) => !v);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   const adminItems = ADMIN_NAV.filter((i) => !i.perm || can(i.perm));
 
@@ -111,9 +125,16 @@ export function Layout() {
             <Menu size={18} />
           </button>
           <ProjectPicker />
-          <button type="button" className="topbar-search" disabled title="Поиск появится позже">
+          <button
+            type="button"
+            className="topbar-search"
+            aria-haspopup="dialog"
+            aria-keyshortcuts="Control+K"
+            aria-label="Поиск"
+            onClick={() => setSearchOpen(true)}
+          >
             <Search size={15} />
-            Поиск
+            <span className="topbar-search-text">Поиск</span>
             <kbd>Ctrl K</kbd>
           </button>
           <span className="topbar-note">Работы ведутся в рамках договора</span>
@@ -122,6 +143,7 @@ export function Layout() {
           <Outlet />
         </main>
       </div>
+      {searchOpen && <CommandPalette onClose={() => setSearchOpen(false)} />}
     </div>
   );
 }
