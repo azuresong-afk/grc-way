@@ -10,3 +10,4 @@ backend/tests
 *.db
 frontend
 docs
+backup

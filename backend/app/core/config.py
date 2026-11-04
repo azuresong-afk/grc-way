@@ -11,7 +11,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="GRC_", env_file=".env", extra="ignore")
 
-    # Строка подключения SQLAlchemy (GRC_DATABASE_URL). В Docker собирается в entrypoint.
+    # Строка подключения SQLAlchemy (GRC_DATABASE_URL). В Docker задаётся в docker-compose.yml.
     database_url: str = "sqlite+pysqlite:///./grc.db"
 
     # local — свой вход по паролю; platform — токены «Платформы» (этап 3).
