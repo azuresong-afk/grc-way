@@ -11,10 +11,12 @@ from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
     String,
+    Text,
     Uuid,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -687,3 +689,115 @@ class RefThreatItem(Base):
     file_hash: Mapped[str | None] = mapped_column(String(64))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+
+
+class BduImport(Base):
+    """Загрузка выгрузки БДУ: сравнение с текущими данными и его применение.
+
+    Файл хранится в томе под sha256; при применении он разбирается заново, и
+    сравнение пересчитывается — если данные изменились, применение отклоняется.
+    """
+
+    __tablename__ = "bdu_imports"
+    __table_args__ = (Index("ix_bdu_imports_kind", "kind", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    kind: Mapped[str] = mapped_column(String(16))  # threats | vulns
+    file_name: Mapped[str] = mapped_column(String(255))
+    file_sha256: Mapped[str] = mapped_column(String(64))
+    file_size: Mapped[int] = mapped_column(BigInteger)
+    export_version: Mapped[date | None] = mapped_column(Date)
+    version_source: Mapped[str] = mapped_column(String(16))
+    status: Mapped[str] = mapped_column(String(16))  # pending | applied | superseded
+    summary: Mapped[dict] = mapped_column(JsonType)
+    items: Mapped[list] = mapped_column(JsonType)
+    warnings: Mapped[list] = mapped_column(JsonType)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    created_by_name: Mapped[str | None] = mapped_column(String(200))
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    applied_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    applied_by_name: Mapped[str | None] = mapped_column(String(200))
+    applied: Mapped[dict | None] = mapped_column(JsonType)
+
+
+class _BduRecord:
+    """Общие поля записей БДУ: хэш, версии выгрузки, исключение из выгрузки."""
+
+    row_hash: Mapped[str] = mapped_column(String(64))
+    first_version: Mapped[date | None] = mapped_column(Date)
+    changed_version: Mapped[date | None] = mapped_column(Date)
+    first_import_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    changed_import_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    # Запись пропала из выгрузки: не удаляется (на неё могут ссылаться модели угроз).
+    withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    withdrawn_import_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class BduThreat(_BduRecord, Base):
+    """Угроза безопасности информации из БДУ (thrlist.xlsx)."""
+
+    __tablename__ = "bdu_threats"
+
+    code: Mapped[str] = mapped_column(String(16), primary_key=True)  # УБИ.001
+    number: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(1000))
+    description: Mapped[str | None] = mapped_column(Text)
+    source: Mapped[str | None] = mapped_column(Text)
+    target: Mapped[str | None] = mapped_column(Text)
+    conf: Mapped[bool | None] = mapped_column(Boolean)
+    integ: Mapped[bool | None] = mapped_column(Boolean)
+    avail: Mapped[bool | None] = mapped_column(Boolean)
+    published_on: Mapped[date | None] = mapped_column(Date)
+    changed_on: Mapped[date | None] = mapped_column(Date)
+    status: Mapped[str | None] = mapped_column(Text)
+
+
+class BduVuln(_BduRecord, Base):
+    """Уязвимость из БДУ (vullist.xlsx) с полями для Методики критичности 2025."""
+
+    __tablename__ = "bdu_vulns"
+    __table_args__ = (Index("ix_bdu_vulns_crit_changed", "criticality_changed_at"),)
+
+    bdu_id: Mapped[str] = mapped_column(String(32), primary_key=True)  # BDU:2024-04835
+    title: Mapped[str] = mapped_column(String(2000))
+    description: Mapped[str | None] = mapped_column(Text)
+    vendor: Mapped[str | None] = mapped_column(Text)
+    product: Mapped[str | None] = mapped_column(Text)
+    product_version: Mapped[str | None] = mapped_column(Text)
+    sw_type: Mapped[str | None] = mapped_column(Text)
+    platform: Mapped[str | None] = mapped_column(Text)
+    vuln_class: Mapped[str | None] = mapped_column(Text)
+    identified_on: Mapped[date | None] = mapped_column(Date)
+    published_on: Mapped[date | None] = mapped_column(Date)
+    severity: Mapped[str | None] = mapped_column(Text)
+    cvss3_vector: Mapped[str | None] = mapped_column(String(200))
+    cvss3_version: Mapped[str | None] = mapped_column(String(8))
+    cvss3_score: Mapped[float | None] = mapped_column(Float)
+    cvss3_score_source: Mapped[str | None] = mapped_column(String(16))  # bdu | computed
+    # {cvss2: {vector, score}, cvss4: {vector, score}}
+    cvss_other: Mapped[dict | None] = mapped_column(JsonType)
+    measures: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str | None] = mapped_column(Text)
+    exploit: Mapped[str | None] = mapped_column(String(16))  # public|exists|unknown|none|other
+    exploit_raw: Mapped[str | None] = mapped_column(String(500))
+    in_wild: Mapped[str | None] = mapped_column(String(16))  # yes|no|unknown|other
+    in_wild_raw: Mapped[str | None] = mapped_column(String(500))
+    fix_info: Mapped[str | None] = mapped_column(Text)
+    links: Mapped[str | None] = mapped_column(Text)
+    cve_ids: Mapped[list] = mapped_column(JsonType, default=list)
+    cwe_ids: Mapped[list] = mapped_column(JsonType, default=list)
+    other_ids: Mapped[str | None] = mapped_column(Text)
+    other_info: Mapped[str | None] = mapped_column(Text)
+    exploit_method: Mapped[str | None] = mapped_column(Text)
+    fix_method: Mapped[str | None] = mapped_column(Text)
+    # Хэш полей, влияющих на уровень критичности (CVSS, эксплойт, эксплуатация, статус).
+    crit_hash: Mapped[str] = mapped_column(String(64))
+    # Когда эти поля последний раз изменились при загрузке выгрузки: оценки критичности,
+    # сделанные раньше, требуют пересчёта (Методика 2025, п. 16, 19; задача 2.8).
+    criticality_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    criticality_changed_import_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # {поле: [было, стало]} последнего такого изменения.
+    criticality_changes: Mapped[dict | None] = mapped_column(JsonType)

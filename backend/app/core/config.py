@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     # Предел размера одного файла доказательства, МБ.
     evidence_max_mb: int = Field(default=50, ge=1, le=1024)
 
+    # Выгрузки БДУ ФСТЭК (thrlist.xlsx, vullist.xlsx): том, имя — sha256. В Docker — /data/bdu.
+    bdu_dir: Path = Path("./data/bdu")
+    # Предел размера выгрузки, МБ (vullist.xlsx — около 100 МБ).
+    bdu_max_mb: int = Field(default=400, ge=1, le=2048)
+
     # Пути, под которыми продукт виден в платформе (для манифеста).
     base_path: str = "/grc/"
     api_base: str = "/api/grc/"
