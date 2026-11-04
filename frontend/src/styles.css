@@ -1888,3 +1888,119 @@ fieldset.field {
   }
 
 }
+
+/* ---------- Результаты «Сканера» (задача 1.9) ---------- */
+
+.scanner-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.scanner-run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px var(--s2);
+  font-size: 13px;
+}
+
+.scanner-stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--s2);
+}
+
+.scanner-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.scanner-stat .kpi-label {
+  display: inline-flex;
+  align-items: center;
+}
+
+.scanner-stat-value {
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.pill.pill-dot {
+  margin-right: 6px;
+  padding: 0;
+  background: none;
+}
+
+.pill.pill-tight {
+  margin-left: 6px;
+  padding: 0 6px;
+}
+
+.run-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.status-differs {
+  color: var(--warn);
+}
+
+.evidence-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.evidence-block h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.evidence-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.evidence-list ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 0;
+  padding-left: var(--s3);
+  list-style: none;
+}
+
+.evidence-list a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+@media (max-width: 960px) {
+  .scanner-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .scanner-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

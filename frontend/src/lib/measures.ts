@@ -1,6 +1,12 @@
 // Набор мер объекта: базовый по классу + адаптация; процент реализации считает сервер.
+import type { SnapshotBrief } from "./snapshots";
 
-export type MeasureStatus = "implemented" | "partial" | "not_implemented" | "not_applicable" | "unassessed";
+export type MeasureStatus =
+  | "implemented"
+  | "partial"
+  | "not_implemented"
+  | "not_applicable"
+  | "unassessed";
 export type AdaptationKind = "none" | "excluded" | "compensated";
 
 export interface ObjectMeasure {
@@ -28,6 +34,10 @@ export interface ObjectMeasure {
   adapted_by_name: string | null;
   status_at: string | null;
   status_by_name: string | null;
+  status_source: "auto" | "manual" | null;
+  auto_status: Exclude<MeasureStatus, "not_applicable"> | null;
+  auto_note: string | null;
+  auto_snapshot_id: string | null;
   updated_at: string;
 }
 
@@ -68,7 +78,12 @@ export interface AdaptationVersion {
   approval_comment: string | null;
   unverified_acknowledged: boolean;
   superseded_at: string | null;
-  counts: { total: number; excluded: number; compensated: number; added: number } | null;
+  counts: {
+    total: number;
+    excluded: number;
+    compensated: number;
+    added: number;
+  } | null;
 }
 
 export interface ClassRef {
@@ -91,9 +106,16 @@ export interface MeasureSet {
   stats: Stats | null;
   partial_weight: number;
   groups: { code: string; title: string; total: number }[];
-  counts: { total: number; baseline: number; added: number; excluded: number; compensated: number };
+  counts: {
+    total: number;
+    baseline: number;
+    added: number;
+    excluded: number;
+    compensated: number;
+  };
   unverified: number;
   approve_blockers: string[];
+  snapshot: SnapshotBrief | null;
 }
 
 export interface PlanItem {
@@ -147,7 +169,10 @@ export const METHOD_LABELS: Record<ObjectMeasure["method"], string> = {
   mixed: "Смешанная",
 };
 
-export const ADAPTATION_STATUS_LABELS: Record<AdaptationVersion["status"], string> = {
+export const ADAPTATION_STATUS_LABELS: Record<
+  AdaptationVersion["status"],
+  string
+> = {
   draft: "Не утверждена",
   approved: "Утверждена",
   superseded: "Заменена",
@@ -162,12 +187,22 @@ export function formatPercent(p: number | null | undefined): string {
 }
 
 /** Части полосы реализации в процентах знаменателя. */
-export function barParts(b: StatsBucket): { key: string; value: number; label: string }[] {
+export function barParts(
+  b: StatsBucket,
+): { key: string; value: number; label: string }[] {
   if (b.total === 0) return [];
   return [
-    { key: "implemented", value: b.implemented, label: STATUS_LABELS.implemented },
+    {
+      key: "implemented",
+      value: b.implemented,
+      label: STATUS_LABELS.implemented,
+    },
     { key: "partial", value: b.partial, label: STATUS_LABELS.partial },
-    { key: "not_implemented", value: b.not_implemented, label: STATUS_LABELS.not_implemented },
+    {
+      key: "not_implemented",
+      value: b.not_implemented,
+      label: STATUS_LABELS.not_implemented,
+    },
     { key: "unassessed", value: b.unassessed, label: STATUS_LABELS.unassessed },
   ]
     .filter((p) => p.value > 0)
@@ -176,8 +211,19 @@ export function barParts(b: StatsBucket): { key: string; value: number; label: s
 
 /** Короткая подпись адаптации меры для строки таблицы. */
 export function adaptationNote(m: ObjectMeasure): string | null {
-  if (m.adaptation === "excluded") return `Исключена: ${m.adaptation_reason ?? ""}`;
-  if (m.adaptation === "compensated") return `Компенсирована мерами ${m.compensating_ids.join(", ")}`;
+  if (m.adaptation === "excluded")
+    return `Исключена: ${m.adaptation_reason ?? ""}`;
+  if (m.adaptation === "compensated")
+    return `Компенсирована мерами ${m.compensating_ids.join(", ")}`;
   if (m.origin === "added") return `Дополнение: ${m.adaptation_reason ?? ""}`;
   return null;
+}
+
+/** Статус поставлен вручную и расходится с предложением «Сканера». */
+export function differsFromScanner(m: ObjectMeasure): boolean {
+  return (
+    m.auto_status !== null &&
+    m.status_source === "manual" &&
+    m.status !== m.auto_status
+  );
 }
