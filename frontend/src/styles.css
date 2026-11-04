@@ -2456,3 +2456,106 @@ fieldset.field {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* ---------- Модель угроз (2.3) ---------- */
+
+.tm-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.tm-kpis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4);
+}
+
+.tm-help {
+  margin: 0;
+  max-width: 72ch;
+}
+
+.tm-group {
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--border);
+}
+
+.tm-group .field-legend {
+  margin-bottom: var(--s1);
+}
+
+.tm-check-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 4px;
+}
+
+.tm-check-row > .input {
+  margin-left: 26px;
+  width: calc(100% - 26px);
+}
+
+.tm-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.tm-block-off {
+  opacity: 0.72;
+}
+
+.tm-block.tm-block-off {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.tm-block-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.tm-block-head .input {
+  flex: 1;
+  font-weight: 500;
+}
+
+.tm-threats-head {
+  justify-content: space-between;
+}
+
+.tm-problems {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.tm-problems li + li {
+  margin-top: 2px;
+}
+
+.tm-details summary {
+  cursor: pointer;
+  color: var(--text-2);
+}
+
+.stepper .count {
+  margin-left: 2px;
+}
+
+.chip:disabled {
+  cursor: default;
+}
+
+@media (max-width: 600px) {
+  .tm-check-row > .input {
+    margin-left: 0;
+    width: 100%;
+  }
+}

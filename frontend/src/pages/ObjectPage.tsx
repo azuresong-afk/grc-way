@@ -40,10 +40,11 @@ import {
 import { useProject } from "../lib/project";
 import { ClassificationTab } from "./ClassificationTab";
 import { MeasuresTab } from "./MeasuresTab";
+import { ThreatModelTab } from "./ThreatModelTab";
 import { RegimeField } from "./ObjectsPage";
 
-type Tab = "description" | "classification" | "measures" | "composition";
-const TABS: Tab[] = ["description", "classification", "measures", "composition"];
+type Tab = "description" | "classification" | "measures" | "threats" | "composition";
+const TABS: Tab[] = ["description", "classification", "measures", "threats", "composition"];
 
 export function ObjectPage() {
   const { id = "" } = useParams();
@@ -182,6 +183,15 @@ export function ObjectPage() {
           type="button"
           role="tab"
           className="tab"
+          aria-selected={tab === "threats"}
+          onClick={() => setTab("threats")}
+        >
+          Модель угроз
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className="tab"
           aria-selected={tab === "composition"}
           onClick={() => setTab("composition")}
         >
@@ -197,6 +207,7 @@ export function ObjectPage() {
       {tab === "measures" && (
         <MeasuresTab obj={obj} editable={known && obj.status === "active"} onChanged={reloadObject} />
       )}
+      {tab === "threats" && <ThreatModelTab obj={obj} editable={known && obj.status === "active"} />}
       {tab === "composition" && (
         <CompositionTab
           obj={obj}
