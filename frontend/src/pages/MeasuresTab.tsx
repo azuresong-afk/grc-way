@@ -1,5 +1,20 @@
-import { CheckCheck, History, ListChecks, Plus, RefreshCw, Search, ShieldCheck, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  CheckCheck,
+  History,
+  ListChecks,
+  Plus,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Trash2,
+} from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
 import { Link } from "react-router-dom";
 import { Drawer } from "../components/Drawer";
 import { EmptyState } from "../components/EmptyState";
@@ -17,6 +32,7 @@ import {
   STATUS_PILL,
   adaptationNote,
   barParts,
+  differsFromScanner,
   formatPercent,
   type AdaptationKind,
   type AdaptationVersion,
@@ -28,11 +44,20 @@ import {
 } from "../lib/measures";
 import type { ObjectFull } from "../lib/objects";
 import { useProject } from "../lib/project";
+import { MeasureEvidence, ScannerCard } from "./ScannerResults";
 
-type Filter = "all" | "unassessed" | "adapted" | "review";
+type Filter =
+  | "all"
+  | "unassessed"
+  | "manual"
+  | "differs"
+  | "adapted"
+  | "review";
 const FILTERS: [Filter, string][] = [
   ["all", "Все"],
   ["unassessed", "Не оценены"],
+  ["manual", "Требуют ручной оценки"],
+  ["differs", "Расходятся со «Сканером»"],
   ["adapted", "Адаптация"],
   ["review", "Требуют сверки"],
 ];
@@ -95,9 +120,26 @@ export function MeasuresTab({
     return (items ?? []).filter((m) => {
       if (group && m.group_code !== group) return false;
       if (filter === "unassessed" && m.status !== "unassessed") return false;
-      if (filter === "adapted" && m.adaptation === "none" && m.origin !== "added") return false;
+      if (
+        filter === "manual" &&
+        (m.method !== "manual" ||
+          m.status !== "unassessed" ||
+          m.adaptation === "excluded")
+      )
+        return false;
+      if (filter === "differs" && !differsFromScanner(m)) return false;
+      if (
+        filter === "adapted" &&
+        m.adaptation === "none" &&
+        m.origin !== "added"
+      )
+        return false;
       if (filter === "review" && m.verified) return false;
-      if (q && !m.measure_id.toLocaleLowerCase("ru-RU").includes(q) && !m.title.toLocaleLowerCase("ru-RU").includes(q))
+      if (
+        q &&
+        !m.measure_id.toLocaleLowerCase("ru-RU").includes(q) &&
+        !m.title.toLocaleLowerCase("ru-RU").includes(q)
+      )
         return false;
       return true;
     });
@@ -105,7 +147,8 @@ export function MeasuresTab({
 
   const byGroup = useMemo(() => {
     const out = new Map<string, ObjectMeasure[]>();
-    for (const m of filtered) out.set(m.group_code, [...(out.get(m.group_code) ?? []), m]);
+    for (const m of filtered)
+      out.set(m.group_code, [...(out.get(m.group_code) ?? []), m]);
     return out;
   }, [filtered]);
 
@@ -115,13 +158,18 @@ export function MeasuresTab({
   const canAdapt = editable && can("adaptation.edit");
   const canAssess = editable && can("assessment.edit");
   const canApprove = editable && can("approve");
+  const canImport = editable && can("scanner.import");
 
   if (set.state === "no_regime" || set.state === "no_profile") {
     return (
       <section className="card">
         <EmptyState
           icon={<ListChecks size={21} />}
-          title={set.state === "no_regime" ? "Режим не выбран" : "Профиль мер не загружен"}
+          title={
+            set.state === "no_regime"
+              ? "Режим не выбран"
+              : "Профиль мер не загружен"
+          }
           text={
             set.state === "no_regime"
               ? "Набор мер формируется для ГИС, ИСПДн и КИИ. Укажите вид объекта и нормативный режим в описании."
@@ -164,7 +212,11 @@ export function MeasuresTab({
             text={`${set.classification?.result_label ?? ""} утверждён. Базовый набор возьмётся из профиля ${set.profile_short ?? ""} по столбцу класса; затем его можно адаптировать.`}
             action={
               canAdapt ? (
-                <button type="button" className="btn btn-primary" onClick={() => setRebuilding(true)}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => setRebuilding(true)}
+                >
                   <ListChecks size={15} /> Сформировать базовый набор
                 </button>
               ) : undefined
@@ -181,7 +233,11 @@ export function MeasuresTab({
                   : "Набор отличается от базового по текущему классу: справочник мер изменился. Пересоберите набор."}
               </span>
               {canAdapt && (
-                <button type="button" className="btn btn-sm" onClick={() => setRebuilding(true)}>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => setRebuilding(true)}
+                >
                   <RefreshCw size={14} /> Пересобрать
                 </button>
               )}
@@ -190,16 +246,26 @@ export function MeasuresTab({
           {set.unverified > 0 && (
             <div className="alert alert-info">
               <span className="alert-text">
-                Состав базового набора взят из профиля «Сканера» ({set.profile_short}) и не сверен методистом:{" "}
-                {formatNumber(set.unverified)} из {formatNumber(set.counts.total)} мер требуют сверки.
+                Состав базового набора взят из профиля «Сканера» (
+                {set.profile_short}) и не сверен методистом:{" "}
+                {formatNumber(set.unverified)} из{" "}
+                {formatNumber(set.counts.total)} мер требуют сверки.
               </span>
             </div>
           )}
 
           <div className="measure-kpis">
             <StatCard title="Всего" bucket={set.stats?.total} accent />
-            <StatCard title="Автоматически" hint="меры с проверками «Сканера»" bucket={set.stats?.auto} />
-            <StatCard title="Вручную" hint="организационные меры" bucket={set.stats?.manual} />
+            <StatCard
+              title="Автоматически"
+              hint="меры с проверками «Сканера»"
+              bucket={set.stats?.auto}
+            />
+            <StatCard
+              title="Вручную"
+              hint="организационные меры"
+              bucket={set.stats?.manual}
+            />
             {a && (
               <AdaptationCard
                 set={set}
@@ -211,6 +277,14 @@ export function MeasuresTab({
               />
             )}
           </div>
+
+          <ScannerCard
+            objectId={obj.id}
+            snapshot={set.snapshot}
+            linked={obj.scanner_engagement_id !== null}
+            canImport={canImport}
+            onImported={reload}
+          />
 
           <div className="toolbar measure-toolbar">
             <select
@@ -251,7 +325,11 @@ export function MeasuresTab({
               />
             </label>
             {canAdapt && (
-              <button type="button" className="btn toolbar-end" onClick={() => setAdding(true)}>
+              <button
+                type="button"
+                className="btn toolbar-end"
+                onClick={() => setAdding(true)}
+              >
                 <Plus size={15} /> Дополнить
               </button>
             )}
@@ -259,7 +337,11 @@ export function MeasuresTab({
 
           {filtered.length === 0 && (
             <section className="card">
-              <EmptyState icon={<CheckCheck size={21} />} title="Ничего не найдено" text="Под выбранные фильтры мер нет." />
+              <EmptyState
+                icon={<CheckCheck size={21} />}
+                title="Ничего не найдено"
+                text="Под выбранные фильтры мер нет."
+              />
             </section>
           )}
 
@@ -286,7 +368,12 @@ export function MeasuresTab({
                     </thead>
                     <tbody>
                       {byGroup.get(g.code)?.map((m) => (
-                        <MeasureRow key={m.id} m={m} selected={opened === m.id} onOpen={() => setOpened(m.id)} />
+                        <MeasureRow
+                          key={m.id}
+                          m={m}
+                          selected={opened === m.id}
+                          onOpen={() => setOpened(m.id)}
+                        />
                       ))}
                     </tbody>
                   </table>
@@ -378,18 +465,27 @@ function StatCard({
       <div
         className="impl-bar"
         role="img"
-        aria-label={parts.map((p) => `${p.label}: ${Math.round(p.value)} %`).join(", ") || "нет мер"}
+        aria-label={
+          parts.map((p) => `${p.label}: ${Math.round(p.value)} %`).join(", ") ||
+          "нет мер"
+        }
       >
         {parts.map((p) => (
-          <span key={p.key} className={`impl-bar-${p.key}`} style={{ width: `${p.value}%` }} />
+          <span
+            key={p.key}
+            className={`impl-bar-${p.key}`}
+            style={{ width: `${p.value}%` }}
+          />
         ))}
       </div>
       {bucket && (
         <span className="kpi-delta">
           {formatNumber(bucket.total)} мер в проценте
-          {bucket.unassessed > 0 && ` · ${formatNumber(bucket.unassessed)} не оценено`}
+          {bucket.unassessed > 0 &&
+            ` · ${formatNumber(bucket.unassessed)} не оценено`}
           {bucket.excluded > 0 && ` · ${formatNumber(bucket.excluded)} искл.`}
-          {bucket.not_applicable > 0 && ` · ${formatNumber(bucket.not_applicable)} не примен.`}
+          {bucket.not_applicable > 0 &&
+            ` · ${formatNumber(bucket.not_applicable)} не примен.`}
         </span>
       )}
     </div>
@@ -419,7 +515,9 @@ function AdaptationCard({
         Адаптация · версия {a.version} · {a.level_label}
       </span>
       <div>
-        <span className={`pill ${a.status === "approved" ? "pill-ok" : "pill-warn"}`}>
+        <span
+          className={`pill ${a.status === "approved" ? "pill-ok" : "pill-warn"}`}
+        >
           {ADAPTATION_STATUS_LABELS[a.status]}
         </span>
       </div>
@@ -429,7 +527,8 @@ function AdaptationCard({
           : `Черновик от ${formatDateTime(a.created_at)}, ${a.created_by_name}${a.edits ? ` · правок: ${a.edits}` : ""}`}
       </span>
       <span className="kpi-delta">
-        Исключено {set.counts.excluded} · компенсировано {set.counts.compensated} · дополнено {set.counts.added}
+        Исключено {set.counts.excluded} · компенсировано{" "}
+        {set.counts.compensated} · дополнено {set.counts.added}
       </span>
       <div className="actions">
         {canApprove && a.status === "draft" && (
@@ -437,7 +536,11 @@ function AdaptationCard({
             type="button"
             className="btn btn-sm btn-primary"
             disabled={own || set.approve_blockers.length > 0}
-            title={own ? "Вы меняли эту версию адаптации — утверждает другой" : set.approve_blockers.join("; ")}
+            title={
+              own
+                ? "Вы меняли эту версию адаптации — утверждает другой"
+                : set.approve_blockers.join("; ")
+            }
             onClick={onApprove}
           >
             <ShieldCheck size={14} /> Утвердить
@@ -453,11 +556,22 @@ function AdaptationCard({
   );
 }
 
-function MeasureRow({ m, selected, onOpen }: { m: ObjectMeasure; selected: boolean; onOpen: () => void }) {
+function MeasureRow({
+  m,
+  selected,
+  onOpen,
+}: {
+  m: ObjectMeasure;
+  selected: boolean;
+  onOpen: () => void;
+}) {
   const note = adaptationNote(m);
   const excluded = m.adaptation === "excluded";
   return (
-    <tr className={`clickable${selected ? " selected" : ""}${excluded ? " row-excluded" : ""}`} onClick={onOpen}>
+    <tr
+      className={`clickable${selected ? " selected" : ""}${excluded ? " row-excluded" : ""}`}
+      onClick={onOpen}
+    >
       <td className="nowrap">
         <button type="button" className="link-btn" onClick={onOpen}>
           <span className="tag">{m.measure_id}</span>
@@ -478,11 +592,31 @@ function MeasureRow({ m, selected, onOpen }: { m: ObjectMeasure; selected: boole
         {excluded ? (
           <span className="pill pill-muted">Исключена</span>
         ) : m.adaptation === "compensated" && m.effective_status ? (
-          <span className={`pill ${STATUS_PILL[m.effective_status]}`} title="По статусу компенсирующих мер">
+          <span
+            className={`pill ${STATUS_PILL[m.effective_status]}`}
+            title="По статусу компенсирующих мер"
+          >
             {STATUS_LABELS[m.effective_status]} · комп.
           </span>
         ) : (
-          <span className={`pill ${STATUS_PILL[m.status]}`}>{STATUS_LABELS[m.status]}</span>
+          <span
+            className={`pill ${STATUS_PILL[m.status]}`}
+            title={
+              m.status_source === "auto"
+                ? (m.auto_note ?? undefined)
+                : undefined
+            }
+          >
+            {STATUS_LABELS[m.status]}
+          </span>
+        )}
+        {m.status_source === "auto" && !excluded && (
+          <div className="cell-sub">по «Сканеру»</div>
+        )}
+        {differsFromScanner(m) && m.auto_status && (
+          <div className="cell-sub status-differs">
+            «Сканер»: {STATUS_LABELS[m.auto_status]}
+          </div>
         )}
       </td>
       <td>
@@ -534,7 +668,8 @@ function HistoryCard({ history }: { history: AdaptationVersion[] }) {
                   {v.approved_at && (
                     <div className="cell-sub">
                       {formatDateTime(v.approved_at)}
-                      {v.unverified_acknowledged && " · по несверенному справочнику"}
+                      {v.unverified_acknowledged &&
+                        " · по несверенному справочнику"}
                     </div>
                   )}
                 </td>
@@ -554,7 +689,15 @@ function HistoryCard({ history }: { history: AdaptationVersion[] }) {
 
 // ---------- Пересборка ----------
 
-function PlanList({ title, items, warn }: { title: string; items: Plan["add"]; warn?: boolean }) {
+function PlanList({
+  title,
+  items,
+  warn,
+}: {
+  title: string;
+  items: Plan["add"];
+  warn?: boolean;
+}) {
   if (items.length === 0) return null;
   return (
     <div className="plan-list">
@@ -565,7 +708,9 @@ function PlanList({ title, items, warn }: { title: string; items: Plan["add"]; w
         {items.map((i) => (
           <li key={i.measure_id}>
             <span className="tag">{i.measure_id}</span> {i.title}
-            {warn && i.assessed && <span className="pill pill-warn">есть оценка</span>}
+            {warn && i.assessed && (
+              <span className="pill pill-warn">есть оценка</span>
+            )}
           </li>
         ))}
       </ul>
@@ -589,7 +734,9 @@ function RebuildDialog({
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    apiSend<Plan>("POST", `/objects/${objectId}/measures/rebuild`, { dry_run: true })
+    apiSend<Plan>("POST", `/objects/${objectId}/measures/rebuild`, {
+      dry_run: true,
+    })
       .then(setPlan)
       .catch((e: Error) => setError(e.message));
   }, [objectId]);
@@ -598,7 +745,9 @@ function RebuildDialog({
     setBusy(true);
     setError(null);
     try {
-      await apiSend<Plan>("POST", `/objects/${objectId}/measures/rebuild`, { dry_run: false });
+      await apiSend<Plan>("POST", `/objects/${objectId}/measures/rebuild`, {
+        dry_run: false,
+      });
       onDone();
     } catch (e) {
       setError(message(e, "Не удалось пересобрать набор"));
@@ -632,24 +781,42 @@ function RebuildDialog({
         {plan && (
           <>
             <p>
-              По классу <b>{plan.classification.result_label}</b>: меры профиля, у которых класс отмечен в базовом наборе.
-              {!first && " Адаптация остальных мер сохранится; изменение откроет новую версию адаптации."}
+              По классу <b>{plan.classification.result_label}</b>: меры профиля,
+              у которых класс отмечен в базовом наборе.
+              {!first &&
+                " Адаптация остальных мер сохранится; изменение откроет новую версию адаптации."}
             </p>
-            {plan.empty && !plan.changes && <p className="muted">Набор уже совпадает с базовым — менять нечего.</p>}
+            {plan.empty && !plan.changes && (
+              <p className="muted">
+                Набор уже совпадает с базовым — менять нечего.
+              </p>
+            )}
             {plan.empty && plan.changes && !first && (
-              <p className="muted">Состав не меняется; версия адаптации привяжется к новой классификации.</p>
+              <p className="muted">
+                Состав не меняется; версия адаптации привяжется к новой
+                классификации.
+              </p>
             )}
             <PlanList title="Войдут в набор" items={plan.add} />
             <PlanList title="Уйдут из набора" items={plan.remove} warn />
-            <PlanList title="Дополненные станут базовыми" items={plan.promote} />
-            <PlanList title="Компенсация снимется: компенсирующих не останется" items={plan.reset} />
+            <PlanList
+              title="Дополненные станут базовыми"
+              items={plan.promote}
+            />
+            <PlanList
+              title="Компенсация снимется: компенсирующих не останется"
+              items={plan.reset}
+            />
             {plan.foreign.length > 0 && (
-              <p className="muted">Меры прежнего режима уйдут из набора: {plan.foreign.length}.</p>
+              <p className="muted">
+                Меры прежнего режима уйдут из набора: {plan.foreign.length}.
+              </p>
             )}
             {plan.remove.some((i) => i.assessed) && (
               <div className="alert alert-warn">
                 <span className="alert-text">
-                  У части уходящих мер есть оценка — она сохранится только в журнале аудита.
+                  У части уходящих мер есть оценка — она сохранится только в
+                  журнале аудита.
                 </span>
               </div>
             )}
@@ -691,7 +858,9 @@ function AddDialog({
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    apiGet<RefMeasure[]>(`/refs/measures?profile=${encodeURIComponent(profileId)}&limit=500`)
+    apiGet<RefMeasure[]>(
+      `/refs/measures?profile=${encodeURIComponent(profileId)}&limit=500`,
+    )
       .then(setRefs)
       .catch((e: Error) => setError(e.message));
   }, [profileId]);
@@ -734,7 +903,12 @@ function AddDialog({
           <button type="button" className="btn" onClick={onClose}>
             Отмена
           </button>
-          <button type="submit" form="add-measure" className="btn btn-primary" disabled={busy || !picked || !reason.trim()}>
+          <button
+            type="submit"
+            form="add-measure"
+            className="btn btn-primary"
+            disabled={busy || !picked || !reason.trim()}
+          >
             Дополнить
           </button>
         </>
@@ -744,13 +918,27 @@ function AddDialog({
         {error && <ErrorAlert message={error} />}
         <label className="field">
           <span>Поиск</span>
-          <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="ИАФ.2, мобильные…" />
+          <input
+            className="input"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="ИАФ.2, мобильные…"
+          />
         </label>
-        <div className="pick-list" role="listbox" aria-label="Меры профиля вне набора">
+        <div
+          className="pick-list"
+          role="listbox"
+          aria-label="Меры профиля вне набора"
+        >
           {!refs && !error && <Loading />}
-          {refs && options.length === 0 && <p className="muted">Все меры профиля уже в наборе.</p>}
+          {refs && options.length === 0 && (
+            <p className="muted">Все меры профиля уже в наборе.</p>
+          )}
           {options.map((r) => (
-            <label key={r.id} className={`pick-item${picked === r.id ? " picked" : ""}`}>
+            <label
+              key={r.id}
+              className={`pick-item${picked === r.id ? " picked" : ""}`}
+            >
               <input
                 type="radio"
                 name="measure"
@@ -763,7 +951,10 @@ function AddDialog({
                 {r.title}
                 <small className="muted">
                   {" "}
-                  · {r.levels.length ? `базовая для ${r.levels.join(", ")}` : "вне базового набора"}
+                  ·{" "}
+                  {r.levels.length
+                    ? `базовая для ${r.levels.join(", ")}`
+                    : "вне базового набора"}
                 </small>
               </span>
             </label>
@@ -833,7 +1024,12 @@ function ApproveDialog({
           <button type="button" className="btn" onClick={onClose}>
             Отмена
           </button>
-          <button type="submit" form="approve-adaptation" className="btn btn-primary" disabled={busy || (needAck && !ack)}>
+          <button
+            type="submit"
+            form="approve-adaptation"
+            className="btn btn-primary"
+            disabled={busy || (needAck && !ack)}
+          >
             Утвердить
           </button>
         </>
@@ -842,25 +1038,38 @@ function ApproveDialog({
       <form id="approve-adaptation" className="form-stack" onSubmit={submit}>
         {error && <ErrorAlert message={error} />}
         <p>
-          Набор по классу <b>{a.level_label}</b>: {set.counts.total} мер, из них исключено {set.counts.excluded},
-          компенсировано {set.counts.compensated}, дополнено {set.counts.added}. Снимок адаптации сохранится в версии{" "}
-          {a.version}; утверждение фиксируется в журнале аудита.
+          Набор по классу <b>{a.level_label}</b>: {set.counts.total} мер, из них
+          исключено {set.counts.excluded}, компенсировано{" "}
+          {set.counts.compensated}, дополнено {set.counts.added}. Снимок
+          адаптации сохранится в версии {a.version}; утверждение фиксируется в
+          журнале аудита.
         </p>
         {needAck && (
           <label className="check">
-            <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={ack}
+              onChange={(e) => setAck(e.target.checked)}
+            />
             <span>
               <b>Утверждаю по несверенному справочнику</b>
               <small>
-                {set.unverified} мер набора не сверены методистом: состав базового набора и сопоставление с проверками
-                «Сканера» могут отличаться от официального текста.
+                {set.unverified} мер набора не сверены методистом: состав
+                базового набора и сопоставление с проверками «Сканера» могут
+                отличаться от официального текста.
               </small>
             </span>
           </label>
         )}
         <label className="field">
           <span>Комментарий</span>
-          <textarea className="textarea" rows={2} maxLength={2000} value={comment} onChange={(e) => setComment(e.target.value)} />
+          <textarea
+            className="textarea"
+            rows={2}
+            maxLength={2000}
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+          />
         </label>
       </form>
     </Modal>
@@ -900,13 +1109,21 @@ function MeasureDrawer({
   const [busy, setBusy] = useState(false);
 
   const candidates = all.filter(
-    (x) => x.measure_id !== m.measure_id && x.adaptation === "none" && !comp.includes(x.measure_id),
+    (x) =>
+      x.measure_id !== m.measure_id &&
+      x.adaptation === "none" &&
+      !comp.includes(x.measure_id),
   );
   const adaptDirty =
     kind !== m.adaptation ||
-    (kind !== "none" || m.origin === "added" ? reason.trim() !== (m.adaptation_reason ?? "") : false) ||
+    (kind !== "none" || m.origin === "added"
+      ? reason.trim() !== (m.adaptation_reason ?? "")
+      : false) ||
     (kind === "compensated" && comp.join() !== m.compensating_ids.join());
-  const assessDirty = status !== m.status || owner !== (m.owner_id ?? "") || comment.trim() !== (m.comment ?? "");
+  const assessDirty =
+    status !== m.status ||
+    owner !== (m.owner_id ?? "") ||
+    comment.trim() !== (m.comment ?? "");
 
   async function save(body: Record<string, unknown>) {
     setBusy(true);
@@ -952,16 +1169,36 @@ function MeasureDrawer({
         <dl className="props">
           <dt>Статус</dt>
           <dd>
-            <span className={`pill ${STATUS_PILL[m.status]}`}>{STATUS_LABELS[m.status]}</span>
+            <span className={`pill ${STATUS_PILL[m.status]}`}>
+              {STATUS_LABELS[m.status]}
+            </span>
             {m.adaptation === "compensated" && m.effective_status && (
-              <span className="muted"> · в проценте: {STATUS_LABELS[m.effective_status]} (по компенсирующим)</span>
+              <span className="muted">
+                {" "}
+                · в проценте: {STATUS_LABELS[m.effective_status]} (по
+                компенсирующим)
+              </span>
             )}
-            {m.adaptation === "excluded" && <span className="muted"> · вне процента</span>}
+            {m.adaptation === "excluded" && (
+              <span className="muted"> · вне процента</span>
+            )}
           </dd>
           <dt>Базовый набор</dt>
-          <dd>{m.levels.length ? m.levels.join(", ") : <span className="muted">вне базового набора</span>}</dd>
+          <dd>
+            {m.levels.length ? (
+              m.levels.join(", ")
+            ) : (
+              <span className="muted">вне базового набора</span>
+            )}
+          </dd>
           <dt>Проверки «Сканера»</dt>
-          <dd>{m.checks.length ? m.checks.join(", ") : <span className="muted">нет — проверяется вручную</span>}</dd>
+          <dd>
+            {m.checks.length ? (
+              m.checks.join(", ")
+            ) : (
+              <span className="muted">нет — проверяется вручную</span>
+            )}
+          </dd>
           <dt>Сверка</dt>
           <dd>
             <VerifyBadge verified={m.verified} />
@@ -983,7 +1220,9 @@ function MeasureDrawer({
         </dl>
         {!m.in_reference && (
           <div className="alert alert-warn">
-            <span className="alert-text">Мера убрана из справочника — пересоберите набор.</span>
+            <span className="alert-text">
+              Мера убрана из справочника — пересоберите набор.
+            </span>
           </div>
         )}
       </div>
@@ -1005,7 +1244,10 @@ function MeasureDrawer({
             <div className="seg" role="radiogroup" aria-label="Адаптация меры">
               {(
                 [
-                  ["none", m.origin === "added" ? "Дополнение" : "Без изменений"],
+                  [
+                    "none",
+                    m.origin === "added" ? "Дополнение" : "Без изменений",
+                  ],
                   ["excluded", "Исключить"],
                   ["compensated", "Компенсировать"],
                 ] as [AdaptationKind, string][]
@@ -1025,7 +1267,10 @@ function MeasureDrawer({
                 ))}
             </div>
             {m.compensates.length > 0 && kind !== "none" && (
-              <p className="cell-sub">Мера компенсирует {m.compensates.join(", ")} — сначала уберите её оттуда.</p>
+              <p className="cell-sub">
+                Мера компенсирует {m.compensates.join(", ")} — сначала уберите
+                её оттуда.
+              </p>
             )}
             {kind === "compensated" && (
               <div className="field">
@@ -1048,7 +1293,9 @@ function MeasureDrawer({
                   className="select"
                   aria-label="Добавить компенсирующую меру"
                   value=""
-                  onChange={(e) => e.target.value && setComp([...comp, e.target.value])}
+                  onChange={(e) =>
+                    e.target.value && setComp([...comp, e.target.value])
+                  }
                 >
                   <option value="">Добавить меру набора…</option>
                   {candidates.map((x) => (
@@ -1083,11 +1330,20 @@ function MeasureDrawer({
               </label>
             )}
             <div className="actions">
-              <button type="submit" className="btn btn-primary btn-sm" disabled={busy || !adaptDirty}>
+              <button
+                type="submit"
+                className="btn btn-primary btn-sm"
+                disabled={busy || !adaptDirty}
+              >
                 Сохранить адаптацию
               </button>
               {m.origin === "added" && (
-                <button type="button" className="btn btn-sm btn-danger" disabled={busy} onClick={remove}>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-danger"
+                  disabled={busy}
+                  onClick={remove}
+                >
                   <Trash2 size={14} /> Убрать из набора
                 </button>
               )}
@@ -1099,9 +1355,15 @@ function MeasureDrawer({
             )}
           </form>
         ) : (
-          <p>{adaptationNote(m) ?? <span className="muted">Без изменений</span>}</p>
+          <p>
+            {adaptationNote(m) ?? <span className="muted">Без изменений</span>}
+          </p>
         )}
       </div>
+
+      {m.method !== "manual" && (
+        <MeasureEvidence m={m} canAssess={canAssess} onChanged={onChanged} />
+      )}
 
       <div className="drawer-section">
         <h3>Оценка</h3>
@@ -1110,12 +1372,20 @@ function MeasureDrawer({
             className="form-stack drawer-form"
             onSubmit={(e) => {
               e.preventDefault();
-              void save({ status, owner_id: owner || null, comment: comment.trim() || null });
+              void save({
+                status,
+                owner_id: owner || null,
+                comment: comment.trim() || null,
+              });
             }}
           >
             <label className="field">
               <span>Статус</span>
-              <select className="select" value={status} onChange={(e) => setStatus(e.target.value as MeasureStatus)}>
+              <select
+                className="select"
+                value={status}
+                onChange={(e) => setStatus(e.target.value as MeasureStatus)}
+              >
                 {STATUS_ORDER.map((s) => (
                   <option key={s} value={s}>
                     {STATUS_LABELS[s]}
@@ -1125,7 +1395,11 @@ function MeasureDrawer({
             </label>
             <label className="field">
               <span>Ответственный</span>
-              <select className="select" value={owner} onChange={(e) => setOwner(e.target.value)}>
+              <select
+                className="select"
+                value={owner}
+                onChange={(e) => setOwner(e.target.value)}
+              >
                 <option value="">не назначен</option>
                 {members.map((u) => (
                   <option key={u.id} value={u.id}>
@@ -1136,10 +1410,20 @@ function MeasureDrawer({
             </label>
             <label className="field">
               <span>Комментарий</span>
-              <textarea className="textarea" rows={2} maxLength={4000} value={comment} onChange={(e) => setComment(e.target.value)} />
+              <textarea
+                className="textarea"
+                rows={2}
+                maxLength={4000}
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+              />
             </label>
             <div className="actions">
-              <button type="submit" className="btn btn-primary btn-sm" disabled={busy || !assessDirty}>
+              <button
+                type="submit"
+                className="btn btn-primary btn-sm"
+                disabled={busy || !assessDirty}
+              >
                 Сохранить оценку
               </button>
             </div>
@@ -1147,7 +1431,9 @@ function MeasureDrawer({
         ) : (
           <dl className="props">
             <dt>Ответственный</dt>
-            <dd>{m.owner_name ?? <span className="muted">не назначен</span>}</dd>
+            <dd>
+              {m.owner_name ?? <span className="muted">не назначен</span>}
+            </dd>
             <dt>Комментарий</dt>
             <dd>{m.comment ?? <span className="muted">—</span>}</dd>
           </dl>

@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "../App";
 import { TOKEN_KEY } from "../lib/api";
@@ -12,9 +18,20 @@ const METH = {
   username: "meth",
   display_name: "Иванова А. А.",
   roles: ["methodologist"],
-  permissions: ["view", "objects.edit", "classification.edit", "adaptation.edit"],
+  permissions: [
+    "view",
+    "objects.edit",
+    "classification.edit",
+    "adaptation.edit",
+  ],
 };
-const BOSS = { ...METH, id: "u9", display_name: "Смирнов С. С.", roles: ["viewer", "approve"], permissions: ["view", "approve"] };
+const BOSS = {
+  ...METH,
+  id: "u9",
+  display_name: "Смирнов С. С.",
+  roles: ["viewer", "approve"],
+  permissions: ["view", "approve"],
+};
 
 const PROJECT = {
   id: "p1",
@@ -50,10 +67,21 @@ const OBJ: ObjectFull = {
   scanner_synced_at: null,
   scanner_engagement_id: null,
   segments: [],
-  classification: { id: "c1", result: "К2", short: "К2", result_label: "К2 — второй класс", status: "approved" },
+  classification: {
+    id: "c1",
+    result: "К2",
+    short: "К2",
+    result_label: "К2 — второй класс",
+    status: "approved",
+  },
 };
 
-const CLASS = { id: "c1", result: "К2", result_label: "К2 — второй класс", status: "approved" };
+const CLASS = {
+  id: "c1",
+  result: "К2",
+  result_label: "К2 — второй класс",
+  status: "approved",
+};
 
 function bucket(over: Partial<StatsBucket> = {}): StatsBucket {
   return {
@@ -97,6 +125,10 @@ function measure(over: Partial<ObjectMeasure>): ObjectMeasure {
     adapted_by_name: null,
     status_at: null,
     status_by_name: null,
+    status_source: null,
+    auto_status: null,
+    auto_note: null,
+    auto_snapshot_id: null,
     updated_at: "2026-11-04T10:00:00Z",
     ...over,
   };
@@ -104,7 +136,15 @@ function measure(over: Partial<ObjectMeasure>): ObjectMeasure {
 
 const MEASURES = [
   measure({}),
-  measure({ id: "m2", measure_id: "ВУ", title: "Выявление угроз", method: "manual", checks: [], status: "unassessed", effective_status: "unassessed" }),
+  measure({
+    id: "m2",
+    measure_id: "ВУ",
+    title: "Выявление угроз",
+    method: "manual",
+    checks: [],
+    status: "unassessed",
+    effective_status: "unassessed",
+  }),
   measure({
     id: "m3",
     measure_id: "БД",
@@ -158,6 +198,7 @@ function setOf(over: Partial<MeasureSet> = {}): MeasureSet {
     counts: { total: 3, baseline: 3, added: 0, excluded: 1, compensated: 0 },
     unverified: 3,
     approve_blockers: [],
+    snapshot: null,
     ...over,
   };
 }
@@ -185,7 +226,14 @@ it("без сформированного набора — план базово
     classification: CLASS,
     profile_id: "fstec-117",
     level: "К2",
-    add: [{ measure_id: "КК", title: "Контроль конфигураций", group_code: "МРП", assessed: false }],
+    add: [
+      {
+        measure_id: "КК",
+        title: "Контроль конфигураций",
+        group_code: "МРП",
+        assessed: false,
+      },
+    ],
     remove: [],
     promote: [],
     reset: [],
@@ -197,7 +245,12 @@ it("без сформированного набора — план базово
   const calls = fakeApi({
     ...BASE,
     "GET /me": () => json(METH),
-    "GET /objects/o1/measure-set": () => json(built ? setOf() : setOf({ state: "not_built", adaptation: null, stats: null })),
+    "GET /objects/o1/measure-set": () =>
+      json(
+        built
+          ? setOf()
+          : setOf({ state: "not_built", adaptation: null, stats: null }),
+      ),
     "GET /objects/o1/measures": () => json(MEASURES),
     "GET /objects/o1/adaptations": () => json([]),
     "POST /objects/o1/measures/rebuild": (init) => {
@@ -207,19 +260,24 @@ it("без сформированного набора — план базово
   });
   renderAt("/objects/o1?tab=measures");
 
-  fireEvent.click(await screen.findByRole("button", { name: /Сформировать базовый набор/ }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: /Сформировать базовый набор/ }),
+  );
   const dialog = await screen.findByRole("dialog");
   expect(await within(dialog).findByText("Войдут в набор")).toBeInTheDocument();
   fireEvent.click(within(dialog).getByRole("button", { name: "Сформировать" }));
   await waitFor(() =>
-    expect(calls.filter((c) => c.path === "/objects/o1/measures/rebuild").map((c) => c.body)).toEqual([
-      { dry_run: true },
-      { dry_run: false },
-    ]),
+    expect(
+      calls
+        .filter((c) => c.path === "/objects/o1/measures/rebuild")
+        .map((c) => c.body),
+    ).toEqual([{ dry_run: true }, { dry_run: false }]),
   );
   // Процент и исключённая мера с обоснованием.
   expect(await screen.findByText("50 %")).toBeInTheDocument();
-  expect(screen.getByText("Исключена: Беспроводного доступа нет")).toBeInTheDocument();
+  expect(
+    screen.getByText("Исключена: Беспроводного доступа нет"),
+  ).toBeInTheDocument();
 });
 
 it("исключение меры требует обоснования и уходит одним запросом", async () => {
@@ -239,7 +297,9 @@ it("исключение меры требует обоснования и ух�
   fireEvent.change(within(drawer).getByLabelText("Обоснование исключения"), {
     target: { value: "Угрозы определены моделью угроз заказчика" },
   });
-  fireEvent.click(within(drawer).getByRole("button", { name: "Сохранить адаптацию" }));
+  fireEvent.click(
+    within(drawer).getByRole("button", { name: "Сохранить адаптацию" }),
+  );
   await waitFor(() =>
     expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({
       adaptation: "excluded",
@@ -247,7 +307,9 @@ it("исключение меры требует обоснования и ух�
     }),
   );
   // У методиста нет права ставить статус — блока оценки с полями нет.
-  expect(within(drawer).queryByRole("button", { name: "Сохранить оценку" })).not.toBeInTheDocument();
+  expect(
+    within(drawer).queryByRole("button", { name: "Сохранить оценку" }),
+  ).not.toBeInTheDocument();
 });
 
 it("утверждающий подтверждает несверенный справочник", async () => {
@@ -279,11 +341,223 @@ it("утверждающий подтверждает несверенный с�
 it("свою версию адаптации утвердить нельзя", async () => {
   fakeApi({
     ...BASE,
-    "GET /me": () => json({ ...METH, permissions: [...METH.permissions, "approve"] }),
+    "GET /me": () =>
+      json({ ...METH, permissions: [...METH.permissions, "approve"] }),
     "GET /objects/o1/measure-set": () => json(setOf()),
     "GET /objects/o1/measures": () => json(MEASURES),
     "GET /objects/o1/adaptations": () => json([]),
   });
   renderAt("/objects/o1?tab=measures");
-  expect(await screen.findByRole("button", { name: /Утвердить/ })).toBeDisabled();
+  expect(
+    await screen.findByRole("button", { name: /Утвердить/ }),
+  ).toBeDisabled();
+});
+
+// ---------- Импорт прогона «Сканера» (1.9) ----------
+
+const EXP = {
+  ...METH,
+  id: "u3",
+  display_name: "Козлов К. К.",
+  roles: ["assessor"],
+  permissions: ["view", "assessment.edit", "evidence.upload", "scanner.import"],
+};
+const LINKED = { ...OBJ, scanner_engagement_id: 1 };
+
+const SNAPSHOT = {
+  id: "s2",
+  number: 2,
+  current: true,
+  run_id: 8,
+  run_name: "Повторный прогон",
+  run_status: "partial",
+  run_started_at: "2026-11-02T13:10:00Z",
+  run_finished_at: "2026-11-02T14:30:05Z",
+  selection: "latest" as const,
+  profile_id: "fstec-117",
+  level: "К2",
+  adaptation_version: 1,
+  percent: 72.2,
+  counts: { passed: 13, failed: 5, na: 4, manual: 80 },
+  summary: {
+    measures: 24,
+    implemented: 14,
+    partial: 3,
+    not_implemented: 2,
+    unassessed: 5,
+    applied: 20,
+    kept_manual: 0,
+  },
+  hosts: 10,
+  coverage_gaps: 11,
+  source: "фикстура «Сканера»",
+  imported_at: "2026-11-04T12:00:00Z",
+  imported_by_name: "Козлов К. К.",
+};
+
+it("эксперт импортирует «последний завершённый» прогон", async () => {
+  let imported = false;
+  const calls = fakeApi({
+    ...BASE,
+    "GET /objects/o1": () => json(LINKED),
+    "GET /me": () => json(EXP),
+    "GET /objects/o1/measure-set": () =>
+      json(setOf({ snapshot: imported ? SNAPSHOT : null })),
+    "GET /objects/o1/measures": () => json(MEASURES),
+    "GET /objects/o1/adaptations": () => json([]),
+    "GET /objects/o1/scanner/runs": () =>
+      json({
+        engagement_id: 1,
+        source: "фикстура «Сканера»",
+        mode: "fixture",
+        latest_id: 8,
+        runs: [
+          {
+            id: 8,
+            name: "Повторный прогон",
+            status: "partial",
+            started_at: null,
+            finished_at: "2026-11-02T14:30:05Z",
+            modules: [],
+            error_message: null,
+            snapshots: [],
+          },
+          {
+            id: 7,
+            name: "Плановый прогон",
+            status: "done",
+            started_at: null,
+            finished_at: "2026-10-28T11:42:30Z",
+            modules: [],
+            error_message: null,
+            snapshots: [1],
+          },
+        ],
+      }),
+    "POST /objects/o1/scanner/import": () => {
+      imported = true;
+      return json({ snapshot: SNAPSHOT, applied: 20, kept_manual: 0 }, 201);
+    },
+  });
+  renderAt("/objects/o1?tab=measures");
+
+  expect(
+    await screen.findByText(/Прогоны ещё не импортированы/),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /Импортировать прогон/ }));
+  const dialog = await screen.findByRole("dialog");
+  expect(
+    await within(dialog).findByText(/сейчас это прогон №8/),
+  ).toBeInTheDocument();
+  expect(within(dialog).getByText(/уже в снимке №1/)).toBeInTheDocument();
+  fireEvent.click(
+    within(dialog).getByRole("button", { name: /^Импортировать$/ }),
+  );
+  await waitFor(() =>
+    expect(calls.find((c) => c.method === "POST")?.body).toEqual({
+      run_id: "latest",
+    }),
+  );
+  expect(
+    await screen.findByText(/Снимок №2 сохранён: статусов изменено — 20/),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Снимок №2")).toBeInTheDocument();
+  expect(screen.getByText("72 %")).toBeInTheDocument();
+});
+
+it("карточка меры показывает нарушения по хостам и принимает предложение «Сканера»", async () => {
+  const manual = measure({
+    status: "partial",
+    effective_status: "partial",
+    status_source: "manual",
+    auto_status: "not_implemented",
+    auto_note: "Нарушения на всех проверенных хостах объекта (7 хостов)",
+    auto_snapshot_id: "s2",
+  });
+  const calls = fakeApi({
+    ...BASE,
+    "GET /objects/o1": () => json(LINKED),
+    "GET /me": () => json(EXP),
+    "GET /objects/o1/measure-set": () => json(setOf({ snapshot: SNAPSHOT })),
+    "GET /objects/o1/measures": () => json([manual, ...MEASURES.slice(1)]),
+    "GET /objects/o1/adaptations": () => json([]),
+    "GET /object-measures/m1/evidence": () =>
+      json([
+        {
+          id: "e1",
+          kind: "scanner",
+          status: "not_implemented",
+          summary: "Нарушения на всех проверенных хостах объекта (7 хостов)",
+          snapshot: SNAPSHOT,
+          created_at: "2026-11-04T12:00:00Z",
+          created_by_name: "Козлов К. К.",
+          data: {
+            status: "not_implemented",
+            reason: "failed_all",
+            note: "",
+            control_status: "failed",
+            hosts: ["10.10.1.10", "10.10.3.103"],
+            checked: ["10.10.1.10"],
+            failed: ["10.10.1.10"],
+            unchecked: [
+              {
+                host: "10.10.3.103",
+                reason: "аудит конфигурации: хост недоступен",
+              },
+            ],
+            not_applicable: [],
+            outside_failed: ["10.20.0.15"],
+            run: {
+              id: 8,
+              name: null,
+              status: "partial",
+              finished_at: null,
+              percent: 72.2,
+            },
+            failed_hosts: [
+              {
+                host: "10.10.1.10",
+                checks: [
+                  {
+                    id: "session_timeout",
+                    failures: [{ kind: "fact", title: "правило x — fail" }],
+                    more: 0,
+                  },
+                ],
+              },
+            ],
+            recommendations: [
+              {
+                check: "session_timeout",
+                title: "Тайм-аут сеанса",
+                remediation: "Задать TMOUT",
+                doc: null,
+              },
+            ],
+            host_counts: {},
+          },
+        },
+      ]),
+    "PATCH /object-measures/m1": () =>
+      json({ ...manual, status: "not_implemented", status_source: "auto" }),
+  });
+  renderAt("/objects/o1?tab=measures");
+
+  expect(
+    await screen.findByText("«Сканер»: Не реализована"),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByText("Контроль конфигураций"));
+  const drawer = await screen.findByRole("dialog");
+  expect(await within(drawer).findByText("10.10.3.103")).toBeInTheDocument();
+  expect(within(drawer).getByText(/правило x — fail/)).toBeInTheDocument();
+  expect(within(drawer).getByText("Задать TMOUT")).toBeInTheDocument();
+  expect(within(drawer).getByText(/Нарушения вне объекта/)).toBeInTheDocument();
+  fireEvent.click(
+    within(drawer).getByRole("button", { name: "Принять предложение" }),
+  );
+  await waitFor(() =>
+    expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({
+      use_auto: true,
+    }),
+  );
 });
