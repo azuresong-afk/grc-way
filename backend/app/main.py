@@ -11,6 +11,7 @@ from app.api import (
     classification,
     health,
     manifest,
+    measures,
     objects,
     projects,
     refs,
@@ -48,6 +49,7 @@ def create_app() -> FastAPI:
         projects,
         objects,
         classification,
+        measures,
         refs,
         refs_sync,
     ):
