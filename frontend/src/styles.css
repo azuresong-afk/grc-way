@@ -1187,6 +1187,14 @@ fieldset.field {
   }
 
   .topbar-search {
+    width: 34px;
+    flex: none;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .topbar-search-text,
+  .topbar-search kbd {
     display: none;
   }
 }
@@ -2158,5 +2166,198 @@ fieldset.field {
 @media (max-width: 600px) {
   .scanner-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ---------- Сводка проекта ---------- */
+
+.impl-bar.impl-bar-sm {
+  height: 4px;
+}
+
+.summary-kpis {
+  grid-template-columns: minmax(0, 1.618fr) repeat(4, minmax(0, 1fr));
+}
+
+.summary-kpi-main {
+  gap: 6px;
+}
+
+.summary-kpi-main .kpi-value {
+  color: var(--accent-text);
+}
+
+.summary-pct {
+  display: flex;
+  min-width: 84px;
+  flex-direction: column;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-class {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.summary-wait {
+  font-size: 12px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.card-head .small {
+  font-size: 12px;
+}
+
+@media (max-width: 1200px) {
+  .summary-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .summary-kpi-main {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 600px) {
+  .summary-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ---------- Быстрый поиск (Ctrl+K) ---------- */
+
+.palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12vh var(--s3) var(--s3);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.palette {
+  display: flex;
+  width: min(640px, 100%);
+  max-height: 70vh;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.palette-input {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: 0 var(--s2);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-3);
+}
+
+.palette-input input {
+  flex: 1;
+  min-width: 0;
+  height: 48px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+}
+
+.palette-input kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.palette-list {
+  margin: 0;
+  padding: 6px 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.palette-group {
+  padding: 8px var(--s2) 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.palette-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 6px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.palette-option.active {
+  background: var(--accent-soft);
+}
+
+.palette-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  color: var(--text-3);
+}
+
+.palette-option.active .palette-icon,
+.palette-enter {
+  color: var(--accent-text);
+}
+
+.palette-text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.palette-label,
+.palette-hint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-hint {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.palette-empty {
+  padding: var(--s3) var(--s2);
+  color: var(--text-3);
+  text-align: center;
+}
+
+.palette-foot {
+  padding: 8px var(--s2);
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+@media (max-width: 600px) {
+  .palette-backdrop {
+    padding-top: var(--s2);
   }
 }
