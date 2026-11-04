@@ -1,0 +1,123 @@
+[
+ {
+  "id": 9,
+  "engagement_id": 1,
+  "modules": [
+   "discovery",
+   "vuln",
+   "auth_inventory",
+   "win_inventory",
+   "config_audit"
+  ],
+  "rate_profile": "normal",
+  "credential_ids": [],
+  "cred_set_ids": [],
+  "name": "Ночной прогон",
+  "targets": [
+   "10.10.0.0/16",
+   "10.20.0.0/24"
+  ],
+  "schedule_id": null,
+  "status": "running",
+  "started_by": 1,
+  "started_at": "2026-11-04T19:00:00Z",
+  "finished_at": null,
+  "created_at": "2026-11-04T19:00:00Z",
+  "error_message": null,
+  "retry_of": null,
+  "options": {},
+  "warnings": [],
+  "progress": null
+ },
+ {
+  "id": 8,
+  "engagement_id": 1,
+  "modules": [
+   "discovery",
+   "vuln",
+   "auth_inventory",
+   "win_inventory",
+   "config_audit"
+  ],
+  "rate_profile": "normal",
+  "credential_ids": [],
+  "cred_set_ids": [],
+  "name": "Повторный прогон после исправлений",
+  "targets": [
+   "10.10.0.0/16",
+   "10.20.0.0/24"
+  ],
+  "schedule_id": null,
+  "status": "partial",
+  "started_by": 1,
+  "started_at": "2026-11-02T13:10:00Z",
+  "finished_at": "2026-11-02T14:30:05Z",
+  "created_at": "2026-11-02T13:10:00Z",
+  "error_message": null,
+  "retry_of": null,
+  "options": {},
+  "warnings": [
+   {
+    "code": "coverage_gaps",
+    "message": "Есть хосты и модули, которые не проверены"
+   }
+  ],
+  "progress": null
+ },
+ {
+  "id": 7,
+  "engagement_id": 1,
+  "modules": [
+   "discovery",
+   "vuln",
+   "auth_inventory",
+   "win_inventory",
+   "config_audit"
+  ],
+  "rate_profile": "normal",
+  "credential_ids": [],
+  "cred_set_ids": [],
+  "name": "Плановый прогон ГИС «Учёт»",
+  "targets": [
+   "10.10.0.0/16",
+   "10.20.0.0/24"
+  ],
+  "schedule_id": null,
+  "status": "done",
+  "started_by": 1,
+  "started_at": "2026-10-28T09:00:00Z",
+  "finished_at": "2026-10-28T11:42:30Z",
+  "created_at": "2026-10-28T09:00:00Z",
+  "error_message": null,
+  "retry_of": null,
+  "options": {},
+  "warnings": [],
+  "progress": null
+ },
+ {
+  "id": 6,
+  "engagement_id": 1,
+  "modules": [
+   "discovery"
+  ],
+  "rate_profile": "normal",
+  "credential_ids": [],
+  "cred_set_ids": [],
+  "name": "Первичное обнаружение",
+  "targets": [
+   "10.10.0.0/16",
+   "10.20.0.0/24"
+  ],
+  "schedule_id": null,
+  "status": "failed",
+  "started_by": 1,
+  "started_at": "2026-10-20T08:00:00Z",
+  "finished_at": "2026-10-20T08:04:12Z",
+  "created_at": "2026-10-20T08:00:00Z",
+  "error_message": "Ни один хост не ответил: проверьте маршрут до сети 10.10.0.0/16",
+  "retry_of": null,
+  "options": {},
+  "warnings": [],
+  "progress": null
+ }
+]

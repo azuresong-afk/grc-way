@@ -1,4 +1,4 @@
-"""Модели: пользователи и аудит, проекты, справочники, объекты."""
+"""Модели: пользователи и аудит, проекты, справочники, объекты, меры и их оценка."""
 
 from __future__ import annotations
 
@@ -526,3 +526,95 @@ class ObjectMeasure(Base):
     adapted_by_name: Mapped[str | None] = mapped_column(String(200))
     status_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status_by_name: Mapped[str | None] = mapped_column(String(200))
+    # Откуда текущий статус: auto — предложение «Сканера»; manual — поставлен вручную
+    # (повторный импорт его не перезаписывает); None — не ставился.
+    status_source: Mapped[str | None] = mapped_column(String(8))
+    # Предложение «Сканера» по текущему (последнему) снимку и его пояснение.
+    auto_status: Mapped[str | None] = mapped_column(String(16))
+    auto_note: Mapped[str | None] = mapped_column(String(1000))
+    auto_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("scanner_snapshots.id", ondelete="SET NULL")
+    )
+
+
+# ---------- Результаты «Сканера» ----------
+
+
+class ScannerSnapshot(Base):
+    """Снимок результата прогона «Сканера» для объекта на дату оценки.
+
+    Неизменяем (UPDATE запрещён триггером): повторный импорт — новый снимок,
+    прежние остаются как были. Текущий снимок объекта — последний импортированный.
+    """
+
+    __tablename__ = "scanner_snapshots"
+    __table_args__ = (
+        Index("ix_scanner_snapshots_object", "object_id", "imported_at"),
+        Index("ux_scanner_snapshots_number", "object_id", "number", unique=True),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    object_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("objects.id", ondelete="CASCADE"))
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    # Номер снимка в объекте: 1, 2, …
+    number: Mapped[int] = mapped_column(Integer)
+    engagement_id: Mapped[int] = mapped_column(Integer)
+    run_id: Mapped[int] = mapped_column(Integer)
+    run_name: Mapped[str | None] = mapped_column(String(300))
+    run_status: Mapped[str] = mapped_column(String(32))
+    run_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    run_finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    run_modules: Mapped[list] = mapped_column(JsonType, default=list)
+    # latest — «последний завершённый»; manual — прогон выбран вручную.
+    selection: Mapped[str] = mapped_column(String(8))
+    profile_id: Mapped[str] = mapped_column(String(64))
+    level: Mapped[str | None] = mapped_column(String(16))
+    adaptation_version: Mapped[int | None] = mapped_column(Integer)
+    # Сводка «Сканера» по профилю и уровню: процент и {passed, failed, na, manual}.
+    percent: Mapped[float | None] = mapped_column()
+    counts: Mapped[dict] = mapped_column(JsonType, default=dict)
+    # Ответы «Сканера» как есть (после проверки схемы): compliance и покрытие.
+    compliance: Mapped[dict] = mapped_column(JsonType)
+    coverage: Mapped[dict] = mapped_column(JsonType)
+    # Состав объекта на момент импорта (адреса) и итог по мерам объекта.
+    object_hosts: Mapped[list] = mapped_column(JsonType, default=list)
+    # {measures, implemented, partial, not_implemented, unassessed, applied, kept_manual}
+    summary: Mapped[dict] = mapped_column(JsonType, default=dict)
+    # sha256 ответов и состава — повторный импорт без изменений не создаёт дубль.
+    content_hash: Mapped[str] = mapped_column(String(64))
+    source: Mapped[str] = mapped_column(String(300))
+    imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    imported_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    imported_by_name: Mapped[str | None] = mapped_column(String(200))
+
+
+class Evidence(Base):
+    """Доказательство по мере объекта. В 1.9 — автоматическое из снимка «Сканера»;
+    ручные (файл, интервью, осмотр) — задача 1.10."""
+
+    __tablename__ = "evidence"
+    __table_args__ = (
+        Index("ix_evidence_measure", "object_measure_id", "created_at"),
+        Index("ix_evidence_snapshot", "snapshot_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    object_measure_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("object_measures.id", ondelete="CASCADE")
+    )
+    object_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("objects.id", ondelete="CASCADE"))
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    measure_id: Mapped[str] = mapped_column(String(32))
+    # scanner | file | interview | inspection | certificate
+    kind: Mapped[str] = mapped_column(String(16))
+    snapshot_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("scanner_snapshots.id", ondelete="CASCADE")
+    )
+    # Предложенный статус (для scanner) и краткое пояснение.
+    status: Mapped[str | None] = mapped_column(String(16))
+    summary: Mapped[str] = mapped_column(String(1000))
+    # scanner: AutoResult + проверки и нарушения по хостам, рекомендации.
+    data: Mapped[dict] = mapped_column(JsonType, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    created_by_name: Mapped[str | None] = mapped_column(String(200))

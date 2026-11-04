@@ -1,0 +1,819 @@
+{
+ "scan_run_id": 8,
+ "status": "partial",
+ "summary": {
+  "hosts": 12,
+  "hosts_checked": 9,
+  "hosts_partial": 1,
+  "hosts_unreachable": 2,
+  "hosts_not_checked": 0,
+  "counts": {
+   "completed": 35,
+   "not_applicable": 14,
+   "skipped": 0,
+   "unreachable": 10,
+   "no_credentials": 1,
+   "timeout": 0,
+   "error": 0
+  },
+  "gaps": 11,
+  "auth_gaps": 7
+ },
+ "hosts": [
+  {
+   "host": "10.10.1.10",
+   "status": "checked",
+   "modules": {
+    "discovery": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "vuln": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "auth_inventory": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "win_inventory": {
+     "status": "not_applicable",
+     "label": "неприменимо",
+     "reason": null
+    },
+    "config_audit": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    }
+   }
+  },
+  {
+   "host": "10.10.1.11",
+   "status": "checked",
+   "modules": {
+    "discovery": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "vuln": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "auth_inventory": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "win_inventory": {
+     "status": "not_applicable",
+     "label": "неприменимо",
+     "reason": null
+    },
+    "config_audit": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    }
+   }
+  },
+  {
+   "host": "10.10.1.12",
+   "status": "checked",
+   "modules": {
+    "discovery": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "vuln": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "auth_inventory": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "win_inventory": {
+     "status": "not_applicable",
+     "label": "неприменимо",
+     "reason": null
+    },
+    "config_audit": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    }
+   }
+  },
+  {
+   "host": "10.10.1.20",
+   "status": "partial",
+   "modules": {
+    "discovery": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "vuln": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "auth_inventory": {
+     "status": "not_applicable",
+     "label": "неприменимо",
+     "reason": null
+    },
+    "win_inventory": {
+     "status": "no_credentials",
+     "label": "нет учётной записи",
+     "reason": "Нет учётной записи WinRM для хоста"
+    },
+    "config_audit": {
+     "status": "not_applicable",
+     "label": "неприменимо",
+     "reason": null
+    }
+   }
+  },
+  {
+   "host": "10.10.2.5",
+   "status": "checked",
+   "modules": {
+    "discovery": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "vuln": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "auth_inventory": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "win_inventory": {
+     "status": "not_applicable",
+     "label": "неприменимо",
+     "reason": null
+    },
+    "config_audit": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    }
+   }
+  },
+  {
+   "host": "10.10.2.6",
+   "status": "checked",
+   "modules": {
+    "discovery": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "vuln": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "auth_inventory": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "win_inventory": {
+     "status": "not_applicable",
+     "label": "неприменимо",
+     "reason": null
+    },
+    "config_audit": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    }
+   }
+  },
+  {
+   "host": "10.10.3.101",
+   "status": "checked",
+   "modules": {
+    "discovery": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "vuln": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "auth_inventory": {
+     "status": "not_applicable",
+     "label": "неприменимо",
+     "reason": null
+    },
+    "win_inventory": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "config_audit": {
+     "status": "not_applicable",
+     "label": "неприменимо",
+     "reason": null
+    }
+   }
+  },
+  {
+   "host": "10.10.3.102",
+   "status": "checked",
+   "modules": {
+    "discovery": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "vuln": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "auth_inventory": {
+     "status": "not_applicable",
+     "label": "неприменимо",
+     "reason": null
+    },
+    "win_inventory": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "config_audit": {
+     "status": "not_applicable",
+     "label": "неприменимо",
+     "reason": null
+    }
+   }
+  },
+  {
+   "host": "10.10.3.103",
+   "status": "unreachable",
+   "modules": {
+    "discovery": {
+     "status": "unreachable",
+     "label": "хост недоступен",
+     "reason": "Хост не ответил на обнаружение"
+    },
+    "vuln": {
+     "status": "unreachable",
+     "label": "хост недоступен",
+     "reason": "Хост не ответил на обнаружение"
+    },
+    "auth_inventory": {
+     "status": "unreachable",
+     "label": "хост недоступен",
+     "reason": "Хост не ответил на обнаружение"
+    },
+    "win_inventory": {
+     "status": "unreachable",
+     "label": "хост недоступен",
+     "reason": "Хост не ответил на обнаружение"
+    },
+    "config_audit": {
+     "status": "unreachable",
+     "label": "хост недоступен",
+     "reason": "Хост не ответил на обнаружение"
+    }
+   }
+  },
+  {
+   "host": "10.10.3.104",
+   "status": "checked",
+   "modules": {
+    "discovery": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "vuln": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "auth_inventory": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "win_inventory": {
+     "status": "not_applicable",
+     "label": "неприменимо",
+     "reason": null
+    },
+    "config_audit": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    }
+   }
+  },
+  {
+   "host": "10.20.0.15",
+   "status": "checked",
+   "modules": {
+    "discovery": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "vuln": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "auth_inventory": {
+     "status": "not_applicable",
+     "label": "неприменимо",
+     "reason": null
+    },
+    "win_inventory": {
+     "status": "completed",
+     "label": "выполнено",
+     "reason": null
+    },
+    "config_audit": {
+     "status": "not_applicable",
+     "label": "неприменимо",
+     "reason": null
+    }
+   }
+  },
+  {
+   "host": "10.20.0.16",
+   "status": "unreachable",
+   "modules": {
+    "discovery": {
+     "status": "unreachable",
+     "label": "хост недоступен",
+     "reason": "Хост не ответил на обнаружение"
+    },
+    "vuln": {
+     "status": "unreachable",
+     "label": "хост недоступен",
+     "reason": "Хост не ответил на обнаружение"
+    },
+    "auth_inventory": {
+     "status": "unreachable",
+     "label": "хост недоступен",
+     "reason": "Хост не ответил на обнаружение"
+    },
+    "win_inventory": {
+     "status": "unreachable",
+     "label": "хост недоступен",
+     "reason": "Хост не ответил на обнаружение"
+    },
+    "config_audit": {
+     "status": "unreachable",
+     "label": "хост недоступен",
+     "reason": "Хост не ответил на обнаружение"
+    }
+   }
+  }
+ ],
+ "entries": [
+  {
+   "host": "10.10.1.10",
+   "module": "discovery",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.1.10",
+   "module": "vuln",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.1.10",
+   "module": "auth_inventory",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.1.10",
+   "module": "win_inventory",
+   "status": "not_applicable",
+   "label": "неприменимо",
+   "reason": null
+  },
+  {
+   "host": "10.10.1.10",
+   "module": "config_audit",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.1.11",
+   "module": "discovery",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.1.11",
+   "module": "vuln",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.1.11",
+   "module": "auth_inventory",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.1.11",
+   "module": "win_inventory",
+   "status": "not_applicable",
+   "label": "неприменимо",
+   "reason": null
+  },
+  {
+   "host": "10.10.1.11",
+   "module": "config_audit",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.1.12",
+   "module": "discovery",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.1.12",
+   "module": "vuln",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.1.12",
+   "module": "auth_inventory",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.1.12",
+   "module": "win_inventory",
+   "status": "not_applicable",
+   "label": "неприменимо",
+   "reason": null
+  },
+  {
+   "host": "10.10.1.12",
+   "module": "config_audit",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.1.20",
+   "module": "discovery",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.1.20",
+   "module": "vuln",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.1.20",
+   "module": "auth_inventory",
+   "status": "not_applicable",
+   "label": "неприменимо",
+   "reason": null
+  },
+  {
+   "host": "10.10.1.20",
+   "module": "win_inventory",
+   "status": "no_credentials",
+   "label": "нет учётной записи",
+   "reason": "Нет учётной записи WinRM для хоста"
+  },
+  {
+   "host": "10.10.1.20",
+   "module": "config_audit",
+   "status": "not_applicable",
+   "label": "неприменимо",
+   "reason": null
+  },
+  {
+   "host": "10.10.2.5",
+   "module": "discovery",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.2.5",
+   "module": "vuln",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.2.5",
+   "module": "auth_inventory",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.2.5",
+   "module": "win_inventory",
+   "status": "not_applicable",
+   "label": "неприменимо",
+   "reason": null
+  },
+  {
+   "host": "10.10.2.5",
+   "module": "config_audit",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.2.6",
+   "module": "discovery",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.2.6",
+   "module": "vuln",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.2.6",
+   "module": "auth_inventory",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.2.6",
+   "module": "win_inventory",
+   "status": "not_applicable",
+   "label": "неприменимо",
+   "reason": null
+  },
+  {
+   "host": "10.10.2.6",
+   "module": "config_audit",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.3.101",
+   "module": "discovery",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.3.101",
+   "module": "vuln",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.3.101",
+   "module": "auth_inventory",
+   "status": "not_applicable",
+   "label": "неприменимо",
+   "reason": null
+  },
+  {
+   "host": "10.10.3.101",
+   "module": "win_inventory",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.3.101",
+   "module": "config_audit",
+   "status": "not_applicable",
+   "label": "неприменимо",
+   "reason": null
+  },
+  {
+   "host": "10.10.3.102",
+   "module": "discovery",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.3.102",
+   "module": "vuln",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.3.102",
+   "module": "auth_inventory",
+   "status": "not_applicable",
+   "label": "неприменимо",
+   "reason": null
+  },
+  {
+   "host": "10.10.3.102",
+   "module": "win_inventory",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.3.102",
+   "module": "config_audit",
+   "status": "not_applicable",
+   "label": "неприменимо",
+   "reason": null
+  },
+  {
+   "host": "10.10.3.103",
+   "module": "discovery",
+   "status": "unreachable",
+   "label": "хост недоступен",
+   "reason": "Хост не ответил на обнаружение"
+  },
+  {
+   "host": "10.10.3.103",
+   "module": "vuln",
+   "status": "unreachable",
+   "label": "хост недоступен",
+   "reason": "Хост не ответил на обнаружение"
+  },
+  {
+   "host": "10.10.3.103",
+   "module": "auth_inventory",
+   "status": "unreachable",
+   "label": "хост недоступен",
+   "reason": "Хост не ответил на обнаружение"
+  },
+  {
+   "host": "10.10.3.103",
+   "module": "win_inventory",
+   "status": "unreachable",
+   "label": "хост недоступен",
+   "reason": "Хост не ответил на обнаружение"
+  },
+  {
+   "host": "10.10.3.103",
+   "module": "config_audit",
+   "status": "unreachable",
+   "label": "хост недоступен",
+   "reason": "Хост не ответил на обнаружение"
+  },
+  {
+   "host": "10.10.3.104",
+   "module": "discovery",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.3.104",
+   "module": "vuln",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.3.104",
+   "module": "auth_inventory",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.10.3.104",
+   "module": "win_inventory",
+   "status": "not_applicable",
+   "label": "неприменимо",
+   "reason": null
+  },
+  {
+   "host": "10.10.3.104",
+   "module": "config_audit",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.20.0.15",
+   "module": "discovery",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.20.0.15",
+   "module": "vuln",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.20.0.15",
+   "module": "auth_inventory",
+   "status": "not_applicable",
+   "label": "неприменимо",
+   "reason": null
+  },
+  {
+   "host": "10.20.0.15",
+   "module": "win_inventory",
+   "status": "completed",
+   "label": "выполнено",
+   "reason": null
+  },
+  {
+   "host": "10.20.0.15",
+   "module": "config_audit",
+   "status": "not_applicable",
+   "label": "неприменимо",
+   "reason": null
+  },
+  {
+   "host": "10.20.0.16",
+   "module": "discovery",
+   "status": "unreachable",
+   "label": "хост недоступен",
+   "reason": "Хост не ответил на обнаружение"
+  },
+  {
+   "host": "10.20.0.16",
+   "module": "vuln",
+   "status": "unreachable",
+   "label": "хост недоступен",
+   "reason": "Хост не ответил на обнаружение"
+  },
+  {
+   "host": "10.20.0.16",
+   "module": "auth_inventory",
+   "status": "unreachable",
+   "label": "хост недоступен",
+   "reason": "Хост не ответил на обнаружение"
+  },
+  {
+   "host": "10.20.0.16",
+   "module": "win_inventory",
+   "status": "unreachable",
+   "label": "хост недоступен",
+   "reason": "Хост не ответил на обнаружение"
+  },
+  {
+   "host": "10.20.0.16",
+   "module": "config_audit",
+   "status": "unreachable",
+   "label": "хост недоступен",
+   "reason": "Хост не ответил на обнаружение"
+  }
+ ],
+ "legacy": false
+}

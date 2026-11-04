@@ -20,11 +20,21 @@ import httpx
 from pydantic import TypeAdapter, ValidationError
 
 from app.core.config import Settings, get_settings
-from app.integrations.scanner.schemas import ScannerAsset, ScannerProfile
+from app.integrations.scanner.schemas import (
+    FINISHED_RUN_STATUSES,
+    ScannerAsset,
+    ScannerCompliance,
+    ScannerCoverage,
+    ScannerProfile,
+    ScannerRun,
+)
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 _PROFILES = TypeAdapter(list[ScannerProfile])
 _ASSETS = TypeAdapter(list[ScannerAsset])
+_RUNS = TypeAdapter(list[ScannerRun])
+# Сколько последних прогонов договора показывать для выбора.
+RUNS_LIMIT = 100
 
 
 class ScannerError(Exception):
@@ -43,6 +53,14 @@ class ScannerClient(Protocol):
     def compliance_profiles(self) -> list[ScannerProfile]: ...
 
     def assets(self, engagement_id: int) -> list[ScannerAsset]: ...
+
+    def runs(self, engagement_id: int) -> list[ScannerRun]: ...
+
+    def run(self, run_id: int) -> ScannerRun: ...
+
+    def run_compliance(self, run_id: int, profile: str, level: str | None) -> ScannerCompliance: ...
+
+    def run_coverage(self, run_id: int) -> ScannerCoverage: ...
 
 
 def _parse_profiles(data: Any) -> list[ScannerProfile]:
@@ -93,6 +111,47 @@ def _parse_assets(data: Any, engagement_id: int) -> list[ScannerAsset]:
     return assets
 
 
+def _parse(adapter: Any, data: Any, what: str) -> Any:
+    try:
+        if isinstance(adapter, TypeAdapter):
+            return adapter.validate_python(data)
+        return adapter.model_validate(data)
+    except ValidationError as e:
+        first = e.errors()[0]
+        where = ".".join(str(x) for x in first["loc"])
+        raise ScannerError(
+            f"«Сканер» вернул неожиданный ответ на {what} ({where}: {first['msg']})",
+            code="scanner_bad_response",
+        ) from e
+
+
+def _level_summary(data: dict[str, Any], profile: ScannerProfile | None, level: str | None) -> dict:
+    """Фикстура хранит все меры профиля; «Сканер» отдаёт только меры уровня.
+
+    Отбираем меры по levels[] и пересчитываем сводные числа так же, как
+    `summarize` в scanner/compliance/engine.py.
+    """
+    level = level or (profile.default_level if profile else None) or data.get("level")
+    keep = (lambda c: level in (c.get("levels") or [])) if level else (lambda c: True)
+    controls = [c for c in data.get("controls") or [] if keep(c)]
+    manual = [c for c in data.get("manual") or [] if keep(c)]
+    counts = {"passed": 0, "failed": 0, "manual": len(manual), "na": 0}
+    for c in controls:
+        counts[c["status"]] = counts.get(c["status"], 0) + 1
+    done = counts["passed"] + counts["failed"]
+    return {
+        **data,
+        "level": level,
+        "controls": controls,
+        "manual": manual,
+        "failures": [c for c in controls if c["status"] == "failed"],
+        "counts": counts,
+        "evaluated": done,
+        "automated": len(controls),
+        "percent": round(100.0 * counts["passed"] / done, 1) if done else None,
+    }
+
+
 class FixtureScannerClient:
     mode = "fixture"
 
@@ -118,6 +177,51 @@ class FixtureScannerClient:
         if isinstance(data, list):
             data = [{**a, "engagement_id": engagement_id} for a in data]
         return _parse_assets(data, engagement_id)
+
+    def _read(self, name: str, missing: str | None = None) -> Any:
+        path = self.directory / name
+        if missing and not path.exists():
+            raise ScannerError(missing, code="scanner_not_found")
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            raise ScannerError(f"Фикстура «Сканера» не читается: {path.name}") from e
+
+    def runs(self, engagement_id: int) -> list[ScannerRun]:
+        """Прогоны демо-договора; номер engagement подставляется запрошенный."""
+        data = self._read("engagement_runs.json")
+        if isinstance(data, list):
+            data = [{**r, "engagement_id": engagement_id} for r in data]
+        return _parse(_RUNS, data, f"GET /engagements/{engagement_id}/runs")
+
+    def run(self, run_id: int) -> ScannerRun:
+        for r in self._read("engagement_runs.json"):
+            if r.get("id") == run_id:
+                return _parse(ScannerRun, r, f"GET /runs/{run_id}")
+        raise ScannerError(f"В «Сканере» нет прогона №{run_id}", code="scanner_not_found")
+
+    def run_compliance(self, run_id: int, profile: str, level: str | None) -> ScannerCompliance:
+        data = self._read(
+            f"run_{run_id}_compliance_{profile}.json",
+            missing=f"В фикстуре «Сканера» нет результата прогона №{run_id} по профилю {profile}",
+        )
+        ref = next((p for p in self.compliance_profiles() if p.id == profile), None)
+        if ref is not None and level is not None and ref.levels and level not in ref.levels:
+            raise ScannerError(
+                f"«Сканер»: для профиля {profile} нет уровня {level}", code="scanner_bad_response"
+            )
+        return _parse(
+            ScannerCompliance,
+            _level_summary(data, ref, level),
+            f"GET /runs/{run_id}/compliance",
+        )
+
+    def run_coverage(self, run_id: int) -> ScannerCoverage:
+        data = self._read(
+            f"run_{run_id}_coverage.json",
+            missing=f"В фикстуре «Сканера» нет покрытия прогона №{run_id}",
+        )
+        return _parse(ScannerCoverage, data, f"GET /runs/{run_id}/coverage")
 
 
 class LiveScannerClient:
@@ -185,17 +289,19 @@ class LiveScannerClient:
         if r.status_code >= 400:
             raise ScannerError(f"«Сканер» ответил {r.status_code} на {what}")
 
-    def _get(self, path: str, not_found: str | None = None) -> Any:
+    def _get(self, path: str, not_found: str | None = None, params: Any = None) -> Any:
         self.ensure_configured()
         try:
             with self._client() as http:
                 if self._token is None:
                     self._token = self._login(http)
-                r = http.get(path, headers={"Authorization": f"Bearer {self._token}"})
+                auth = {"Authorization": f"Bearer {self._token}"}
+                r = http.get(path, headers=auth, params=params)
                 if r.status_code == 401 and self.settings.scanner_username:
                     # Токен истёк — один повторный вход.
                     self._token = self._login(http)
-                    r = http.get(path, headers={"Authorization": f"Bearer {self._token}"})
+                    auth = {"Authorization": f"Bearer {self._token}"}
+                    r = http.get(path, headers=auth, params=params)
         except httpx.TimeoutException as e:
             raise ScannerError(
                 f"«Сканер» не ответил за {self.settings.scanner_timeout_seconds:g} с"
@@ -231,6 +337,37 @@ class LiveScannerClient:
             not_found=f"В «Сканере» нет проекта (engagement) №{engagement_id}",
         )
         return _parse_assets(data, engagement_id)
+
+    def runs(self, engagement_id: int) -> list[ScannerRun]:
+        params = [
+            *(("status", s) for s in sorted(FINISHED_RUN_STATUSES)),
+            ("sort", "id"),
+            ("order", "desc"),
+            ("limit", str(RUNS_LIMIT)),
+        ]
+        data = self._get(
+            f"/engagements/{engagement_id}/runs",
+            not_found=f"В «Сканере» нет проекта (engagement) №{engagement_id}",
+            params=params,
+        )
+        return _parse(_RUNS, data, f"GET /engagements/{engagement_id}/runs")
+
+    def run(self, run_id: int) -> ScannerRun:
+        data = self._get(f"/runs/{run_id}", not_found=f"В «Сканере» нет прогона №{run_id}")
+        return _parse(ScannerRun, data, f"GET /runs/{run_id}")
+
+    def run_compliance(self, run_id: int, profile: str, level: str | None) -> ScannerCompliance:
+        params = {"profile": profile, **({"level": level} if level else {})}
+        data = self._get(
+            f"/runs/{run_id}/compliance",
+            not_found=f"В «Сканере» нет прогона №{run_id}",
+            params=params,
+        )
+        return _parse(ScannerCompliance, data, f"GET /runs/{run_id}/compliance")
+
+    def run_coverage(self, run_id: int) -> ScannerCoverage:
+        data = self._get(f"/runs/{run_id}/coverage", not_found=f"В «Сканере» нет прогона №{run_id}")
+        return _parse(ScannerCoverage, data, f"GET /runs/{run_id}/coverage")
 
 
 def get_scanner_client() -> ScannerClient:

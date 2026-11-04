@@ -16,6 +16,7 @@ from app.api import (
     projects,
     refs,
     refs_sync,
+    scanner_import,
     users,
 )
 from app.core.config import get_settings
@@ -52,6 +53,7 @@ def create_app() -> FastAPI:
         measures,
         refs,
         refs_sync,
+        scanner_import,
     ):
         app.include_router(module.router)
     return app

@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from app import audit
 from app.api.deps import CurrentUser, DbSession, client_ip, require
 from app.api.objects import _editable, get_object_for
+from app.api.snapshots import SnapshotBrief, snapshot_brief
 from app.core.config import get_settings
 from app.core.rbac import Perm, SelfApprovalError, ensure_not_own_work, perms_for
 from app.db.models import (
@@ -94,6 +95,11 @@ class MeasureOut(BaseModel):
     adapted_by_name: str | None
     status_at: datetime | None
     status_by_name: str | None
+    # auto — статус взят из предложения «Сканера»; manual — поставлен вручную.
+    status_source: str | None
+    auto_status: str | None
+    auto_note: str | None
+    auto_snapshot_id: uuid.UUID | None
     updated_at: datetime
 
 
@@ -192,6 +198,8 @@ class MeasureSetOut(BaseModel):
     unverified: int
     # Утвердить сейчас нельзя — почему (для подсказки в интерфейсе).
     approve_blockers: list[str]
+    # Текущий снимок результата прогона «Сканера» (app/api/scanner_import.py).
+    snapshot: SnapshotBrief | None = None
 
 
 class RebuildIn(BaseModel):
@@ -208,6 +216,8 @@ class MeasurePatch(BaseModel):
     adaptation_reason: str | None = Field(default=None, max_length=4000)
     compensating_ids: list[str] | None = Field(default=None, max_length=50)
     status: Status | None = None
+    # true — принять предложение «Сканера» по текущему снимку (вместо status).
+    use_auto: bool = False
     owner_id: uuid.UUID | None = None
     comment: str | None = Field(default=None, max_length=4000)
 
@@ -220,7 +230,7 @@ class ApproveIn(BaseModel):
 
 
 _ADAPTATION_FIELDS = {"adaptation", "adaptation_reason", "compensating_ids"}
-_ASSESSMENT_FIELDS = {"status", "owner_id", "comment"}
+_ASSESSMENT_FIELDS = {"status", "use_auto", "owner_id", "comment"}
 
 
 # ---------- Общие функции ----------
@@ -451,6 +461,10 @@ def _measure_out(
         adapted_by_name=m.adapted_by_name,
         status_at=m.status_at,
         status_by_name=m.status_by_name,
+        status_source=m.status_source,
+        auto_status=m.auto_status,
+        auto_note=m.auto_note,
+        auto_snapshot_id=m.auto_snapshot_id,
         updated_at=m.updated_at,
     )
 
@@ -647,6 +661,7 @@ def measure_set(object_id: uuid.UUID, user: Viewer, session: DbSession) -> Measu
             and not (refs.get(m.measure_id) and refs[m.measure_id].verified_at)
         ),
         approve_blockers=_blockers(session, obj, a, measures, class_changed, rebuild_needed),
+        snapshot=snapshot_brief(session, obj),
     )
 
 
@@ -957,9 +972,21 @@ def update_measure(
             m.adapted_by_name = user.display_name
 
     assess: dict[str, Any] = {}
-    if "status" in fields and body.status is not None and body.status != m.status:
+    if body.use_auto:
+        if m.auto_status is None:
+            raise HTTPException(409, detail="Предложения «Сканера» по этой мере нет")
+        if m.status_source != "auto" or m.status != m.auto_status:
+            assess["status"] = [m.status, m.auto_status]
+            assess["source"] = "auto"
+            m.status = m.auto_status
+            m.status_source = "auto"
+            m.status_at = now
+            m.status_by_name = user.display_name
+    elif "status" in fields and body.status is not None and body.status != m.status:
         assess["status"] = [m.status, body.status]
+        assess["source"] = "manual"
         m.status = body.status
+        m.status_source = "manual"
         m.status_at = now
         m.status_by_name = user.display_name
     if "owner_id" in fields and body.owner_id != m.owner_id:
