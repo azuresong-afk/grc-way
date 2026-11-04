@@ -1,0 +1,243 @@
+{
+ "scan_run_id": 6,
+ "status": "failed",
+ "summary": {
+  "hosts": 12,
+  "hosts_checked": 0,
+  "hosts_partial": 0,
+  "hosts_unreachable": 12,
+  "hosts_not_checked": 0,
+  "counts": {
+   "completed": 0,
+   "not_applicable": 0,
+   "skipped": 0,
+   "unreachable": 12,
+   "no_credentials": 0,
+   "timeout": 0,
+   "error": 0
+  },
+  "gaps": 12,
+  "auth_gaps": 0
+ },
+ "hosts": [
+  {
+   "host": "10.10.1.10",
+   "status": "unreachable",
+   "modules": {
+    "discovery": {
+     "status": "unreachable",
+     "label": "хост недоступен",
+     "reason": "Хост не ответил на обнаружение"
+    }
+   }
+  },
+  {
+   "host": "10.10.1.11",
+   "status": "unreachable",
+   "modules": {
+    "discovery": {
+     "status": "unreachable",
+     "label": "хост недоступен",
+     "reason": "Хост не ответил на обнаружение"
+    }
+   }
+  },
+  {
+   "host": "10.10.1.12",
+   "status": "unreachable",
+   "modules": {
+    "discovery": {
+     "status": "unreachable",
+     "label": "хост недоступен",
+     "reason": "Хост не ответил на обнаружение"
+    }
+   }
+  },
+  {
+   "host": "10.10.1.20",
+   "status": "unreachable",
+   "modules": {
+    "discovery": {
+     "status": "unreachable",
+     "label": "хост недоступен",
+     "reason": "Хост не ответил на обнаружение"
+    }
+   }
+  },
+  {
+   "host": "10.10.2.5",
+   "status": "unreachable",
+   "modules": {
+    "discovery": {
+     "status": "unreachable",
+     "label": "хост недоступен",
+     "reason": "Хост не ответил на обнаружение"
+    }
+   }
+  },
+  {
+   "host": "10.10.2.6",
+   "status": "unreachable",
+   "modules": {
+    "discovery": {
+     "status": "unreachable",
+     "label": "хост недоступен",
+     "reason": "Хост не ответил на обнаружение"
+    }
+   }
+  },
+  {
+   "host": "10.10.3.101",
+   "status": "unreachable",
+   "modules": {
+    "discovery": {
+     "status": "unreachable",
+     "label": "хост недоступен",
+     "reason": "Хост не ответил на обнаружение"
+    }
+   }
+  },
+  {
+   "host": "10.10.3.102",
+   "status": "unreachable",
+   "modules": {
+    "discovery": {
+     "status": "unreachable",
+     "label": "хост недоступен",
+     "reason": "Хост не ответил на обнаружение"
+    }
+   }
+  },
+  {
+   "host": "10.10.3.103",
+   "status": "unreachable",
+   "modules": {
+    "discovery": {
+     "status": "unreachable",
+     "label": "хост недоступен",
+     "reason": "Хост не ответил на обнаружение"
+    }
+   }
+  },
+  {
+   "host": "10.10.3.104",
+   "status": "unreachable",
+   "modules": {
+    "discovery": {
+     "status": "unreachable",
+     "label": "хост недоступен",
+     "reason": "Хост не ответил на обнаружение"
+    }
+   }
+  },
+  {
+   "host": "10.20.0.15",
+   "status": "unreachable",
+   "modules": {
+    "discovery": {
+     "status": "unreachable",
+     "label": "хост недоступен",
+     "reason": "Хост не ответил на обнаружение"
+    }
+   }
+  },
+  {
+   "host": "10.20.0.16",
+   "status": "unreachable",
+   "modules": {
+    "discovery": {
+     "status": "unreachable",
+     "label": "хост недоступен",
+     "reason": "Хост не ответил на обнаружение"
+    }
+   }
+  }
+ ],
+ "entries": [
+  {
+   "host": "10.10.1.10",
+   "module": "discovery",
+   "status": "unreachable",
+   "label": "хост недоступен",
+   "reason": "Хост не ответил на обнаружение"
+  },
+  {
+   "host": "10.10.1.11",
+   "module": "discovery",
+   "status": "unreachable",
+   "label": "хост недоступен",
+   "reason": "Хост не ответил на обнаружение"
+  },
+  {
+   "host": "10.10.1.12",
+   "module": "discovery",
+   "status": "unreachable",
+   "label": "хост недоступен",
+   "reason": "Хост не ответил на обнаружение"
+  },
+  {
+   "host": "10.10.1.20",
+   "module": "discovery",
+   "status": "unreachable",
+   "label": "хост недоступен",
+   "reason": "Хост не ответил на обнаружение"
+  },
+  {
+   "host": "10.10.2.5",
+   "module": "discovery",
+   "status": "unreachable",
+   "label": "хост недоступен",
+   "reason": "Хост не ответил на обнаружение"
+  },
+  {
+   "host": "10.10.2.6",
+   "module": "discovery",
+   "status": "unreachable",
+   "label": "хост недоступен",
+   "reason": "Хост не ответил на обнаружение"
+  },
+  {
+   "host": "10.10.3.101",
+   "module": "discovery",
+   "status": "unreachable",
+   "label": "хост недоступен",
+   "reason": "Хост не ответил на обнаружение"
+  },
+  {
+   "host": "10.10.3.102",
+   "module": "discovery",
+   "status": "unreachable",
+   "label": "хост недоступен",
+   "reason": "Хост не ответил на обнаружение"
+  },
+  {
+   "host": "10.10.3.103",
+   "module": "discovery",
+   "status": "unreachable",
+   "label": "хост недоступен",
+   "reason": "Хост не ответил на обнаружение"
+  },
+  {
+   "host": "10.10.3.104",
+   "module": "discovery",
+   "status": "unreachable",
+   "label": "хост недоступен",
+   "reason": "Хост не ответил на обнаружение"
+  },
+  {
+   "host": "10.20.0.15",
+   "module": "discovery",
+   "status": "unreachable",
+   "label": "хост недоступен",
+   "reason": "Хост не ответил на обнаружение"
+  },
+  {
+   "host": "10.20.0.16",
+   "module": "discovery",
+   "status": "unreachable",
+   "label": "хост недоступен",
+   "reason": "Хост не ответил на обнаружение"
+  }
+ ],
+ "legacy": false
+}

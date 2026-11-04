@@ -1431,3 +1431,576 @@ fieldset.field {
     gap: 2px;
   }
 }
+
+/* ---------- Объекты: состав и редакторы строк ---------- */
+
+.table th.num,
+.table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.toolbar .toolbar-search {
+  width: 280px;
+  max-width: 100%;
+}
+
+.select-sm {
+  width: auto;
+  max-width: 220px;
+  height: 30px;
+  padding: 0 var(--s1);
+  font-size: 13px;
+}
+
+.rows-editor {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s1);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.rows-editor legend {
+  margin-bottom: 6px;
+  padding: 0;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.rows-editor-row {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr 34px;
+  gap: var(--s1);
+  width: 100%;
+}
+
+.asset-list {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 0 var(--s1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+@media (max-width: 600px) {
+  .rows-editor-row {
+    grid-template-columns: 1fr 34px;
+  }
+
+  .rows-editor-row > :not(:first-child):not(:last-child) {
+    grid-column: 1;
+  }
+
+  .rows-editor-row > :last-child {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .toolbar .toolbar-search {
+    width: 100%;
+  }
+}
+
+/* ---------- Классификация: мастер и трасса расчёта ---------- */
+
+.class-current {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s1);
+}
+
+.class-current p {
+  margin: 0;
+}
+
+.class-result {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.class-outcome {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.table-note {
+  margin: 0;
+  padding-top: 0;
+}
+
+.stepper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s3);
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border-bottom: 1px solid var(--border);
+  list-style: none;
+}
+
+.stepper .link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  color: var(--text-2);
+}
+
+.stepper .link-btn:disabled {
+  color: var(--text-3);
+  cursor: default;
+}
+
+.stepper li[aria-current="step"] .link-btn {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.stepper li[aria-current="step"] .trace-num {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.stepper li.done .trace-num {
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.trace-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.field-legend {
+  margin-bottom: 2px;
+  padding: 0;
+  font-weight: 500;
+}
+
+.option-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--s1);
+  margin-top: 4px;
+}
+
+.check.option {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.check.option:hover {
+  border-color: var(--border-strong);
+}
+
+.check.option.checked {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.trace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  width: 100%;
+}
+
+.trace-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.trace-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s1);
+  padding: var(--s1) 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.trace-hit {
+  color: var(--ok);
+  vertical-align: -2px;
+}
+
+.table-compact th,
+.table-compact td {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.trace-max p {
+  margin: 0 0 var(--s1);
+}
+
+.trace-max-hit {
+  font-weight: 600;
+}
+
+.props-row {
+  display: contents;
+}
+
+.drawer-note {
+  margin-right: auto;
+  align-self: center;
+}
+
+.count.count-warn {
+  background: var(--warn-soft);
+  color: var(--text);
+}
+
+/* ---------- Набор мер объекта ---------- */
+
+.measure-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s3);
+}
+
+.measure-kpi {
+  gap: 6px;
+}
+
+.measure-kpi .actions {
+  margin-top: auto;
+  padding-top: var(--s1);
+}
+
+.measure-kpi-main .kpi-value {
+  color: var(--accent-text);
+}
+
+/* Полоса реализации: реализовано · частично · не реализовано · не оценено. */
+.impl-bar {
+  display: flex;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-xs);
+  background: var(--surface-3);
+}
+
+.impl-bar > span {
+  height: 100%;
+}
+
+.impl-bar-implemented {
+  background: var(--ok);
+}
+
+.impl-bar-partial {
+  background: var(--sev-medium);
+}
+
+.impl-bar-not_implemented {
+  background: var(--sev-critical);
+}
+
+.impl-bar-unassessed {
+  background: var(--border-strong);
+}
+
+.search-field {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 220px;
+}
+
+.search-field svg {
+  position: absolute;
+  left: 10px;
+  color: var(--text-3);
+  pointer-events: none;
+}
+
+.search-field .input {
+  padding-left: 30px;
+}
+
+.toolbar-end {
+  margin-left: auto;
+}
+
+.measures-table td:nth-child(2) {
+  min-width: 280px;
+}
+
+.measure-note {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.measure-toolbar .toolbar-select {
+  max-width: 340px;
+}
+
+.table tr.row-excluded .measure-title {
+  color: var(--text-3);
+  text-decoration: line-through;
+  text-decoration-color: var(--border-strong);
+}
+
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.seg-btn {
+  height: 30px;
+  padding: 0 var(--s2);
+  border: 0;
+  border-right: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.seg-btn:last-child {
+  border-right: 0;
+}
+
+.seg-btn[aria-checked="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 500;
+}
+
+.drawer-form {
+  width: 100%;
+}
+
+.drawer-form .field .chips {
+  margin-bottom: 6px;
+}
+
+.pick-list {
+  display: flex;
+  max-height: 280px;
+  flex-direction: column;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.pick-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s1);
+  padding: 8px var(--s2);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.pick-item:last-child {
+  border-bottom: 0;
+}
+
+.pick-item:hover {
+  background: var(--surface-2);
+}
+
+.pick-item.picked {
+  background: var(--accent-soft);
+}
+
+.pick-item input {
+  flex: none;
+}
+
+.plan-list h3 {
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.plan-list ul {
+  display: flex;
+  max-height: 180px;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  font-size: 13px;
+}
+
+.plan-list .pill {
+  margin-left: 6px;
+}
+
+@media (max-width: 1200px) {
+  .measure-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .measure-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .search-field {
+    width: 100%;
+  }
+
+  .toolbar-end {
+    margin-left: 0;
+  }
+
+}
+
+/* ---------- Результаты «Сканера» (задача 1.9) ---------- */
+
+.scanner-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.scanner-run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px var(--s2);
+  font-size: 13px;
+}
+
+.scanner-stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--s2);
+}
+
+.scanner-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.scanner-stat .kpi-label {
+  display: inline-flex;
+  align-items: center;
+}
+
+.scanner-stat-value {
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.pill.pill-dot {
+  margin-right: 6px;
+  padding: 0;
+  background: none;
+}
+
+.pill.pill-tight {
+  margin-left: 6px;
+  padding: 0 6px;
+}
+
+.run-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.status-differs {
+  color: var(--warn);
+}
+
+.evidence-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.evidence-block h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.evidence-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.evidence-list ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 0;
+  padding-left: var(--s3);
+  list-style: none;
+}
+
+.evidence-list a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+@media (max-width: 960px) {
+  .scanner-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .scanner-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

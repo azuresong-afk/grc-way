@@ -3,7 +3,10 @@ import { Layout } from "./components/Layout";
 import { RequireAuth, RequirePerm } from "./lib/auth";
 import { ProjectProvider } from "./lib/project";
 import { AuditPage } from "./pages/AuditPage";
+import { ClassTablesPage } from "./pages/ClassTablesPage";
 import { LoginPage } from "./pages/LoginPage";
+import { ObjectPage } from "./pages/ObjectPage";
+import { ObjectsPage } from "./pages/ObjectsPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { RefsPage } from "./pages/RefsPage";
@@ -43,8 +46,25 @@ export function App() {
             </RequirePerm>
           }
         />
+        <Route
+          path="objects"
+          element={
+            <RequirePerm perm="view">
+              <ObjectsPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="objects/:id"
+          element={
+            <RequirePerm perm="view">
+              <ObjectPage />
+            </RequirePerm>
+          }
+        />
         <Route path="refs" element={<RefsPage />} />
         <Route path="refs/scanner" element={<ScannerSyncPage />} />
+        <Route path="refs/classification" element={<ClassTablesPage />} />
         <Route
           path="admin/users"
           element={

@@ -5,7 +5,20 @@ import secrets
 from fastapi import FastAPI
 
 from app import __version__
-from app.api import audit_log, auth, health, manifest, projects, refs, refs_sync, users
+from app.api import (
+    audit_log,
+    auth,
+    classification,
+    health,
+    manifest,
+    measures,
+    objects,
+    projects,
+    refs,
+    refs_sync,
+    scanner_import,
+    users,
+)
 from app.core.config import get_settings
 from app.core.security import LoginThrottle, TokenSigner
 
@@ -28,6 +41,19 @@ def create_app() -> FastAPI:
     app.state.signer = TokenSigner(secret, settings.token_ttl_minutes * 60)
     app.state.throttle = LoginThrottle(settings.login_max_failures, settings.login_lockout_seconds)
 
-    for module in (health, manifest, auth, users, audit_log, projects, refs, refs_sync):
+    for module in (
+        health,
+        manifest,
+        auth,
+        users,
+        audit_log,
+        projects,
+        objects,
+        classification,
+        measures,
+        refs,
+        refs_sync,
+        scanner_import,
+    ):
         app.include_router(module.router)
     return app

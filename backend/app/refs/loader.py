@@ -13,6 +13,11 @@
   устаревшему YAML. Каталог проверок из файла дополняет только новые проверки и
   справочные поля (рекомендации, источники), которых нет в API.
 
+Таблицы классификации (reference/classification/*.yaml) загружаются по тем же
+правилам: новая — добавляется; изменённый файл обновляет таблицу, если её не
+правили в интерфейсе (origin≠local), — новая ревизия и снятие отметки о сверке;
+неизменённый файл таблицу не трогает.
+
 Запуск вручную: python -m app.refs.loader
 """
 
@@ -30,8 +35,17 @@ from sqlalchemy.orm import Session
 
 from app import audit
 from app.core.config import get_settings
-from app.db.models import RefCheck, RefGroup, RefMeasure, RefProfile, RefRevision, utcnow
+from app.db.models import (
+    RefCheck,
+    RefClassificationTable,
+    RefGroup,
+    RefMeasure,
+    RefProfile,
+    RefRevision,
+    utcnow,
+)
 from app.db.session import get_engine
+from app.domain.classification import definition_hash, validate
 
 CHECKS_FILE = "checks.yaml"
 PROFILE_ORDER = ["fstec-117", "fstec-21", "fstec-239", "cis-controls-v8", "cis-benchmark"]
@@ -47,16 +61,21 @@ class LoadReport:
     local_conflicts: list[str] = field(default_factory=list)
     missing_in_file: list[str] = field(default_factory=list)
     checks: int = 0
+    tables_added: int = 0
+    tables_updated: int = 0
+    tables_unchanged: int = 0
 
     @property
     def changed(self) -> bool:
-        return bool(self.added or self.updated)
+        return bool(self.added or self.updated or self.tables_added or self.tables_updated)
 
     def summary(self) -> str:
         parts = [
             f"профилей {self.profiles}",
             f"мер добавлено {self.added}, обновлено {self.updated}, без изменений {self.unchanged}",
             f"проверок {self.checks}",
+            f"таблиц классификации добавлено {self.tables_added}, обновлено "
+            f"{self.tables_updated}, без изменений {self.tables_unchanged}",
         ]
         if self.local_conflicts:
             parts.append(f"изменены в интерфейсе, файл не применён: {len(self.local_conflicts)}")
@@ -186,6 +205,80 @@ def _load_profile(session: Session, path: Path, report: LoadReport) -> None:
     report.missing_in_file += [f"{pid}:{mid}" for mid in existing if mid not in in_file]
 
 
+# Поля определения, которые хранятся отдельными колонками, а не в definition.
+_TABLE_META = {"regime", "title", "version", "origin", "source"}
+
+
+def table_snapshot(t: RefClassificationTable) -> dict[str, Any]:
+    return {
+        "title": t.title,
+        "version": t.version,
+        "definition": t.definition,
+        "source": t.source,
+        "origin": t.origin,
+        "verified_by_name": t.verified_by_name,
+        "verified_at": t.verified_at.isoformat() if t.verified_at else None,
+    }
+
+
+def _load_table(session: Session, path: Path, report: LoadReport) -> None:
+    raw = path.read_bytes()
+    data = yaml.safe_load(raw.decode("utf-8"))
+    regime = str(data["regime"])
+    definition = {k: v for k, v in data.items() if k not in _TABLE_META}
+    validate(definition)
+    digest = hashlib.sha256(raw).hexdigest()
+    t = session.get(RefClassificationTable, regime)
+    if t is not None and t.source_hash == digest:
+        report.tables_unchanged += 1
+        return
+    wanted = {
+        "title": data["title"],
+        "version": str(data["version"]),
+        "definition": definition,
+        "source": data.get("source") or {},
+    }
+    if t is None:
+        session.add(
+            RefClassificationTable(
+                regime=regime,
+                origin=data.get("origin") or "stub",
+                definition_hash=definition_hash(definition),
+                source_hash=digest,
+                revision=1,
+                **wanted,
+            )
+        )
+        report.tables_added += 1
+        return
+    t.source_hash = digest
+    if t.origin == "local":
+        report.local_conflicts.append(f"classification:{regime}")
+        return
+    if {k: getattr(t, k) for k in wanted} == wanted:
+        report.tables_unchanged += 1
+        return
+    session.add(
+        RefRevision(
+            entity="classification_table",
+            entity_key=regime,
+            revision=t.revision,
+            data=table_snapshot(t),
+            changed_by_name="загрузка справочников",
+            comment="Обновление из файла таблицы",
+        )
+    )
+    for k, v in wanted.items():
+        setattr(t, k, v)
+    t.origin = data.get("origin") or "stub"
+    t.definition_hash = definition_hash(definition)
+    t.revision += 1
+    t.imported_at = t.updated_at = utcnow()
+    t.updated_by = None
+    t.verified_by = t.verified_by_name = t.verified_at = None
+    report.tables_updated += 1
+
+
 def load_reference(session: Session, directory: Path) -> LoadReport:
     report = LoadReport()
     profiles_dir = directory / "profiles"
@@ -195,6 +288,8 @@ def load_reference(session: Session, directory: Path) -> LoadReport:
     for path in sorted(profiles_dir.glob("*.yaml")):
         if path.name != CHECKS_FILE:
             _load_profile(session, path, report)
+    for path in sorted((directory / "classification").glob("*.yaml")):
+        _load_table(session, path, report)
     if report.changed:
         audit.record(
             session, action="refs.load", actor_name="system", details={"summary": report.summary()}

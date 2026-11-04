@@ -4,6 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -49,6 +50,9 @@ class Settings(BaseSettings):
     scanner_ca_file: str = ""
     # Каталог с фикстурами для scanner_mode=fixture; пусто — встроенные.
     scanner_fixture_dir: Path | None = None
+
+    # Вес меры «Частично» в проценте реализации (0 — считать нереализованной, 1 — реализованной).
+    partial_weight: float = Field(default=0.5, ge=0, le=1)
 
     # Пути, под которыми продукт виден в платформе (для манифеста).
     base_path: str = "/grc/"
