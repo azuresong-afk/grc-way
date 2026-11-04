@@ -1,0 +1,269 @@
+# «Аттестация» (`grc`) — архитектура и план работ
+
+Исходное ТЗ — [`docs/brief.md`](brief.md). Этот документ фиксирует, как мы его реализуем: архитектуру, модель данных, API, экраны, этапы с задачами и критериями приёмки. Решения, принятые без владельца, помечены **[решение]** — их можно пересмотреть, пока соответствующая задача не начата. Вопросы, которые реально меняют решение, — в конце документа.
+
+---
+
+## 1. Архитектура
+
+```
+                ┌────────────── web (nginx-unprivileged :8080 → хост 18082) ──────────────┐
+браузер ───────▶│  /            SPA (React 18 + TS + Vite 5), VITE_BASE                   │
+                │  /api/*  ──▶  app:8000 (префикс /api отрезается)                         │
+                └──────────────────────────────────────────────────────────────────────────┘
+                                   │
+                ┌──────────────────▼──────────────────┐        ┌───────────────────────┐
+                │ app (FastAPI, :8000 → хост 18002)   │──REST─▶│ «Сканер» (auditor)    │
+                │  api/        роуты, require(Perm)   │        └───────────────────────┘
+                │  domain/     сервисы предметки      │        ┌───────────────────────┐
+                │  refs/       справочники (YAML→БД)  │──REST─▶│ «Устранение»          │
+                │  integrations/scanner|vm|platform   │◀─event─└───────────────────────┘
+                │  docs_gen/   docxtpl → DOCX → PDF   │        ┌───────────────────────┐
+                │  jobs/       пул потоков + jobs     │──event▶│ «Платформа» (outbox)  │
+                │  audit/      append-only журнал     │        └───────────────────────┘
+                └──────────────────┬──────────────────┘
+                                   │
+                         db (postgres:16, 127.0.0.1:15434)
+```
+
+- **Один репозиторий, две части:** `backend/` (Python 3.12, FastAPI, Pydantic 2, SQLAlchemy 2, Alembic, pytest, ruff) и `frontend/` (React 18, TS strict, Vite 5, react-router-dom 6, lucide-react, vitest + Testing Library, ESLint 9). Стили — копия `styles.css` «Сканера» с теми же классами и токенами (до появления `@platform/ui`).
+- **Docker Compose:** `app`, `web`, `db`; entrypoint `app`: проверка секретов → `alembic upgrade head` → загрузка справочников из YAML (идемпотентно, не затирает правки методиста) → первый администратор из `.env` → uvicorn. Healthcheck `/health/ready`.
+- **Фоновые задачи** (импорт прогона, генерация документов, импорт БДУ/СЗИ, доставка outbox): таблица `jobs` + `ThreadPoolExecutor` в процессе API; при старте задачи в статусе `running` переводятся в `interrupted` и перезапускаются, если идемпотентны.
+- **Интеграции изолированы** в `backend/app/integrations/{scanner,vm,platform}/`: клиент + Pydantic-схемы ответов + фейковая реализация для тестов и демо (`SCANNER_MODE=live|fixture`). Продукт собирается и проходит тесты без живого «Сканера».
+- **Аутентификация:** `AUTH_MODE=local` — scrypt + JWT HS256 (как в «Сканере»); `AUTH_MODE=platform` — проверка Ed25519 JWT по JWKS платформы, теневые пользователи по `sub`. Обе ветки за одним интерфейсом `current_user()`. Права вычисляются из ролей на каждый запрос.
+- **Секреты интеграций** (токен/пароль сервисной учётки «Сканера», HMAC-ключ событий) — в `.env`; если понадобится хранить их в БД (правка в интерфейсе «Источники»), то AES-GCM ключом `GRC_SECRET_KEY`.
+- **Файлы доказательств** — в томе `/data/evidence/<sha256>` **[решение]** (а не в БД: протоколы и сканы бывают большими, том проще бэкапить отдельно). Белый список типов (pdf, docx, xlsx, odt, png, jpg, txt, csv, json, xml, zip), проверка сигнатуры, лимит `EVIDENCE_MAX_MB=50`, отдача с `Content-Disposition: attachment` и `X-Content-Type-Options: nosniff`, никогда не исполняются и не рендерятся как HTML.
+- **Генерация документов:** docxtpl (Jinja в DOCX) → DOCX; PDF — LibreOffice headless в образе `app` **[решение]** (единственный надёжный путь DOCX→PDF без сети; увеличит образ ≈ на 400 МБ, поэтому вынесем в отдельный сервис `converter`, если размер станет проблемой).
+
+### Структура репозитория
+
+```
+backend/
+  app/
+    api/            # роуты по ресурсам
+    core/           # конфиг, безопасность, RBAC (Perm, require)
+    db/             # модели SQLAlchemy, сессия
+    domain/         # classification, measures, assessment, threats, szi, documents
+    refs/           # загрузчик справочников YAML → БД, diff
+    integrations/   # scanner/, vm/, platform/ (+ fixtures)
+    docs_gen/       # контекст документов, рендер, конвертация
+    jobs/  audit/  events/
+  alembic/versions/0001_…
+  tests/
+reference/          # справочники в YAML, с источниками и флагом сверки
+  profiles/         # fstec-117.yaml, fstec-21.yaml, fstec-239.yaml, cis-*.yaml, checks.yaml (из «Сканера»)
+  classification/   # gis-class.yaml, pdn-level.yaml, kii-category.yaml
+  baselines/        # базовые наборы мер по классам (если не совпадают с levels[] профиля)
+  threats/          # структура Методики 2021: последствия, нарушители, тактики/техники
+  documents/        # каталог документов комплекта и их обязательных полей
+templates/docx/     # шаблоны документов (docxtpl)
+frontend/
+  src/{api,components,pages,styles}/
+docs/  brief.md roadmap.md INSTALL.md TESTING.md
+docker-compose.yml  .env.example  .github/workflows/ci.yml
+```
+
+---
+
+## 2. Справочники и честность данных
+
+Каждая запись справочника (мера, строка таблицы классификации, показатель значимости, элемент Методики, шаблон документа) несёт:
+
+| поле | смысл |
+|---|---|
+| `source` | `{document, clause, appendix, url}` — документ, пункт, приложение |
+| `verified` | `{by, at}` или `null` — «Сверено методистом» |
+| `origin` | `official` (из загруженного официального текста) / `scanner` (импорт из «Сканера») / `stub` (заглушка) / `local` (правка в интерфейсе) |
+| `revision` | номер версии записи; история правок — в таблице `ref_revisions` |
+
+- YAML в `reference/` — **начальное наполнение**; при старте загружается в БД только то, чего там нет или что не правилось в интерфейсе (сравнение по `revision` и хэшу). Правки в интерфейсе пишутся в БД и в журнал; выгрузка «Справочник → YAML» позволяет вернуть правку в репозиторий через PR.
+- Пока `verified = null`: в интерфейсе значок «требует сверки», в документах — водяной знак «Проект» и сноска со списком несверенных записей, использованных в документе.
+- Импорт профилей из «Сканера» (`GET /compliance/profiles`) — всегда через экран разницы: добавлено / изменено / удалено по `id` меры; применение — отдельное действие с записью в журнал. Сопоставления «мера → проверка» и применимость мер №21/№239 из «Сканера» приходят с `origin=scanner, verified=null`.
+- **Изменённая после сверки запись снова становится несверенной** **[решение]**.
+- Где официального текста ещё нет — `origin=stub`, формулировка «Текст требования не загружен. Источник: …», и такая запись не может попасть в утверждённый документ без явного подтверждения утверждающего.
+
+---
+
+## 3. Модель данных (этап 1 полностью, этапы 2–3 — эскиз)
+
+Все таблицы с `id uuid`, `created_at/by`, `updated_at/by`. Деньги, сроки, ФИО заказчика — обычные поля, без шифрования; секреты — только в `.env`/AES-GCM.
+
+**Пользователи и доступ**
+- `users {id, username, display_name, password_hash?, platform_sub?, is_active}`
+- `user_roles {user_id, role}`; роли: `admin, methodologist, assessor, viewer` + право-надбавка `approve`
+- `project_members {project_id, user_id}` — в `local`; в `platform` берётся из claim `projects`
+
+**Проекты и объекты**
+- `customers {id, name, inn, ogrn, address, contacts jsonb}`
+- `projects {id, customer_id, name, client, contract_ref, period_from, period_to, status, platform_project_id?, scanner_engagement_id?}`
+- `objects {id, project_id, kind (gis|ispdn|kii|other), name, purpose, boundaries, interconnections jsonb, internet bool, responsible jsonb, regime (117|21|239), status}`
+- `object_segments {id, object_id, name, description}`
+- `object_hosts {object_id, segment_id?, address, hostname, scanner_asset_id?, source (scanner|manual)}` — ключ сопоставления с активами `(project_id, address)`
+
+**Справочники**
+- `ref_documents {id, code (fstec-117…), title, number, date, url, file_id?, verified}`
+- `ref_profiles {id (fstec-117…), title, level_label, levels[], default_level, source_hash, imported_at}`
+- `ref_groups {profile_id, code, title, order}`
+- `ref_measures {profile_id, id (ИАФ.1), group_code, title, text?, levels[], checks[], kind (technical|organizational), source jsonb, origin, verified jsonb, revision}`
+- `ref_classification_tables {id, regime, version, definition jsonb, source, verified}` — таблицы как данные, мастер их только интерпретирует
+- `ref_revisions {entity, entity_id, revision, diff jsonb, by, at}`
+
+**Классификация**
+- `classifications {id, object_id, regime, inputs jsonb, result (К2|УЗ3|cat2|…), justification, table_version, status (draft|approved), approved_by?, approved_at?}` — новая классификация = новая запись, старая сохраняется
+
+**Меры объекта и оценка**
+- `object_measures {id, object_id, classification_id, measure_id, origin (baseline|added), adaptation (none|excluded|compensated), adaptation_reason, compensating_measure_ids[], status (implemented|partial|not_implemented|not_applicable|unassessed), method (auto|manual|mixed), owner_id, comment, confirmed_by?, confirmed_at?}`
+- `adaptations {id, object_id, status (draft|approved), approved_by?, approved_at?}` — утверждение адаптации целиком
+- `scanner_snapshots {id, object_id, run_id, run_name, run_finished_at, profile, level, percent, counts jsonb, raw jsonb, coverage jsonb, imported_at, imported_by}` — **неизменяемые**, повторный импорт создаёт новый снимок
+- `evidence {id, object_measure_id, kind (scanner|file|interview|inspection|certificate), snapshot_id?, file_id?, summary, data jsonb, created_at/by}`
+- `files {id, sha256, name, mime, size, path}`
+
+**Этап 2:** `threat_models`, `negative_consequences`, `impact_objects`, `intruders {category, capability (Н1–Н4)}`, `interfaces`, `scenarios {tactic, technique}`, `bdu_threats (УБИ.xxx)`, `object_threats {threat_id, relevant, justification, linked_findings[] (dedup_key, bdu_ids)}`; `szi {name, cert_number, cert_valid_to, trust_level, class, measures[]}`, `szi_registry` (импорт CSV/XLSX).
+
+**Этап 3:** `documents {id, object_id, type, version, status (draft|review|approved), file_id, context_hash, approved_by}`, `nonconformities {id, object_measure_id, priority, due_date?, vm_ticket_id?, vm_status}`, `outbox {id, type, payload, attempts, next_at, delivered_at}`, `inbox {event_id}` (идемпотентность).
+
+**Аудит:** `audit_log {id, at, user_sub, user_name, action, entity, entity_id, project_id, result, ip, details jsonb}` — триггер PostgreSQL запрещает UPDATE/DELETE.
+
+### Как считается процент реализации
+
+- Знаменатель — меры объекта после адаптации, кроме `excluded` и `not_applicable`. Компенсированная мера считается по статусу компенсирующих.
+- `implemented = 1`, `partial = 0,5` **[решение — вес частичной реализации; сделаем настройкой]**, `not_implemented = 0`, `unassessed` — в знаменателе, но показывается отдельной полосой «не оценено».
+- Три числа: авто (меры с проверками «Сканера»), вручную (организационные), всего.
+- Автостатус из снимка: `passed` → «Реализована», `failed` → «Не реализована» (или «Частично», если нарушения не на всех хостах объекта **[решение]**), хост+модуль не `completed` в покрытии → «не проверено», мера остаётся `unassessed` с пометкой. Автостатус — предложение; финальный статус меры подтверждает испытатель («Подтвердить»), подтверждение фиксируется.
+
+---
+
+## 4. Роли и права
+
+| право | admin | methodologist | assessor | viewer | +approve |
+|---|:-:|:-:|:-:|:-:|:-:|
+| `users.manage`, `refs.manage`, `integrations.manage`, `audit.view` | ✓ | | | | |
+| `objects.edit`, `classification.edit`, `adaptation.edit`, `threats.edit`, `documents.edit` | | ✓ | | | |
+| `assessment.edit`, `evidence.upload`, `scanner.import`, `protocols.edit` | | | ✓ | | |
+| `refs.verify` («Сверено методистом») | | ✓ | | | |
+| `view` объектов проекта | | ✓ | ✓ | ✓ | |
+| `documents.view_approved`, `documents.export_approved` | | ✓ | ✓ | ✓ | |
+| `approve` (класс, адаптация, модель угроз, заключение) | | | | | ✓ |
+
+Администратор рабочих операций не выполняет (разделение обязанностей). Утверждающий не может утвердить запись, которую сам создал или последним изменил — проверка на сервере.
+
+---
+
+## 5. API (этап 1; все пути без префикса `/api`)
+
+```
+POST /auth/token · POST /auth/logout · GET /me · GET /manifest · GET /health/live · GET /health/ready
+
+GET/POST         /projects               GET/PATCH /projects/{id}
+GET/POST         /customers              GET/PATCH /customers/{id}
+GET/POST         /projects/{id}/objects  GET/PATCH /objects/{id}
+GET/PUT          /objects/{id}/hosts     POST /objects/{id}/hosts/sync-from-scanner
+
+GET  /refs/profiles · GET /refs/profiles/{id} · GET /refs/measures?profile=&group=&verified=
+PATCH /refs/measures/{profile}/{id} · POST /refs/{entity}/{id}/verify
+POST /refs/profiles/scanner-diff → diff · POST /refs/profiles/scanner-apply {diff_id}
+GET  /refs/classification-tables/{regime} · PATCH …
+
+POST /objects/{id}/classifications {inputs} → расчёт (черновик)
+GET  /objects/{id}/classifications · POST /classifications/{id}/approve
+
+GET  /objects/{id}/measures?group=&status=&method=&needs_review=&limit=&offset=   (X-Total-Count)
+POST /objects/{id}/measures/rebuild            # базовый набор по утверждённому классу
+PATCH /object-measures/{id}                    # статус, адаптация, ответственный, комментарий
+POST /object-measures/{id}/confirm
+POST /objects/{id}/adaptation/approve
+
+GET  /objects/{id}/scanner/runs                # завершённые прогоны engagement из «Сканера»
+POST /objects/{id}/scanner/import {run_id|"latest"} → job
+GET  /objects/{id}/snapshots · GET /snapshots/{id}
+
+POST /object-measures/{id}/evidence (multipart | json) · GET /evidence/{id} · GET /files/{id}
+
+GET  /projects/{id}/summary · GET /jobs/{id} · GET /audit?…&limit=&offset= · GET /audit/export
+GET  /search?q=                                # для Ctrl+K и платформы
+GET/POST/PATCH /users …
+```
+
+Ошибки — `{detail, code}` на русском; списки — `limit/offset` + `X-Total-Count`; изменения — запись в аудит и (в режиме платформы) событие `grc.assessment.updated`.
+
+---
+
+## 6. Экраны
+
+Каркас, токены и компоненты — строго как в «Сканере» (раздел «Единый стиль» в брифе). Боковая панель:
+
+- **Сводка** — KPI по проекту (объекты, % реализации, несоответствия, истекающие СЗИ — с этапа 2), таблица объектов: класс, полосы авто/вручную/всего, готовность документов (с этапа 3).
+- **Объекты** — список; карточка с вкладками *Описание · Классификация · Меры · Модель угроз · СЗИ · Документы · История*. Вкладки этапов 2–3 появляются вместе с функциональностью, а не заглушками.
+- **Меры** (вкладка объекта, она же отдельный пункт меню по текущему объекту) — таблица по группам, фильтр-чипы «Не реализовано», «Требует ручной оценки», «Требует сверки», «Исключено»; шторка меры: требование и источник, проверки «Сканера» и результат по хостам из снимка, ручные доказательства, рекомендации, кнопки «Подтвердить», «Отправить в Устранение» (этап 3).
+- **Классификация** — мастер по шагам с вычислением на редактируемой таблице и показом, какая строка таблицы сработала и откуда она.
+- **Модель угроз** (этап 2), **Документы** (этап 3).
+- **Справочники** — профили мер, таблицы классификации, нормативные документы, (этап 2) угрозы БДУ, реестр СЗИ; у каждой записи источник и флаг сверки; экран разницы при обновлении из «Сканера».
+- **Администрирование:** Пользователи и роли · Источники (подключение к «Сканеру», «Устранению») · Журнал аудита.
+
+---
+
+## 7. Этапы и задачи
+
+Каждая задача — отдельная ветка и PR, к PR со стороны интерфейса — скриншоты в обеих темах. Миграции нумеруются последовательно.
+
+### Этап 1 — MVP
+
+| # | задача | готово, когда |
+|---|---|---|
+| 1.1 | Каркас репозитория: backend (FastAPI, конфиг, `/health`, `/manifest`), frontend (Vite, роутинг, `styles.css` «Сканера», Layout, тема), Docker Compose, `.env.example`, CI (pytest, ruff, vitest, tsc, eslint, сборка образов) | `docker compose up --build` открывает пустой кабинет на :18082 в обеих темах; CI зелёный |
+| 1.2 | Пользователи, роли, `AUTH_MODE=local`, RBAC `require(Perm)`, журнал аудита с триггером, тест-страж миграций | вход/выход; права проверяются на каждом запросе; UPDATE/DELETE журнала падают |
+| 1.3 | Заказчики, проекты, выбор проекта в верхней полосе (`platform.project`, `?project=`) | CRUD с аудитом и пагинацией |
+| 1.4 | Справочник мер: загрузка YAML «Сканера» в БД, источники, флаг сверки, экран «Справочники», правка с ревизиями | все меры видны с пометкой «требует сверки»; правка → новая ревизия и запись в журнале |
+| 1.5 | Адаптер «Сканера» (`integrations/scanner`) с фикстурами; обновление справочника из `GET /compliance/profiles` с экраном разницы | тесты на моках; diff показывает добавленные/изменённые/удалённые меры |
+| 1.6 | Объекты: описание, сегменты, хосты (вручную и из активов «Сканера») | карточка объекта, синхронизация хостов по `(project, address)` |
+| 1.7 | Классификация: таблицы как данные, мастер ГИС/ИСПДн/КИИ, черновик → утверждение с запретом самоутверждения | расчёт воспроизводим по версии таблицы; утверждение в журнале |
+| 1.8 | Набор мер объекта: базовый по классу, адаптация (исключение с обоснованием, компенсирующие, дополнение), утверждение адаптации | процент пересчитывается с учётом адаптации |
+| 1.9 | Импорт результатов прогона: выбор прогона / «последний завершённый», снимок, учёт покрытия, автостатусы с доказательствами | повторный импорт другого прогона создаёт второй снимок, первый не меняется |
+| 1.10 | Ручная оценка: доказательства-файлы (том, проверки типа/размера), интервью, осмотр; подтверждение меры | организационные меры оцениваются и подтверждаются; файлы скачиваются, не исполняются |
+| 1.11 | Сводка, Ctrl+K, демо-данные (`make demo`: «ГИС, класс К2», 10 хостов, фикстура `GET /runs/{id}/compliance`) | критерии приёмки MVP ниже |
+| 1.12 | `README.md`, `docs/INSTALL.md`, `docs/TESTING.md` | ручная проверка проходима по шагам |
+
+**Критерии приёмки MVP** (из ТЗ): демо-объект «ГИС, класс К2» с 10 хостами и фикстурой ответа `GET /runs/{id}/compliance` → автоматические меры получают статусы с доказательствами, организационные ждут ручной оценки; адаптация с обоснованием отражается в проценте; повторный импорт другого прогона создаёт новый снимок, не затирая старый; всё несверенное видно как «требует сверки»; стиль неотличим от «Сканера» в обеих темах; тесты зелёные.
+
+### Этап 2 — модель угроз и СЗИ
+
+| # | задача |
+|---|---|
+| 2.1 | Справочник Методики 2021 (последствия У1–У3, категории нарушителей Н1–Н4, тактики/техники) как данные с источниками |
+| 2.2 | Импорт `thrlist.xlsx` (БДУ, УБИ) с diff и версией выгрузки |
+| 2.3 | Мастер модели угроз по шагам Методики с прогрессом, перечень актуальных угроз с обоснованием, утверждение |
+| 2.4 | Привязка находок «Сканера» с `bdu_ids` к угрозам как подтверждение актуальности (по `dedup_key`) |
+| 2.5 | Реестр СЗИ объекта, импорт реестра сертифицированных СЗИ (CSV/XLSX), предупреждения об истечении, связь СЗИ ↔ меры |
+
+### Этап 3 — документы, «Устранение», платформа
+
+| # | задача |
+|---|---|
+| 3.1 | Движок документов: контекст из данных, docxtpl, DOCX→PDF, водяной знак «Проект», карта «из каких данных собран / какие поля пустые» |
+| 3.2 | Шаблоны комплекта (9 документов из ТЗ), выбор Inter / PT Astra Serif, загрузка фирменного шаблона |
+| 3.3 | Версии документов, согласование `черновик → на согласовании → утверждён`, сравнение версий |
+| 3.4 | Несоответствия и план устранения; «Отправить в Устранение», приём `vm.ticket.status_changed`, `vm.remediation.verified` |
+| 3.5 | `AUTH_MODE=platform` (Ed25519/JWKS, теневые пользователи), outbox/inbox событий, `grc.assessment.updated`, `audit.recorded`, межпродуктовые ссылки, `VITE_PLATFORM=1` |
+
+---
+
+## 8. Принятые решения (кратко)
+
+1. Монорепозиторий `backend/` + `frontend/`, один `docker-compose.yml`.
+2. Таблицы классификации и составы мер — данные (YAML → БД), мастер их только интерпретирует; код не содержит нормативных чисел.
+3. Снимки прогонов «Сканера» неизменяемы; статус меры — предложение автоматики, подтверждаемое человеком.
+4. Частичная реализация весит 0,5 в проценте (настраивается).
+5. Файлы доказательств — в томе по sha256, не в БД.
+6. DOCX→PDF через LibreOffice headless.
+7. Правка сверенной записи снимает отметку о сверке.
+8. Этапы 2–3 не показываются в интерфейсе заглушками до реализации.
+
+---
+
+## 9. Вопросы, которые меняют решение
+
+1. **YAML-профили «Сканера».** Бриф ссылается на `attachments/compliance-profiles/` (`fstec-*.yaml`, `cis-*.yaml`, `checks.yaml`), но в проект они пока не загружены. Без них задача 1.4 стартует на заглушках и идентификаторы мер придётся сверять позже — лучше загрузить их до 1.4.
+2. **Официальные тексты: какие и когда.** Что загрузите первым — №117 + методический документ от 12.04.2026, №21 + ПП №1119 или №239 + ПП №127? От этого зависит, какой режим (ГИС / ИСПДн / КИИ) доводить в мастере классификации первым. По умолчанию — ГИС (№117), т. к. на нём демо-объект MVP.
+3. **Свой шаблон документов** (этап 3): есть ли фирменный DOCX компании, или делаем нейтральный по умолчанию и даём загрузку?
+4. **Базовый набор мер по классу:** достаточно ли `levels[]` из профилей «Сканера», или методист будет вести базовые наборы отдельно (например, для №117 состав мер зависит не только от класса)?
+5. **Вес «Частично»** в проценте — 0,5 нас устраивает, или такие меры должны считаться нереализованными до подтверждения?
