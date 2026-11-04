@@ -163,6 +163,7 @@ export function ObjectsPage() {
                   <th>Объект</th>
                   <th>Вид</th>
                   <th>Режим</th>
+                  <th>Класс</th>
                   <th className="num">Хосты</th>
                   <th className="num">Сегменты</th>
                   <th>Интернет</th>
@@ -184,6 +185,18 @@ export function ObjectsPage() {
                       </span>
                     </td>
                     <td className="nowrap">{o.regime ? `№${o.regime}` : "—"}</td>
+                    <td className="nowrap">
+                      {o.classification ? (
+                        <span
+                          className={`pill ${o.classification.status === "approved" ? "pill-ok" : "pill-warn"}`}
+                          title={o.classification.status === "approved" ? "Утверждена" : "Черновик, не утверждена"}
+                        >
+                          {o.classification.short}
+                        </span>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
                     <td className="num">{o.host_count}</td>
                     <td className="num">{o.segment_count}</td>
                     <td>{o.internet ? <Globe size={15} aria-label="Подключён" /> : <span className="muted">нет</span>}</td>

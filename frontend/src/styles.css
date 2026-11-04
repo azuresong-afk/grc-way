@@ -1504,3 +1504,179 @@ fieldset.field {
     width: 100%;
   }
 }
+
+/* ---------- Классификация: мастер и трасса расчёта ---------- */
+
+.class-current {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s1);
+}
+
+.class-current p {
+  margin: 0;
+}
+
+.class-result {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.class-outcome {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.table-note {
+  margin: 0;
+  padding-top: 0;
+}
+
+.stepper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s3);
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border-bottom: 1px solid var(--border);
+  list-style: none;
+}
+
+.stepper .link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  color: var(--text-2);
+}
+
+.stepper .link-btn:disabled {
+  color: var(--text-3);
+  cursor: default;
+}
+
+.stepper li[aria-current="step"] .link-btn {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.stepper li[aria-current="step"] .trace-num {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.stepper li.done .trace-num {
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.trace-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.field-legend {
+  margin-bottom: 2px;
+  padding: 0;
+  font-weight: 500;
+}
+
+.option-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--s1);
+  margin-top: 4px;
+}
+
+.check.option {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.check.option:hover {
+  border-color: var(--border-strong);
+}
+
+.check.option.checked {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.trace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  width: 100%;
+}
+
+.trace-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.trace-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s1);
+  padding: var(--s1) 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.trace-hit {
+  color: var(--ok);
+  vertical-align: -2px;
+}
+
+.table-compact th,
+.table-compact td {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.trace-max p {
+  margin: 0 0 var(--s1);
+}
+
+.trace-max-hit {
+  font-weight: 600;
+}
+
+.props-row {
+  display: contents;
+}
+
+.drawer-note {
+  margin-right: auto;
+  align-self: center;
+}
+
+.count.count-warn {
+  background: var(--warn-soft);
+  color: var(--text);
+}

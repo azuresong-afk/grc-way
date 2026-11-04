@@ -22,7 +22,15 @@ from app.api.deps import DbSession, client_ip, require
 from app.api.projects import get_project_for
 from app.api.refs_sync import _scanner_error
 from app.core.rbac import Perm
-from app.db.models import AssessedObject, ObjectHost, ObjectSegment, Project, User, utcnow
+from app.db.models import (
+    AssessedObject,
+    Classification,
+    ObjectHost,
+    ObjectSegment,
+    Project,
+    User,
+    utcnow,
+)
 from app.integrations.scanner.client import ScannerClient, ScannerError, get_scanner_client
 from app.integrations.scanner.schemas import ScannerAsset
 
@@ -91,6 +99,17 @@ class SegmentOut(BaseModel):
     host_count: int
 
 
+class ClassBrief(BaseModel):
+    """Текущая классификация объекта: утверждённая или (если её нет) черновик."""
+
+    id: uuid.UUID
+    result: str
+    # Короткая подпись для списков (К2, УЗ3, Кат. 2).
+    short: str
+    result_label: str
+    status: str
+
+
 class ObjectBrief(BaseModel):
     id: uuid.UUID
     project_id: uuid.UUID
@@ -102,6 +121,7 @@ class ObjectBrief(BaseModel):
     host_count: int
     segment_count: int
     updated_at: datetime
+    classification: ClassBrief | None = None
 
 
 class ObjectOut(ObjectBrief):
@@ -254,7 +274,38 @@ def _segment_out(obj: AssessedObject, s: ObjectSegment) -> SegmentOut:
     )
 
 
-def _brief(obj: AssessedObject) -> ObjectBrief:
+def current_classes(session: Session, objs: list[AssessedObject]) -> dict[uuid.UUID, ClassBrief]:
+    """Утверждённая классификация по текущему режиму объекта, иначе последний черновик."""
+    if not objs:
+        return {}
+    regime = {o.id: o.regime for o in objs}
+    rows = session.scalars(
+        select(Classification)
+        .where(
+            Classification.object_id.in_(regime),
+            Classification.status.in_(("approved", "draft")),
+        )
+        .order_by(Classification.created_at.desc())
+    )
+    out: dict[uuid.UUID, ClassBrief] = {}
+    for c in rows:
+        if c.regime != regime[c.object_id]:
+            continue
+        have = out.get(c.object_id)
+        if have is None or (have.status == "draft" and c.status == "approved"):
+            values = (c.table_snapshot.get("result") or {}).get("values") or []
+            short = next((v.get("short") for v in values if str(v["value"]) == c.result), None)
+            out[c.object_id] = ClassBrief(
+                id=c.id,
+                result=c.result,
+                short=short or c.result,
+                result_label=c.result_label,
+                status=c.status,
+            )
+    return out
+
+
+def _brief(obj: AssessedObject, cls: ClassBrief | None = None) -> ObjectBrief:
     return ObjectBrief(
         id=obj.id,
         project_id=obj.project_id,
@@ -266,13 +317,14 @@ def _brief(obj: AssessedObject) -> ObjectBrief:
         host_count=len(obj.hosts),
         segment_count=len(obj.segments),
         updated_at=obj.updated_at,
+        classification=cls,
     )
 
 
 def _out(session: Session, obj: AssessedObject) -> ObjectOut:
     project = session.get(Project, obj.project_id)
     return ObjectOut(
-        **_brief(obj).model_dump(),
+        **_brief(obj, current_classes(session, [obj]).get(obj.id)).model_dump(),
         purpose=obj.purpose,
         boundaries=obj.boundaries,
         interconnections=[Interconnection(**x) for x in obj.interconnections],
@@ -361,8 +413,9 @@ def list_objects(
     response.headers["X-Total-Count"] = str(
         session.scalar(select(func.count()).select_from(stmt.subquery()))
     )
-    rows = session.scalars(stmt.order_by(AssessedObject.name).limit(limit).offset(offset))
-    return [_brief(o) for o in rows]
+    rows = list(session.scalars(stmt.order_by(AssessedObject.name).limit(limit).offset(offset)))
+    classes = current_classes(session, rows)
+    return [_brief(o, classes.get(o.id)) for o in rows]
 
 
 @router.post("/projects/{project_id}/objects", response_model=ObjectOut, status_code=201)

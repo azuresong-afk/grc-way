@@ -1,0 +1,82 @@
+# Таблица определения уровня защищённости ПДн (УЗ1–УЗ4) для ИСПДн.
+#
+# ВНИМАНИЕ: официальный текст ПП РФ от 01.11.2012 №1119 в проект ещё не
+# загружен (решение 04.11.2026: сначала №117, №21 — позже). Строки составлены
+# по пп. 12–15 Требований, утверждённых ПП №1119, и помечены origin=stub,
+# verified=null — «требует сверки», пока методист не сверит их с текстом.
+# Формат — см. gis-117.yaml.
+
+regime: "21"
+title: Уровень защищённости ПДн
+version: "1119-stub-1"
+origin: stub
+source:
+  document: Постановление Правительства РФ от 01.11.2012 №1119
+  clause: пп. 12–15
+  note: Заглушка до загрузки официального текста. Сверить формулировки и пороги.
+
+groups:
+  - {key: threats, title: Актуальные угрозы}
+  - {key: data, title: Персональные данные}
+
+inputs:
+  - key: threat_type
+    group: threats
+    label: Тип актуальных угроз
+    help: Определяется по модели угроз (п. 6–7 Требований).
+    options:
+      - {value: "1", label: "1-го типа", help: "Связаны с недокументированными возможностями системного ПО"}
+      - {value: "2", label: "2-го типа", help: "Связаны с недокументированными возможностями прикладного ПО"}
+      - {value: "3", label: "3-го типа", help: "Не связаны с недокументированными возможностями ПО"}
+  - key: category
+    group: data
+    label: Категория обрабатываемых ПДн
+    help: Если обрабатывается несколько категорий — выберите наиболее значимую по этому порядку.
+    options:
+      - {value: special, label: Специальные}
+      - {value: biometric, label: Биометрические}
+      - {value: other, label: Иные}
+      - {value: public, label: Общедоступные}
+  - key: subjects
+    group: data
+    label: Чьи ПДн и сколько субъектов
+    options:
+      - {value: employees, label: Только сотрудники оператора}
+      - {value: lt100k, label: "Менее 100 000 субъектов, не являющихся сотрудниками"}
+      - {value: gt100k, label: "Более 100 000 субъектов, не являющихся сотрудниками"}
+
+steps:
+  - key: level
+    label: Уровень защищённости ПДн
+    method: first_match
+    rows:
+      # п. 12 — УЗ1
+      - {id: uz1-a, when: {threat_type: ["1"], category: [special]}, value: УЗ1, source: {clause: "п. 12 «а»"}}
+      - {id: uz1-b, when: {threat_type: ["1"], category: [biometric]}, value: УЗ1, source: {clause: "п. 12 «б»"}}
+      - {id: uz1-c, when: {threat_type: ["1"], category: [other]}, value: УЗ1, source: {clause: "п. 12 «в»"}}
+      - {id: uz1-d, when: {threat_type: ["2"], category: [special], subjects: [gt100k]}, value: УЗ1, source: {clause: "п. 12 «г»"}}
+      # п. 13 — УЗ2
+      - {id: uz2-a, when: {threat_type: ["1"], category: [public]}, value: УЗ2, source: {clause: "п. 13 «а»"}}
+      - {id: uz2-b, when: {threat_type: ["2"], category: [special], subjects: [employees]}, value: УЗ2, source: {clause: "п. 13 «б»"}}
+      - {id: uz2-c, when: {threat_type: ["2"], category: [special], subjects: [lt100k]}, value: УЗ2, source: {clause: "п. 13 «в»"}}
+      - {id: uz2-d, when: {threat_type: ["2"], category: [biometric]}, value: УЗ2, source: {clause: "п. 13 «г»"}}
+      - {id: uz2-e, when: {threat_type: ["2"], category: [other], subjects: [gt100k]}, value: УЗ2, source: {clause: "п. 13 «д»"}}
+      - {id: uz2-f, when: {threat_type: ["3"], category: [special], subjects: [gt100k]}, value: УЗ2, source: {clause: "п. 13 «е»"}}
+      # п. 14 — УЗ3
+      - {id: uz3-a, when: {threat_type: ["2"], category: [public]}, value: УЗ3, source: {clause: "п. 14 «а»"}}
+      - {id: uz3-b, when: {threat_type: ["2"], category: [other], subjects: [employees, lt100k]}, value: УЗ3, source: {clause: "п. 14 «б»"}}
+      - {id: uz3-c, when: {threat_type: ["3"], category: [special], subjects: [employees, lt100k]}, value: УЗ3, source: {clause: "п. 14 «в»"}}
+      - {id: uz3-d, when: {threat_type: ["3"], category: [biometric]}, value: УЗ3, source: {clause: "п. 14 «г»"}}
+      - {id: uz3-e, when: {threat_type: ["3"], category: [other], subjects: [gt100k]}, value: УЗ3, source: {clause: "п. 14 «д»"}}
+      # п. 15 — УЗ4
+      - {id: uz4-a, when: {threat_type: ["3"], category: [public]}, value: УЗ4, source: {clause: "п. 15 «а»"}}
+      - {id: uz4-b, when: {threat_type: ["3"], category: [other], subjects: [employees, lt100k]}, value: УЗ4, source: {clause: "п. 15 «б»"}}
+
+result:
+  key: level
+  label: Уровень защищённости ПДн
+  values:
+    - {value: УЗ1, label: "УЗ1 — первый уровень"}
+    - {value: УЗ2, label: "УЗ2 — второй уровень"}
+    - {value: УЗ3, label: "УЗ3 — третий уровень"}
+    - {value: УЗ4, label: "УЗ4 — четвёртый уровень"}
