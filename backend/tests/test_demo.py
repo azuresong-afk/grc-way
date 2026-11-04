@@ -149,3 +149,18 @@ def test_demo_bdu_samples(client, demo_env):
     assert st["threats"]["active"] == 6 and st["vulns"]["active"] == 6
     pending = client.get(f"/bdu/imports/{st['vulns']['pending_id']}", headers=h["demo-viewer"])
     assert pending.json()["summary"]["criticality"] == 1
+
+
+def test_demo_threat_model_waits_for_approval(client, demo_env):
+    r, h = demo_env
+    models = client.get(f"/objects/{r.object_id}/threat-models", headers=h["demo-viewer"]).json()
+    assert [(m["version"], m["status"]) for m in models] == [(1, "draft")]
+    m = client.get(f"/threat-models/{models[0]['id']}", headers=h["demo-viewer"]).json()
+    assert m["progress"]["ready"], m["progress"]
+    assert (m["considered"], m["relevant"]) == (6, 5)
+    r2 = client.post(
+        f"/threat-models/{m['id']}/approve",
+        headers=h["demo-boss"],
+        json={"acknowledge_unverified": True},
+    )
+    assert r2.status_code == 200, r2.text

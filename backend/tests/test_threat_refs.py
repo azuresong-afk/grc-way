@@ -32,6 +32,8 @@ def test_reference_file_has_all_sections_with_sources():
     assert [i["code"] for i in by_kind["capability"]] == ["Н1", "Н2", "Н3", "Н4"]
     assert [i["code"] for i in by_kind["tactic"]] == [f"Т{n}" for n in range(1, 11)]
     assert len(by_kind["intruder"]) == 13
+    assert [i["code"] for i in by_kind["impact"]] == [f"ВВ{n}" for n in range(1, 7)]
+    assert [i["code"] for i in by_kind["method"]] == [f"СР{n}" for n in range(1, 10)]
     # Наименования с запятыми не обрезаны YAML.
     titles = {i["code"]: i["title"] for i in items}
     assert titles["НВ2"] == "Террористические, экстремистские группировки"

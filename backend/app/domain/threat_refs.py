@@ -12,7 +12,16 @@ import json
 import re
 from typing import Any
 
-KINDS = ("consequence_type", "consequence", "capability", "intruder", "tactic", "technique")
+KINDS = (
+    "consequence_type",
+    "consequence",
+    "capability",
+    "intruder",
+    "tactic",
+    "technique",
+    "impact",
+    "method",
+)
 # Вид записи → вид её родителя (у остальных родителя нет).
 PARENT_KIND = {"consequence": "consequence_type", "technique": "tactic"}
 KIND_TITLES = {
@@ -22,6 +31,8 @@ KIND_TITLES = {
     "intruder": "Вид нарушителя",
     "tactic": "Тактика",
     "technique": "Техника",
+    "impact": "Вид воздействия",
+    "method": "Способ реализации угроз",
 }
 INTRUDER_CATEGORIES = ("внешний", "внутренний")
 _ITEM_KEYS = {"code", "title", "description", "source", "attrs", "children"}

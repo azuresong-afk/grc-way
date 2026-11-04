@@ -20,6 +20,7 @@ from app.api import (
     refs_sync,
     scanner_import,
     summary,
+    threat_models,
     threat_refs,
     users,
 )
@@ -58,6 +59,7 @@ def create_app() -> FastAPI:
         refs,
         threat_refs,
         bdu,
+        threat_models,
         refs_sync,
         scanner_import,
         evidence,

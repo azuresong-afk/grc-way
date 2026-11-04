@@ -801,3 +801,82 @@ class BduVuln(_BduRecord, Base):
     criticality_changed_import_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     # {поле: [было, стало]} последнего такого изменения.
     criticality_changes: Mapped[dict | None] = mapped_column(JsonType)
+
+
+# ---------- Модель угроз ----------
+
+
+class ThreatModel(Base):
+    """Версия модели угроз объекта по Методике 2021: черновик → утверждена → заменена.
+
+    Шаги мастера (последствия, объекты воздействия, нарушители, способы, сценарии)
+    хранятся в steps; угрозы БДУ с решением об актуальности — в ThreatModelThreat.
+    Утверждённая версия не меняется: правка начинается с новой версии-черновика,
+    скопированной с неё. При утверждении в snapshot фиксируются записи справочника
+    и угрозы БДУ в том виде, в каком их видел утверждающий.
+    """
+
+    __tablename__ = "threat_models"
+    __table_args__ = (Index("ux_threat_models_version", "object_id", "version", unique=True),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    object_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("objects.id", ondelete="CASCADE"))
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    version: Mapped[int] = mapped_column(Integer)
+    # draft | approved | superseded
+    status: Mapped[str] = mapped_column(String(16), default="draft")
+    # {consequences: {...}, objects: {...}, intruders: {...}, methods: {...}, scenarios: {...}}
+    steps: Mapped[dict] = mapped_column(JsonType, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    created_by_name: Mapped[str | None] = mapped_column(String(200))
+    # Версия, с которой скопирован черновик.
+    based_on: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # Кто менял эту версию (id строками): им утверждать нельзя.
+    editors: Mapped[list] = mapped_column(JsonType, default=list)
+    edits: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    approved_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    approved_by_name: Mapped[str | None] = mapped_column(String(200))
+    approval_comment: Mapped[str | None] = mapped_column(String(2000))
+    # Утверждающий подтвердил, что записи справочника Методики не сверены.
+    unverified_acknowledged: Mapped[bool] = mapped_column(Boolean, default=False)
+    # {refs: {code: {kind, title, revision, verified}}, bdu: {code: {title, version}}}
+    snapshot: Mapped[dict | None] = mapped_column(JsonType)
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    threats: Mapped[list[ThreatModelThreat]] = relationship(
+        cascade="all, delete-orphan", lazy="selectin", order_by="ThreatModelThreat.threat_code"
+    )
+
+
+class ThreatModelThreat(Base):
+    """Угроза БДУ, рассмотренная в модели: актуальна или нет, почему, через что.
+
+    Ссылки на шаги модели: intruders — коды актуальных нарушителей (НВ…),
+    objects — ключи объектов воздействия, consequences — коды последствий,
+    methods — коды способов (СР…), tactics — коды тактик и техник.
+    linked_findings — находки «Сканера» с bdu_ids (задача 2.4).
+    """
+
+    __tablename__ = "threat_model_threats"
+    __table_args__ = (
+        Index("ux_threat_model_threats_code", "model_id", "threat_code", unique=True),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    model_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("threat_models.id", ondelete="CASCADE"))
+    threat_code: Mapped[str] = mapped_column(String(16))  # УБИ.006
+    # None — решение ещё не принято.
+    relevant: Mapped[bool | None] = mapped_column(Boolean)
+    justification: Mapped[str | None] = mapped_column(String(4000))
+    intruders: Mapped[list] = mapped_column(JsonType, default=list)
+    objects: Mapped[list] = mapped_column(JsonType, default=list)
+    consequences: Mapped[list] = mapped_column(JsonType, default=list)
+    methods: Mapped[list] = mapped_column(JsonType, default=list)
+    tactics: Mapped[list] = mapped_column(JsonType, default=list)
+    linked_findings: Mapped[list] = mapped_column(JsonType, default=list)
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_by_name: Mapped[str | None] = mapped_column(String(200))
