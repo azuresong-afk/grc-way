@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -46,3 +48,27 @@ class ScannerProfile(_Model):
     groups: list[ScannerGroup] = Field(default_factory=list)
     controls: list[ScannerControl] = Field(default_factory=list)
     checks: dict[str, ScannerCheck] = Field(default_factory=dict)
+
+
+class ScannerGroupRef(_Model):
+    id: int
+    name: str = Field(min_length=1, max_length=200)
+
+
+class ScannerAsset(_Model):
+    """Актив договора — `AssetOut` из scanner/api/schemas.py (GET /engagements/{id}/assets)."""
+
+    id: int
+    engagement_id: int
+    address: str = Field(min_length=1, max_length=64)
+    hostname: str | None = Field(default=None, max_length=255)
+    owner: str | None = Field(default=None, max_length=200)
+    criticality: str | None = Field(default=None, max_length=16)
+    tags: list[str] = Field(default_factory=list)
+    groups: list[ScannerGroupRef] = Field(default_factory=list)
+    os_guess: str | None = Field(default=None, max_length=200)
+    os_family: str | None = Field(default=None, max_length=32)
+    os_family_label: str | None = Field(default=None, max_length=100)
+    findings_total: int = 0
+    source: str = "manual"
+    last_seen_at: datetime | None = None

@@ -4,6 +4,8 @@ import { RequireAuth, RequirePerm } from "./lib/auth";
 import { ProjectProvider } from "./lib/project";
 import { AuditPage } from "./pages/AuditPage";
 import { LoginPage } from "./pages/LoginPage";
+import { ObjectPage } from "./pages/ObjectPage";
+import { ObjectsPage } from "./pages/ObjectsPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { RefsPage } from "./pages/RefsPage";
@@ -40,6 +42,22 @@ export function App() {
           element={
             <RequirePerm perm="view">
               <ProjectPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="objects"
+          element={
+            <RequirePerm perm="view">
+              <ObjectsPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="objects/:id"
+          element={
+            <RequirePerm perm="view">
+              <ObjectPage />
             </RequirePerm>
           }
         />

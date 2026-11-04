@@ -20,10 +20,11 @@ import httpx
 from pydantic import TypeAdapter, ValidationError
 
 from app.core.config import Settings, get_settings
-from app.integrations.scanner.schemas import ScannerProfile
+from app.integrations.scanner.schemas import ScannerAsset, ScannerProfile
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 _PROFILES = TypeAdapter(list[ScannerProfile])
+_ASSETS = TypeAdapter(list[ScannerAsset])
 
 
 class ScannerError(Exception):
@@ -40,6 +41,8 @@ class ScannerClient(Protocol):
     source: str
 
     def compliance_profiles(self) -> list[ScannerProfile]: ...
+
+    def assets(self, engagement_id: int) -> list[ScannerAsset]: ...
 
 
 def _parse_profiles(data: Any) -> list[ScannerProfile]:
@@ -76,6 +79,20 @@ def _parse_profiles(data: Any) -> list[ScannerProfile]:
     return profiles
 
 
+def _parse_assets(data: Any, engagement_id: int) -> list[ScannerAsset]:
+    try:
+        assets = _ASSETS.validate_python(data)
+    except ValidationError as e:
+        first = e.errors()[0]
+        where = ".".join(str(x) for x in first["loc"])
+        raise ScannerError(
+            f"«Сканер» вернул неожиданный ответ на GET /engagements/{engagement_id}/assets "
+            f"({where}: {first['msg']})",
+            code="scanner_bad_response",
+        ) from e
+    return assets
+
+
 class FixtureScannerClient:
     mode = "fixture"
 
@@ -90,6 +107,17 @@ class FixtureScannerClient:
         except (OSError, ValueError) as e:
             raise ScannerError(f"Фикстура «Сканера» не читается: {path.name}") from e
         return _parse_profiles(data)
+
+    def assets(self, engagement_id: int) -> list[ScannerAsset]:
+        """Активы демо-договора; номер engagement подставляется запрошенный."""
+        path = self.directory / "engagement_assets.json"
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            raise ScannerError(f"Фикстура «Сканера» не читается: {path.name}") from e
+        if isinstance(data, list):
+            data = [{**a, "engagement_id": engagement_id} for a in data]
+        return _parse_assets(data, engagement_id)
 
 
 class LiveScannerClient:
@@ -157,7 +185,7 @@ class LiveScannerClient:
         if r.status_code >= 400:
             raise ScannerError(f"«Сканер» ответил {r.status_code} на {what}")
 
-    def _get(self, path: str) -> Any:
+    def _get(self, path: str, not_found: str | None = None) -> Any:
         self.ensure_configured()
         try:
             with self._client() as http:
@@ -184,6 +212,8 @@ class LiveScannerClient:
                 "(нужна роль auditor)",
                 code="scanner_auth",
             )
+        if r.status_code == 404 and not_found:
+            raise ScannerError(not_found, code="scanner_not_found")
         self._check(r, f"GET {path}")
         try:
             return r.json()
@@ -194,6 +224,13 @@ class LiveScannerClient:
 
     def compliance_profiles(self) -> list[ScannerProfile]:
         return _parse_profiles(self._get("/compliance/profiles"))
+
+    def assets(self, engagement_id: int) -> list[ScannerAsset]:
+        data = self._get(
+            f"/engagements/{engagement_id}/assets",
+            not_found=f"В «Сканере» нет проекта (engagement) №{engagement_id}",
+        )
+        return _parse_assets(data, engagement_id)
 
 
 def get_scanner_client() -> ScannerClient:

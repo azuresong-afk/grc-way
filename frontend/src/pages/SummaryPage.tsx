@@ -1,15 +1,32 @@
 import { AlertTriangle, FolderOpen, Layers } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { EmptyState } from "../components/EmptyState";
-import { apiGet } from "../lib/api";
+import { Loading } from "../components/Status";
+import { apiGet, apiPage, query } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { KIND_LABELS, type ObjectBrief } from "../lib/objects";
 import { useProject } from "../lib/project";
 
 export function SummaryPage() {
   const { can } = useAuth();
   const { current } = useProject();
   const [apiDown, setApiDown] = useState(false);
+  const [objects, setObjects] = useState<ObjectBrief[] | null>(null);
+  const navigate = useNavigate();
+  const projectId = can("view") ? current?.id : undefined;
+
+  useEffect(() => {
+    if (!projectId) return;
+    let alive = true;
+    setObjects(null);
+    apiPage<ObjectBrief>(`/projects/${projectId}/objects${query({ status: "active", limit: 200 })}`)
+      .then((p) => alive && setObjects(p.items))
+      .catch(() => alive && setObjects([]));
+    return () => {
+      alive = false;
+    };
+  }, [projectId]);
 
   useEffect(() => {
     let alive = true;
@@ -40,6 +57,11 @@ export function SummaryPage() {
       <section className="card">
         <div className="card-head">
           <h2>Объекты проекта</h2>
+          {projectId && (
+            <Link className="btn btn-sm" to="/objects">
+              Все объекты
+            </Link>
+          )}
         </div>
         {!can("view") ? (
           <EmptyState
@@ -48,11 +70,49 @@ export function SummaryPage() {
             text="Администратор управляет пользователями и справочниками; объекты проектов ему не видны."
           />
         ) : current ? (
-          <EmptyState
-            icon={<Layers size={21} />}
-            title="Объектов пока нет"
-            text="Информационные системы проекта появятся здесь, когда будет готов раздел «Объекты»."
-          />
+          objects === null ? (
+            <Loading />
+          ) : objects.length === 0 ? (
+            <EmptyState
+              icon={<Layers size={21} />}
+              title="Объектов пока нет"
+              text="Заведите информационные системы проекта: ГИС, ИСПДн, объекты КИИ."
+              action={
+                <Link className="btn btn-primary" to="/objects">
+                  К объектам
+                </Link>
+              }
+            />
+          ) : (
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Объект</th>
+                    <th>Вид</th>
+                    <th>Режим</th>
+                    <th className="num">Хосты</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {objects.map((o) => (
+                    <tr key={o.id} className="clickable" onClick={() => navigate(`/objects/${o.id}`)}>
+                      <td>
+                        <Link to={`/objects/${o.id}`} className="cell-title">
+                          {o.name}
+                        </Link>
+                      </td>
+                      <td>
+                        <span className="tag">{KIND_LABELS[o.kind]}</span>
+                      </td>
+                      <td>{o.regime ? `№${o.regime}` : "—"}</td>
+                      <td className="num">{o.host_count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
         ) : (
           <EmptyState
             icon={<FolderOpen size={21} />}
