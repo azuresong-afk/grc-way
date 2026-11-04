@@ -1,0 +1,118 @@
+/* Дизайн-токены: тёмная тема по умолчанию, светлая — data-theme="light". */
+:root {
+  color-scheme: dark;
+  --bg: #0b0f14;
+  --surface: #121821;
+  --surface-2: #18202b;
+  --surface-3: #1f2834;
+  --sidebar: #0f141b;
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --text: #e6eaf0;
+  --text-2: #a3adbb;
+  --text-3: #7d8794;
+  --accent: #2f7bea;
+  --accent-hover: #4a8ef0;
+  --accent-text: #7db8ff;
+  --accent-soft: rgba(76, 158, 255, 0.13);
+  --grid: #222b36;
+  --axis: #36404d;
+
+  --sev-critical: #e5484d;
+  --sev-high: #f07f4a;
+  --sev-medium: #f2b53a;
+  --sev-low: #5b9cf5;
+  --sev-info: #6b7480;
+  --sev-critical-text: #ff8a8e;
+  --sev-high-text: #f7a27a;
+  --sev-medium-text: #f5c96a;
+  --sev-low-text: #8dbbfa;
+  --sev-info-text: #a3adbb;
+
+  --ok: #4cc38a;
+  --ok-soft: rgba(48, 164, 108, 0.15);
+  --warn: #f7a27a;
+  --warn-soft: rgba(240, 127, 74, 0.15);
+  --danger: #ff8a8e;
+  --danger-soft: rgba(229, 72, 77, 0.15);
+  --info-soft: rgba(76, 158, 255, 0.14);
+  --muted-soft: rgba(139, 149, 163, 0.15);
+
+  --series-1: #4c9eff;
+  --series-2: #f07f4a;
+
+  --heat-1: #184f95;
+  --heat-2: #1c5cab;
+  --heat-3: #2a78d6;
+  --heat-4: #5598e7;
+  --heat-ink-light: #ffffff;
+  --heat-ink-dark: #ffffff;
+
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  /* Угловатый вариант (решение заказчика 04.11.2026). Скруглённый вариант
+     «Сканера» — --radius: 12px; --radius-sm: 8px; --radius-xs: 4px. */
+  --radius: 4px;
+  --radius-sm: 2px;
+  --radius-xs: 2px;
+  --font: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Пропорции по золотому сечению (φ ≈ 1,618). Отступы — ряд Фибоначчи:
+     каждый следующий ≈ предыдущий × φ. */
+  --s1: 8px;
+  --s2: 13px;
+  --s3: 21px;
+  --s4: 34px;
+  --s5: 55px;
+  /* Рабочая колонка 1618 px = 1000 × φ: на широких мониторах (27" и больше)
+     контент и верхняя панель центрируются в ней, а не прижимаются к левому краю. */
+  --content-max: 1618px;
+  --gutter: var(--s4);
+  --gutter-x: max(var(--gutter), calc((100% - var(--content-max)) / 2 + var(--gutter)));
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #f6f7f9;
+  --surface-3: #eceff3;
+  --sidebar: #ffffff;
+  --border: #e3e7ec;
+  --border-strong: #cbd2db;
+  --text: #0f172a;
+  --text-2: #475569;
+  --text-3: #64748b;
+  --accent: #1d5fd8;
+  --accent-hover: #1a4fb5;
+  --accent-text: #1d5fd8;
+  --accent-soft: #eaf1ff;
+  --grid: #eceef2;
+  --axis: #cbd2db;
+
+  --sev-critical-text: #b91c1c;
+  --sev-high-text: #c2410c;
+  --sev-medium-text: #92600a;
+  --sev-low-text: #1d5fd8;
+  --sev-info-text: #475569;
+
+  --ok: #15803d;
+  --ok-soft: #dcfce7;
+  --warn: #c2410c;
+  --warn-soft: #ffedd5;
+  --danger: #b91c1c;
+  --danger-soft: #fee2e2;
+  --info-soft: #dbeafe;
+  --muted-soft: #f1f5f9;
+
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+
+  --heat-1: #cde2fb;
+  --heat-2: #9ec5f4;
+  --heat-3: #5598e7;
+  --heat-4: #256abf;
+  --heat-ink-light: #0b2a55;
+  --heat-ink-dark: #ffffff;
+
+  --shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+}
