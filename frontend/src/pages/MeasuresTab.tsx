@@ -1,7 +1,9 @@
 import {
+  BadgeCheck,
   CheckCheck,
   History,
   ListChecks,
+  Paperclip,
   Plus,
   RefreshCw,
   Search,
@@ -23,6 +25,7 @@ import { ErrorAlert, Loading } from "../components/Status";
 import { VerifyBadge } from "../components/VerifyBadge";
 import { apiGet, apiSend } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { awaitsConfirmation } from "../lib/evidence";
 import { formatDateTime, formatNumber } from "../lib/format";
 import {
   ADAPTATION_STATUS_LABELS,
@@ -44,12 +47,14 @@ import {
 } from "../lib/measures";
 import type { ObjectFull } from "../lib/objects";
 import { useProject } from "../lib/project";
+import { ConfirmSection, ManualEvidenceSection } from "./ManualEvidence";
 import { MeasureEvidence, ScannerCard } from "./ScannerResults";
 
 type Filter =
   | "all"
   | "unassessed"
   | "manual"
+  | "unconfirmed"
   | "differs"
   | "adapted"
   | "review";
@@ -57,6 +62,7 @@ const FILTERS: [Filter, string][] = [
   ["all", "Все"],
   ["unassessed", "Не оценены"],
   ["manual", "Требуют ручной оценки"],
+  ["unconfirmed", "Ждут подтверждения"],
   ["differs", "Расходятся со «Сканером»"],
   ["adapted", "Адаптация"],
   ["review", "Требуют сверки"],
@@ -120,13 +126,15 @@ export function MeasuresTab({
     return (items ?? []).filter((m) => {
       if (group && m.group_code !== group) return false;
       if (filter === "unassessed" && m.status !== "unassessed") return false;
+      // Организационная мера ждёт ручной оценки, пока её не подтвердили.
       if (
         filter === "manual" &&
         (m.method !== "manual" ||
-          m.status !== "unassessed" ||
+          m.confirmed_at !== null ||
           m.adaptation === "excluded")
       )
         return false;
+      if (filter === "unconfirmed" && !awaitsConfirmation(m)) return false;
       if (filter === "differs" && !differsFromScanner(m)) return false;
       if (
         filter === "adapted" &&
@@ -159,6 +167,7 @@ export function MeasuresTab({
   const canAssess = editable && can("assessment.edit");
   const canApprove = editable && can("approve");
   const canImport = editable && can("scanner.import");
+  const canUpload = editable && can("evidence.upload");
 
   if (set.state === "no_regime" || set.state === "no_profile") {
     return (
@@ -255,7 +264,16 @@ export function MeasuresTab({
           )}
 
           <div className="measure-kpis">
-            <StatCard title="Всего" bucket={set.stats?.total} accent />
+            <StatCard
+              title="Всего"
+              bucket={set.stats?.total}
+              accent
+              extra={
+                set.confirmed + set.to_confirm > 0
+                  ? `подтверждено ${formatNumber(set.confirmed)}${set.to_confirm ? ` · ждут подтверждения ${formatNumber(set.to_confirm)}` : ""}`
+                  : undefined
+              }
+            />
             <StatCard
               title="Автоматически"
               hint="меры с проверками «Сканера»"
@@ -429,6 +447,7 @@ export function MeasuresTab({
           projectId={obj.project_id}
           canAdapt={canAdapt}
           canAssess={canAssess}
+          canUpload={canUpload}
           onClose={() => setOpened(null)}
           onChanged={() => reload()}
           onRemoved={() => {
@@ -448,11 +467,13 @@ function StatCard({
   hint,
   bucket,
   accent,
+  extra,
 }: {
   title: string;
   hint?: string;
   bucket: StatsBucket | undefined;
   accent?: boolean;
+  extra?: string;
 }) {
   const parts = bucket ? barParts(bucket) : [];
   return (
@@ -486,6 +507,11 @@ function StatCard({
           {bucket.excluded > 0 && ` · ${formatNumber(bucket.excluded)} искл.`}
           {bucket.not_applicable > 0 &&
             ` · ${formatNumber(bucket.not_applicable)} не примен.`}
+        </span>
+      )}
+      {extra && (
+        <span className="kpi-delta confirmed-mark">
+          <BadgeCheck size={13} aria-hidden="true" /> {extra}
         </span>
       )}
     </div>
@@ -587,6 +613,14 @@ function MeasureRow({
         ) : (
           <span className="pill pill-muted">{METHOD_LABELS[m.method]}</span>
         )}
+        {m.manual_evidence > 0 && (
+          <div
+            className="cell-sub evidence-count"
+            title="Ручные доказательства"
+          >
+            <Paperclip size={12} aria-hidden="true" /> {m.manual_evidence}
+          </div>
+        )}
       </td>
       <td className="nowrap">
         {excluded ? (
@@ -610,8 +644,13 @@ function MeasureRow({
             {STATUS_LABELS[m.status]}
           </span>
         )}
-        {m.status_source === "auto" && !excluded && (
-          <div className="cell-sub">по «Сканеру»</div>
+        {m.confirmed_at && !excluded ? (
+          <div className="cell-sub confirmed-mark">
+            <BadgeCheck size={12} aria-hidden="true" /> подтверждена
+          </div>
+        ) : (
+          m.status_source === "auto" &&
+          !excluded && <div className="cell-sub">по «Сканеру»</div>
         )}
         {differsFromScanner(m) && m.auto_status && (
           <div className="cell-sub status-differs">
@@ -1084,6 +1123,7 @@ function MeasureDrawer({
   projectId,
   canAdapt,
   canAssess,
+  canUpload,
   onClose,
   onChanged,
   onRemoved,
@@ -1093,6 +1133,7 @@ function MeasureDrawer({
   projectId: string;
   canAdapt: boolean;
   canAssess: boolean;
+  canUpload: boolean;
   onClose: () => void;
   onChanged: () => void;
   onRemoved: () => void;
@@ -1365,6 +1406,12 @@ function MeasureDrawer({
         <MeasureEvidence m={m} canAssess={canAssess} onChanged={onChanged} />
       )}
 
+      <ManualEvidenceSection
+        m={m}
+        canUpload={canUpload}
+        onChanged={onChanged}
+      />
+
       <div className="drawer-section">
         <h3>Оценка</h3>
         {canAssess ? (
@@ -1439,6 +1486,8 @@ function MeasureDrawer({
           </dl>
         )}
       </div>
+
+      <ConfirmSection m={m} canAssess={canAssess} onChanged={onChanged} />
     </Drawer>
   );
 }

@@ -20,7 +20,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import audit
@@ -33,6 +33,7 @@ from app.db.models import (
     Adaptation,
     AssessedObject,
     Classification,
+    Evidence,
     ObjectMeasure,
     Project,
     RefGroup,
@@ -41,6 +42,7 @@ from app.db.models import (
     User,
     utcnow,
 )
+from app.domain import confirmation
 from app.domain.measures import (
     AdaptationError,
     Current,
@@ -58,6 +60,7 @@ router = APIRouter(tags=["measures"])
 Viewer = Annotated[User, Depends(require(Perm.VIEW))]
 Adapter = Annotated[User, Depends(require(Perm.ADAPTATION_EDIT))]
 Approver = Annotated[User, Depends(require(Perm.APPROVE))]
+Assessor = Annotated[User, Depends(require(Perm.ASSESSMENT_EDIT))]
 
 REGIME_PROFILE = {"117": "fstec-117", "21": "fstec-21", "239": "fstec-239"}
 
@@ -100,6 +103,13 @@ class MeasureOut(BaseModel):
     auto_status: str | None
     auto_note: str | None
     auto_snapshot_id: uuid.UUID | None
+    # Подтверждение итогового статуса испытателем (app/domain/confirmation.py).
+    confirmed_at: datetime | None = None
+    confirmed_by_name: str | None = None
+    confirmed_status: str | None = None
+    confirm_comment: str | None = None
+    # Действующие ручные доказательства (файлы, интервью, осмотры).
+    manual_evidence: int = 0
     updated_at: datetime
 
 
@@ -200,6 +210,9 @@ class MeasureSetOut(BaseModel):
     approve_blockers: list[str]
     # Текущий снимок результата прогона «Сканера» (app/api/scanner_import.py).
     snapshot: SnapshotBrief | None = None
+    # Подтверждение: сколько мер подтверждено и сколько оценено, но ещё не подтверждено.
+    confirmed: int = 0
+    to_confirm: int = 0
 
 
 class RebuildIn(BaseModel):
@@ -220,6 +233,12 @@ class MeasurePatch(BaseModel):
     use_auto: bool = False
     owner_id: uuid.UUID | None = None
     comment: str | None = Field(default=None, max_length=4000)
+
+
+class ConfirmIn(BaseModel):
+    comment: str | None = Field(default=None, max_length=2000)
+    # Подтверждаемый статус — защита от гонки с правкой.
+    status: Status | None = None
 
 
 class ApproveIn(BaseModel):
@@ -430,6 +449,7 @@ def _measure_out(
     refs: dict[str, RefMeasure],
     items: list[Item],
     names: dict[uuid.UUID, str],
+    evidence: dict[uuid.UUID, int] | None = None,
 ) -> MeasureOut:
     ref = refs.get(m.measure_id)
     if ref is not None and ref.profile_id != m.profile_id:
@@ -465,7 +485,38 @@ def _measure_out(
         auto_status=m.auto_status,
         auto_note=m.auto_note,
         auto_snapshot_id=m.auto_snapshot_id,
+        confirmed_at=m.confirmed_at,
+        confirmed_by_name=m.confirmed_by_name,
+        confirmed_status=m.confirmed_status,
+        confirm_comment=m.confirm_comment,
+        manual_evidence=(evidence or {}).get(m.id, 0),
         updated_at=m.updated_at,
+    )
+
+
+def _evidence_counts(session: Session, ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+    if not ids:
+        return {}
+    rows = session.execute(
+        select(Evidence.object_measure_id, func.count())
+        .where(
+            Evidence.object_measure_id.in_(ids),
+            Evidence.kind.in_(confirmation.MANUAL_KINDS),
+            Evidence.withdrawn_at.is_(None),
+        )
+        .group_by(Evidence.object_measure_id)
+    )
+    return {mid: int(n) for mid, n in rows}
+
+
+def _out_one(session: Session, obj: AssessedObject, m: ObjectMeasure) -> MeasureOut:
+    measures = _measures(session, obj)
+    return _measure_out(
+        m,
+        _refs_by_id(session, obj),
+        _items(measures),
+        _names(session, [m]),
+        _evidence_counts(session, [m.id]),
     )
 
 
@@ -662,6 +713,12 @@ def measure_set(object_id: uuid.UUID, user: Viewer, session: DbSession) -> Measu
         ),
         approve_blockers=_blockers(session, obj, a, measures, class_changed, rebuild_needed),
         snapshot=snapshot_brief(session, obj),
+        confirmed=sum(1 for m in measures if m.confirmed_at is not None),
+        to_confirm=sum(
+            1
+            for m in measures
+            if m.confirmed_at is None and m.status != "unassessed" and m.adaptation != "excluded"
+        ),
     )
 
 
@@ -676,6 +733,7 @@ def list_measures(
     method: Literal["auto", "manual", "mixed"] | None = None,
     adaptation: Literal["none", "excluded", "compensated", "added", "any"] | None = None,
     needs_review: bool | None = None,
+    confirmed: bool | None = None,
     q: str | None = Query(default=None, max_length=200),
     limit: int = Query(default=500, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
@@ -685,7 +743,8 @@ def list_measures(
     refs = _refs_by_id(session, obj)
     items = _items(measures)
     names = _names(session, measures)
-    out = [_measure_out(m, refs, items, names) for m in measures]
+    counts = _evidence_counts(session, [m.id for m in measures])
+    out = [_measure_out(m, refs, items, names, counts) for m in measures]
 
     def keep(m: MeasureOut) -> bool:
         if group and m.group_code != group:
@@ -701,6 +760,8 @@ def list_measures(
         if adaptation in ("none", "excluded", "compensated") and m.adaptation != adaptation:
             return False
         if needs_review is not None and m.verified == needs_review:
+            return False
+        if confirmed is not None and (m.confirmed_at is not None) != confirmed:
             return False
         if q:
             needle = q.casefold()
@@ -881,8 +942,7 @@ def add_measure(
         },
     )
     session.commit()
-    measures = _measures(session, obj)
-    return _measure_out(m, _refs_by_id(session, obj), _items(measures), _names(session, [m]))
+    return _out_one(session, obj, m)
 
 
 @router.delete("/object-measures/{measure_id}", status_code=204)
@@ -970,6 +1030,8 @@ def update_measure(
             changes["adaptation_version"] = a.version
             m.adapted_at = now
             m.adapted_by_name = user.display_name
+            if m.adaptation == "excluded" and confirmation.clear(m):
+                changes["confirmation_reset"] = True
 
     assess: dict[str, Any] = {}
     if body.use_auto:
@@ -1002,6 +1064,8 @@ def update_measure(
         if comment != m.comment:
             assess["comment"] = True
             m.comment = comment
+    if "status" in assess and confirmation.clear(m):
+        assess["confirmation_reset"] = True
     changes.update(assess)
 
     if changes:
@@ -1018,8 +1082,7 @@ def update_measure(
             details={"object_id": str(obj.id), "measure_id": m.measure_id, **changes},
         )
         session.commit()
-    measures = _measures(session, obj)
-    return _measure_out(m, _refs_by_id(session, obj), _items(measures), _names(session, [m]))
+    return _out_one(session, obj, m)
 
 
 def _apply_adaptation(
@@ -1080,6 +1143,64 @@ def _apply_adaptation(
         "reason": reason,
         "compensating": compensating,
     }
+
+
+@router.post("/object-measures/{measure_id}/confirm", response_model=MeasureOut)
+def confirm_measure(
+    measure_id: uuid.UUID,
+    body: ConfirmIn,
+    request: Request,
+    user: Assessor,
+    session: DbSession,
+) -> MeasureOut:
+    """«Подтвердить»: испытатель фиксирует итоговый статус меры и доказательства,
+    на которые он опирается (правила — app/domain/confirmation.py)."""
+    from app.api.evidence import confirmation_basis
+
+    m = _get_measure(session, measure_id, user)
+    obj = session.get(AssessedObject, m.object_id)
+    assert obj is not None  # noqa: S101 — внешний ключ
+    _editable(session, obj)
+    if body.status is not None and body.status != m.status:
+        raise HTTPException(
+            409,
+            detail="Статус меры изменился, пока вы её смотрели — обновите карточку",
+            headers={"X-Error-Code": "status_changed"},
+        )
+    comment = (body.comment or "").strip() or None
+    basis = confirmation_basis(session, m, obj)
+    reason = confirmation.blocker(m, basis, comment or m.comment)
+    if reason:
+        raise HTTPException(409, detail=reason, headers={"X-Error-Code": "cannot_confirm"})
+    now = utcnow()
+    ids = confirmation.evidence_ids(m, basis)
+    m.confirmed_at = now
+    m.confirmed_by = user.id
+    m.confirmed_by_name = user.display_name
+    m.confirmed_status = m.status
+    m.confirm_comment = comment
+    m.confirmed_evidence = ids
+    m.updated_at = now
+    m.updated_by = user.id
+    audit.record(
+        session,
+        action="measures.confirm",
+        actor=user,
+        entity="object_measure",
+        entity_id=m.id,
+        project_id=obj.project_id,
+        ip=client_ip(request),
+        details={
+            "object_id": str(obj.id),
+            "measure_id": m.measure_id,
+            "status": m.status,
+            "status_source": m.status_source,
+            "evidence": ids,
+            "comment": comment,
+        },
+    )
+    session.commit()
+    return _out_one(session, obj, m)
 
 
 @router.get("/objects/{object_id}/adaptations", response_model=list[AdaptationOut])

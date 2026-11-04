@@ -9,8 +9,9 @@
   создаёт новый, прежние остаются. Текущий снимок объекта — последний.
 - По снимку каждая мера с проверками «Сканера» получает предложение статуса и
   доказательство (app/domain/assessment.py). Статус автоматической меры, который
-  не ставили вручную, принимает предложение; поставленный вручную не трогается —
-  расхождение видно в карточке меры.
+  не ставили вручную и не подтверждал испытатель, принимает предложение;
+  поставленный вручную или подтверждённый не трогается — расхождение видно
+  в карточке меры.
 - Импорт выполняется в запросе: это несколько GET к «Сканеру»; таблица jobs
   появится вместе с долгими задачами (генерация документов).
 """
@@ -119,17 +120,6 @@ class ImportOut(BaseModel):
     kept_manual: int
 
 
-class EvidenceOut(BaseModel):
-    id: uuid.UUID
-    kind: str
-    status: str | None
-    summary: str
-    data: dict[str, Any]
-    snapshot: SnapshotBrief | None
-    created_at: datetime
-    created_by_name: str | None
-
-
 # ---------- Общие функции ----------
 
 
@@ -208,6 +198,11 @@ def _evidence_data(
         "recommendations": (control or {}).get("recommendations") or [],
         "host_counts": (control or {}).get("hosts") or {},
     }
+
+
+def _follows_scanner(m: ObjectMeasure) -> bool:
+    """Статус меры берётся из предложения «Сканера»: не ставился вручную и не подтверждён."""
+    return m.method == "auto" and m.status_source != "manual" and m.confirmed_at is None
 
 
 def _hash(*parts: Any) -> str:
@@ -370,9 +365,9 @@ def import_run(
         results.append((m, result, control))
         summary["measures"] += 1
         summary[result.status] += 1
-        if m.method == "auto" and m.status_source != "manual":
+        if _follows_scanner(m):
             summary["applied"] += int(m.status != result.status)
-        elif m.status_source == "manual" and m.status != result.status:
+        elif m.status != result.status:
             summary["kept_manual"] += 1
     snapshot.summary = summary
     # Снимок неизменяем: пишем его целиком до ссылок на него из мер и доказательств.
@@ -401,7 +396,7 @@ def import_run(
         m.auto_note = result.note
         m.auto_snapshot_id = snapshot.id
         m.updated_at = now
-        if m.method == "auto" and m.status_source != "manual":
+        if _follows_scanner(m):
             if m.status != result.status:
                 changed.append({"measure_id": m.measure_id, "status": [m.status, result.status]})
                 m.status = result.status
@@ -494,44 +489,3 @@ def get_snapshot(snapshot_id: uuid.UUID, user: Viewer, session: DbSession) -> Sn
         coverage_hosts=cov_hosts,
         missing_hosts=[h for h in s.object_hosts or [] if h not in seen],
     )
-
-
-@router.get("/object-measures/{measure_id}/evidence", response_model=list[EvidenceOut])
-def list_evidence(measure_id: uuid.UUID, user: Viewer, session: DbSession) -> list[EvidenceOut]:
-    m = session.get(ObjectMeasure, measure_id)
-    if m is None:
-        raise HTTPException(404, detail="Мера не найдена")
-    try:
-        obj = get_object_for(session, m.object_id, user)
-    except HTTPException as e:
-        raise HTTPException(404, detail="Мера не найдена") from e
-    latest = _latest_snapshot(session, obj)
-    rows = list(
-        session.scalars(
-            select(Evidence)
-            .where(Evidence.object_measure_id == m.id)
-            .order_by(Evidence.created_at.desc())
-        )
-    )
-    snaps = {
-        s.id: s
-        for s in session.scalars(
-            select(ScannerSnapshot).where(
-                ScannerSnapshot.id.in_({e.snapshot_id for e in rows if e.snapshot_id})
-            )
-        )
-    }
-    current = latest.id if latest else None
-    return [
-        EvidenceOut(
-            id=e.id,
-            kind=e.kind,
-            status=e.status,
-            summary=e.summary,
-            data=e.data or {},
-            snapshot=_brief(snaps[e.snapshot_id], current) if e.snapshot_id in snaps else None,
-            created_at=e.created_at,
-            created_by_name=e.created_by_name,
-        )
-        for e in rows
-    ]
