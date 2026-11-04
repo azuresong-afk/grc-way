@@ -220,7 +220,7 @@ code,
   border-bottom: 1px solid var(--border);
 }
 
-.topbar-burger {
+.icon-btn.topbar-burger {
   display: none;
 }
 
@@ -911,6 +911,48 @@ fieldset.field {
   flex: none;
 }
 
+/* ---------- Проекты ---------- */
+
+.topbar-project {
+  width: auto;
+  min-width: 0;
+  max-width: 320px;
+  text-overflow: ellipsis;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s2);
+}
+
+.props {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--s1) var(--s3);
+  margin: 0;
+}
+
+.props dt {
+  color: var(--text-3);
+}
+
+.props dd {
+  margin: 0;
+}
+
+.member-list {
+  margin: 0;
+  padding: var(--s1) 0;
+  list-style: none;
+}
+
+.member-list li {
+  display: flex;
+  flex-direction: column;
+  padding: var(--s1) 20px;
+}
+
 /* ---------- Адаптивность ---------- */
 
 @media (max-width: 960px) {
@@ -940,7 +982,7 @@ fieldset.field {
     background: var(--muted-soft);
   }
 
-  .topbar-burger {
+  .icon-btn.topbar-burger {
     display: inline-grid;
   }
 
@@ -950,6 +992,16 @@ fieldset.field {
 
   .row-phi {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .topbar-project {
+    width: 100%;
+    max-width: none;
+    flex: 1 1 0;
+  }
+
+  .topbar-search {
+    display: none;
   }
 }
 
@@ -961,6 +1013,11 @@ fieldset.field {
   .actions,
   .actions .btn {
     width: 100%;
+  }
+
+  .form-row,
+  .props {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

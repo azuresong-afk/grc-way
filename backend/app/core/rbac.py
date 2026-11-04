@@ -31,6 +31,7 @@ class Perm(StrEnum):
     AUDIT_VIEW = "audit.view"
 
     VIEW = "view"
+    PROJECTS_MANAGE = "projects.manage"
     OBJECTS_EDIT = "objects.edit"
     CLASSIFICATION_EDIT = "classification.edit"
     ADAPTATION_EDIT = "adaptation.edit"
@@ -58,6 +59,7 @@ ROLE_PERMS: dict[Role, frozenset[Perm]] = {
     Role.METHODOLOGIST: frozenset(
         {
             *_COMMON_VIEW,
+            Perm.PROJECTS_MANAGE,
             Perm.OBJECTS_EDIT,
             Perm.CLASSIFICATION_EDIT,
             Perm.ADAPTATION_EDIT,

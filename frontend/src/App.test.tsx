@@ -17,7 +17,20 @@ const METHODOLOGIST = {
   id: "u2",
   display_name: "Иванова А. А.",
   roles: ["methodologist", "approve"],
-  permissions: ["view", "objects.edit", "approve"],
+  permissions: ["view", "projects.manage", "objects.edit", "approve"],
+};
+
+const PROJECT = {
+  customer_id: "c1",
+  client: "ГБУ «Центр»",
+  contract_ref: "Д-17/2026",
+  period_from: "2026-11-01",
+  period_to: "2027-02-28",
+  status: "active",
+  scanner_engagement_id: 3,
+  platform_project_id: null,
+  created_at: "2026-11-04T10:00:00Z",
+  members: [],
 };
 
 function renderAt(path: string) {
@@ -143,6 +156,26 @@ describe("вход и каркас", () => {
       password: "long-enough-pass",
       roles: ["assessor"],
     });
+  });
+
+  it("проекты: список, выбор в верхней полосе и ?project=", async () => {
+    sessionStorage.setItem(TOKEN_KEY, "tok");
+    const projects = [
+      { ...PROJECT, id: "p1", name: "Аттестация ГИС «Учёт»" },
+      { ...PROJECT, id: "p2", name: "ИСПДн «Кадры»" },
+    ];
+    fakeApi({
+      "GET /me": () => json(METHODOLOGIST),
+      "GET /projects": () => json(projects, 200, { "X-Total-Count": "2" }),
+    });
+    renderAt("/projects?project=p2");
+    expect(await screen.findByRole("heading", { level: 1, name: "Проекты" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "ИСПДн «Кадры»" })).toBeInTheDocument();
+    const picker = await screen.findByRole("combobox", { name: "Проект" });
+    await waitFor(() => expect(picker).toHaveValue("p2"));
+    expect(localStorage.getItem("platform.project")).toBe("p2");
+    fireEvent.change(picker, { target: { value: "p1" } });
+    expect(localStorage.getItem("platform.project")).toBe("p1");
   });
 
   it("переключает тему и запоминает выбор", async () => {

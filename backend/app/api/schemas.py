@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -68,3 +68,85 @@ class AuditOut(BaseModel):
     result: str
     ip: str | None
     details: dict[str, Any]
+
+
+INN = r"^(\d{10}|\d{12})$"
+OGRN = r"^(\d{13}|\d{15})$"
+
+
+class Contact(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    position: str | None = Field(default=None, max_length=200)
+    phone: str | None = Field(default=None, max_length=50)
+    email: str | None = Field(default=None, max_length=200)
+
+
+class CustomerIn(BaseModel):
+    name: str = Field(min_length=1, max_length=300)
+    inn: str | None = Field(default=None, pattern=INN)
+    ogrn: str | None = Field(default=None, pattern=OGRN)
+    address: str | None = Field(default=None, max_length=500)
+    contacts: list[Contact] = Field(default_factory=list, max_length=50)
+
+
+class CustomerPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=300)
+    inn: str | None = Field(default=None, pattern=INN)
+    ogrn: str | None = Field(default=None, pattern=OGRN)
+    address: str | None = Field(default=None, max_length=500)
+    contacts: list[Contact] | None = Field(default=None, max_length=50)
+
+
+class CustomerOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    inn: str | None
+    ogrn: str | None
+    address: str | None
+    contacts: list[Contact]
+    created_at: datetime
+
+
+class ProjectIn(BaseModel):
+    customer_id: uuid.UUID
+    name: str = Field(min_length=1, max_length=300)
+    contract_ref: str | None = Field(default=None, max_length=200)
+    period_from: date | None = None
+    period_to: date | None = None
+    scanner_engagement_id: int | None = Field(default=None, ge=1)
+
+
+class ProjectPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=300)
+    contract_ref: str | None = Field(default=None, max_length=200)
+    period_from: date | None = None
+    period_to: date | None = None
+    status: str | None = Field(default=None, pattern=r"^(active|archived)$")
+    scanner_engagement_id: int | None = Field(default=None, ge=1)
+
+
+class MemberOut(BaseModel):
+    id: uuid.UUID
+    display_name: str
+    roles: list[str]
+
+
+class ProjectOut(BaseModel):
+    id: uuid.UUID
+    customer_id: uuid.UUID
+    client: str
+    name: str
+    contract_ref: str | None
+    period_from: date | None
+    period_to: date | None
+    status: str
+    scanner_engagement_id: int | None
+    platform_project_id: uuid.UUID | None
+    created_at: datetime
+    members: list[MemberOut]
+
+
+class MembersIn(BaseModel):
+    user_ids: list[uuid.UUID] = Field(max_length=500)

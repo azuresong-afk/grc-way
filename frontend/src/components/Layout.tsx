@@ -1,4 +1,5 @@
 import {
+  FolderKanban,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -12,6 +13,7 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { initials } from "../lib/format";
 import { roleList } from "../lib/roles";
+import { ProjectPicker } from "./ProjectPicker";
 import { ThemeToggle } from "./ThemeToggle";
 
 interface NavItem {
@@ -22,7 +24,10 @@ interface NavItem {
 }
 
 // Пункты меню добавляются вместе с экранами (см. docs/roadmap.md, этап 1).
-const NAV: NavItem[] = [{ to: "/summary", label: "Сводка", icon: <LayoutDashboard size={18} /> }];
+const NAV: NavItem[] = [
+  { to: "/summary", label: "Сводка", icon: <LayoutDashboard size={18} /> },
+  { to: "/projects", label: "Проекты", icon: <FolderKanban size={18} />, perm: "view" },
+];
 
 const ADMIN_NAV: NavItem[] = [
   { to: "/admin/users", label: "Пользователи и роли", icon: <Users size={18} />, perm: "users.manage" },
@@ -101,6 +106,7 @@ export function Layout() {
           >
             <Menu size={18} />
           </button>
+          <ProjectPicker />
           <button type="button" className="topbar-search" disabled title="Поиск появится позже">
             <Search size={15} />
             Поиск

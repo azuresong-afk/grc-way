@@ -1,18 +1,21 @@
-import { AlertTriangle, CheckCircle2, FolderOpen } from "lucide-react";
+import { AlertTriangle, FolderOpen, Layers } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { EmptyState } from "../components/EmptyState";
 import { apiGet } from "../lib/api";
-
-type ApiState = "loading" | "ok" | "error";
+import { useAuth } from "../lib/auth";
+import { useProject } from "../lib/project";
 
 export function SummaryPage() {
-  const [api, setApi] = useState<ApiState>("loading");
+  const { can } = useAuth();
+  const { current } = useProject();
+  const [apiDown, setApiDown] = useState(false);
 
   useEffect(() => {
     let alive = true;
     apiGet<{ status: string }>("/health/ready")
-      .then((r) => alive && setApi(r.status === "ok" ? "ok" : "error"))
-      .catch(() => alive && setApi("error"));
+      .then((r) => alive && setApiDown(r.status !== "ok"))
+      .catch(() => alive && setApiDown(true));
     return () => {
       alive = false;
     };
@@ -22,21 +25,15 @@ export function SummaryPage() {
     <>
       <div className="page-head">
         <div>
-          <div className="crumbs">Аттестация</div>
+          <div className="crumbs">{current ? `${current.client} · ${current.name}` : "Аттестация"}</div>
           <h1>Сводка</h1>
         </div>
       </div>
 
-      {api === "error" && (
+      {apiDown && (
         <div className="alert alert-danger" role="alert">
           <AlertTriangle size={15} />
           Сервер «Аттестации» недоступен. Проверьте, что сервис app запущен.
-        </div>
-      )}
-      {api === "ok" && (
-        <div className="alert alert-ok">
-          <CheckCircle2 size={15} />
-          Сервер и база данных доступны.
         </div>
       )}
 
@@ -44,11 +41,30 @@ export function SummaryPage() {
         <div className="card-head">
           <h2>Объекты проекта</h2>
         </div>
-        <EmptyState
-          icon={<FolderOpen size={21} />}
-          title="Объектов пока нет"
-          text="Проекты и объекты появятся в следующих задачах плана: сначала вход и роли, затем проекты."
-        />
+        {!can("view") ? (
+          <EmptyState
+            icon={<Layers size={21} />}
+            title="Сводка для рабочих ролей"
+            text="Администратор управляет пользователями и справочниками; объекты проектов ему не видны."
+          />
+        ) : current ? (
+          <EmptyState
+            icon={<Layers size={21} />}
+            title="Объектов пока нет"
+            text="Информационные системы проекта появятся здесь, когда будет готов раздел «Объекты»."
+          />
+        ) : (
+          <EmptyState
+            icon={<FolderOpen size={21} />}
+            title="Нет проектов"
+            text="Начните с проекта — договора с заказчиком."
+            action={
+              <Link className="btn btn-primary" to="/projects">
+                К проектам
+              </Link>
+            }
+          />
+        )}
       </section>
     </>
   );
