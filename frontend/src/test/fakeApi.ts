@@ -13,7 +13,7 @@ export function fakeApi(routes: Record<string, Handler>) {
   const fn = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), "http://test");
     const method = (init?.method ?? "GET").toUpperCase();
-    const path = url.pathname.replace(/^\/api/, "");
+    const path = decodeURIComponent(url.pathname).replace(/^\/api/, "");
     const headers = new Headers(init?.headers);
     calls.push({
       method,

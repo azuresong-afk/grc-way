@@ -6,6 +6,7 @@ import { AuditPage } from "./pages/AuditPage";
 import { LoginPage } from "./pages/LoginPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
+import { RefsPage } from "./pages/RefsPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { SummaryPage } from "./pages/SummaryPage";
 import { UsersPage } from "./pages/UsersPage";
@@ -41,6 +42,7 @@ export function App() {
             </RequirePerm>
           }
         />
+        <Route path="refs" element={<RefsPage />} />
         <Route
           path="admin/users"
           element={

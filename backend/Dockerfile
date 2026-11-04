@@ -1,17 +1,20 @@
 FROM python:3.12-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
+    GRC_REFERENCE_DIR=/srv/reference
 WORKDIR /srv
 
 RUN groupadd --system grc && useradd --system --gid grc --home /srv grc
 
-COPY pyproject.toml ./
-COPY app ./app
+# Контекст сборки — корень репозитория (нужен каталог reference/).
+COPY backend/pyproject.toml ./
+COPY backend/app ./app
 RUN pip install .
 
-COPY alembic.ini ./
-COPY alembic ./alembic
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY backend/alembic.ini ./
+COPY backend/alembic ./alembic
+COPY reference ./reference
+COPY backend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh && mkdir -p /data && chown grc:grc /data
 
 USER grc

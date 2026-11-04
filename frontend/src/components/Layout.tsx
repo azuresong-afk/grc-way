@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   FolderKanban,
   LayoutDashboard,
   LogOut,
@@ -27,6 +28,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { to: "/summary", label: "Сводка", icon: <LayoutDashboard size={18} /> },
   { to: "/projects", label: "Проекты", icon: <FolderKanban size={18} />, perm: "view" },
+  { to: "/refs", label: "Справочники", icon: <BookOpen size={18} /> },
 ];
 
 const ADMIN_NAV: NavItem[] = [

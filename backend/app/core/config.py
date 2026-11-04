@@ -1,6 +1,7 @@
 """Настройки приложения из переменных окружения (.env)."""
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -30,6 +31,9 @@ class Settings(BaseSettings):
     # Первый администратор: создаётся при старте, если пользователей ещё нет.
     bootstrap_admin: str = "admin"
     bootstrap_admin_password: str = ""
+
+    # Каталог справочников (YAML). В Docker — /srv/reference.
+    reference_dir: Path = Path(__file__).resolve().parents[3] / "reference"
 
     # Пути, под которыми продукт виден в платформе (для манифеста).
     base_path: str = "/grc/"

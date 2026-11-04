@@ -145,3 +145,101 @@ class ProjectMember(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
+
+
+# ---------- Справочники ----------
+
+
+class RefProfile(Base):
+    """Профиль мер (нормативный документ): fstec-117, fstec-21, fstec-239, cis-*."""
+
+    __tablename__ = "ref_profiles"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    title: Mapped[str] = mapped_column(String(300))
+    short: Mapped[str] = mapped_column(String(100))
+    document: Mapped[str | None] = mapped_column(String(2000))
+    url: Mapped[str | None] = mapped_column(String(500))
+    level_label: Mapped[str | None] = mapped_column(String(100))
+    levels: Mapped[list] = mapped_column(JsonType, default=list)
+    default_level: Mapped[str | None] = mapped_column(String(16))
+    dynamic: Mapped[str | None] = mapped_column(String(64))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    source_hash: Mapped[str] = mapped_column(String(64))
+    imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class RefGroup(Base):
+    __tablename__ = "ref_groups"
+
+    profile_id: Mapped[str] = mapped_column(
+        ForeignKey("ref_profiles.id", ondelete="CASCADE"), primary_key=True
+    )
+    code: Mapped[str] = mapped_column(String(16), primary_key=True)
+    title: Mapped[str] = mapped_column(String(300))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class RefMeasure(Base):
+    """Мера или мероприятие. Идентификатор совпадает со «Сканером» (ИАФ.1, ВУ, …)."""
+
+    __tablename__ = "ref_measures"
+    __table_args__ = (Index("ix_ref_measures_group", "profile_id", "group_code"),)
+
+    profile_id: Mapped[str] = mapped_column(
+        ForeignKey("ref_profiles.id", ondelete="CASCADE"), primary_key=True
+    )
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    group_code: Mapped[str] = mapped_column(String(16))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    title: Mapped[str] = mapped_column(String(500))
+    # Текст требования из официального документа; None — текст не загружен.
+    text: Mapped[str | None] = mapped_column(String(10000))
+    levels: Mapped[list] = mapped_column(JsonType, default=list)
+    checks: Mapped[list] = mapped_column(JsonType, default=list)
+    # {document, clause, appendix, url, note}
+    source: Mapped[dict] = mapped_column(JsonType, default=dict)
+    # scanner — импорт из «Сканера»; local — правка в интерфейсе; official; stub.
+    origin: Mapped[str] = mapped_column(String(16))
+    verified_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    verified_by_name: Mapped[str | None] = mapped_column(String(200))
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+
+    @property
+    def kind(self) -> str:
+        """Техническая — есть проверки «Сканера»; организационная — проверяется вручную."""
+        return "technical" if self.checks else "organizational"
+
+
+class RefCheck(Base):
+    """Техническая проверка «Сканера» (каталог checks.yaml)."""
+
+    __tablename__ = "ref_checks"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    title: Mapped[str] = mapped_column(String(500))
+    platform: Mapped[str] = mapped_column(String(16))
+    remediation: Mapped[str | None] = mapped_column(String(4000))
+    doc: Mapped[str | None] = mapped_column(String(500))
+    # Источники проверки (openscap, lynis, windows, …) — как в «Сканере».
+    sources: Mapped[dict] = mapped_column(JsonType, default=dict)
+
+
+class RefRevision(Base):
+    """История правок записей справочника: снимок записи до изменения."""
+
+    __tablename__ = "ref_revisions"
+    __table_args__ = (Index("ix_ref_revisions_entity", "entity", "entity_key"),)
+
+    id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
+    entity: Mapped[str] = mapped_column(String(32))
+    entity_key: Mapped[str] = mapped_column(String(128))
+    revision: Mapped[int] = mapped_column(Integer)
+    data: Mapped[dict] = mapped_column(JsonType)
+    changed_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    changed_by_name: Mapped[str | None] = mapped_column(String(200))
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    comment: Mapped[str | None] = mapped_column(String(1000))

@@ -12,6 +12,7 @@ dependencies = [
   "alembic>=1.13",
   "psycopg[binary]>=3.2",
   "pyjwt>=2.8",
+  "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
