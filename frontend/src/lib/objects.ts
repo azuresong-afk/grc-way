@@ -75,6 +75,10 @@ export interface Host {
   last_seen_at: string | null;
   scanner_missing: boolean;
   synced_at: string | null;
+  // Инвентаризация для I_infr (Методика 2025): коды значений показателя K и
+  // доступность из сети «Интернет»; null — не указано.
+  component_types: string[] | null;
+  internet_exposed: boolean | null;
 }
 
 export interface Asset {
@@ -105,6 +109,78 @@ export interface SyncResult {
   missing: string[];
   segments_created: string[];
   hosts: Host[];
+}
+
+/** Тип компонента — значение показателя K таблицы 1 Методики 2025. */
+export interface ComponentType {
+  code: string;
+  short: string;
+  title: string;
+  score: number;
+}
+
+export interface Inventory {
+  methodology: {
+    id: string;
+    version: string;
+    revision: number;
+    verified: boolean;
+  };
+  hosts_total: number;
+  ready: boolean;
+  missing_type: string[];
+  missing_internet: string[];
+  internet_conflict: string[];
+  types: (ComponentType & { total: number; internet: number })[];
+}
+
+export interface InfrResult {
+  methodology: Inventory["methodology"];
+  complete: boolean;
+  inputs: Record<string, string[]>;
+  missing: { indicator: string; text: string; addresses: string[] }[];
+  by_type: {
+    code: string;
+    short: string;
+    title: string;
+    total: number;
+    vulnerable: number;
+    share: string;
+    band: string | null;
+    band_title: string | null;
+  }[];
+  exposed: string[];
+  i_infr: string | null;
+  trace: {
+    indicator: string;
+    title: string;
+    weight_symbol?: string;
+    weight?: string;
+    value?: string;
+    value_title?: string;
+    score: string;
+    product?: string;
+    rule?: string | null;
+    chosen?: { code: string; title: string; score: string }[];
+  }[];
+}
+
+export const INTERNET_LABELS = {
+  yes: "Доступен",
+  no: "Недоступен",
+  unknown: "Не указано",
+} as const;
+
+export function internetKey(v: boolean | null): keyof typeof INTERNET_LABELS {
+  return v === null ? "unknown" : v ? "yes" : "no";
+}
+
+/** Чего не хватает хосту для расчёта I_infr. */
+export function inventoryGaps(h: Pick<Host, "component_types" | "internet_exposed">): string[] {
+  const out: string[] = [];
+  if (!h.component_types?.length) out.push("тип компонента");
+  if (h.internet_exposed === null) out.push("доступность из «Интернета»");
+  return out;
 }
 
 export const KIND_LABELS: Record<Kind, string> = {

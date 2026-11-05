@@ -26,6 +26,7 @@ from app.api import (
     threat_refs,
     users,
     vuln_criticality,
+    vuln_inventory,
 )
 from app.core.config import get_settings
 from app.core.security import LoginThrottle, TokenSigner
@@ -62,6 +63,7 @@ def create_app() -> FastAPI:
         refs,
         threat_refs,
         vuln_criticality,
+        vuln_inventory,
         ref_documents,
         bdu,
         szi,

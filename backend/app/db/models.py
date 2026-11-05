@@ -366,6 +366,11 @@ class ObjectHost(Base):
     # Последняя синхронизация не нашла адрес среди активов «Сканера».
     scanner_missing: Mapped[bool] = mapped_column(Boolean, default=False)
     synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Инвентаризация для I_infr (Методика 2025, п. 14): коды типов компонента —
+    # значения показателя K справочника; доступность из сети «Интернет».
+    # NULL — не указано («Сканер» эти поля не заполняет и не меняет).
+    component_types: Mapped[list | None] = mapped_column(JsonType)
+    internet_exposed: Mapped[bool | None] = mapped_column(Boolean)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

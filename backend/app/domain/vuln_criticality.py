@@ -52,7 +52,7 @@ def _dec(value: Any, what: str) -> Decimal:
     return d
 
 
-def _fmt(d: Decimal) -> str:
+def fmt(d: Decimal) -> str:
     """Число без лишних нулей: 0.50 → 0.5, 1.0 → 1."""
     s = format(d.normalize(), "f")
     return s
@@ -81,28 +81,75 @@ def _check_levels(levels: list[dict[str, Any]]) -> None:
         if _dec(dl.get("value"), f"уровень {code}, срок") <= 0:
             raise MethodologyError(f"уровень {code}: срок должен быть больше нуля")
 
-    # Уровни покрывают всю ось без разрывов и наложений: снизу вверх каждая
-    # граница принадлежит ровно одному уровню.
-    def lower(lv: dict[str, Any]) -> Decimal:
-        return Decimal("-Infinity") if lv.get("min") is None else _dec(lv["min"], "min")
+    _check_axis(levels, what="уровни", prefix="")
 
-    ordered = sorted(levels, key=lower)
-    if ordered[0].get("min") is not None:
-        raise MethodologyError(f"уровень {ordered[0]['code']}: у нижнего уровня не должно быть min")
-    if ordered[-1].get("max") is not None:
+
+def _check_axis(items: list[dict[str, Any]], *, what: str, prefix: str) -> None:
+    """Полосы покрывают всю ось без разрывов и наложений: снизу вверх каждая
+    граница принадлежит ровно одной полосе. Ключи — {prefix}min, {prefix}max,
+    {prefix}min_inclusive, {prefix}max_inclusive."""
+    lo_k, hi_k = f"{prefix}min", f"{prefix}max"
+
+    def lower(lv: dict[str, Any]) -> Decimal:
+        return Decimal("-Infinity") if lv.get(lo_k) is None else _dec(lv[lo_k], lo_k)
+
+    ordered = sorted(items, key=lower)
+    if ordered[0].get(lo_k) is not None:
         raise MethodologyError(
-            f"уровень {ordered[-1]['code']}: у верхнего уровня не должно быть max"
+            f"{what}: у нижней полосы {ordered[0]['code']} не должно быть {lo_k}"
+        )
+    if ordered[-1].get(hi_k) is not None:
+        raise MethodologyError(
+            f"{what}: у верхней полосы {ordered[-1]['code']} не должно быть {hi_k}"
         )
     for a, b in itertools.pairwise(ordered):
-        if a.get("max") is None or b.get("min") is None:
-            raise MethodologyError(f"уровни {a['code']} и {b['code']} перекрываются")
-        if _dec(a["max"], "max") != _dec(b["min"], "min"):
-            raise MethodologyError(f"между уровнями {a['code']} и {b['code']} разрыв или наложение")
-        if bool(a.get("max_inclusive")) == bool(b.get("min_inclusive")):
+        if a.get(hi_k) is None or b.get(lo_k) is None:
+            raise MethodologyError(f"{what}: {a['code']} и {b['code']} перекрываются")
+        if _dec(a[hi_k], hi_k) != _dec(b[lo_k], lo_k):
+            raise MethodologyError(f"{what}: между {a['code']} и {b['code']} разрыв или наложение")
+        if bool(a.get(f"{hi_k}_inclusive")) == bool(b.get(f"{lo_k}_inclusive")):
             raise MethodologyError(
-                f"граница {_fmt(_dec(a['max'], 'max'))} должна относиться ровно к одному из "
-                f"уровней {a['code']} и {b['code']}"
+                f"{what}: граница {fmt(_dec(a[hi_k], hi_k))} должна относиться ровно к одному "
+                f"из интервалов {a['code']} и {b['code']}"
             )
+
+
+# Откуда значение показателя берётся у объекта (задача 2.7).
+INVENTORY = ("component_type", "vulnerable_share", "internet")
+
+
+def _check_inventory(indicators: list[dict[str, Any]]) -> None:
+    seen: dict[str, str] = {}
+    for ind in indicators:
+        role = ind.get("inventory")
+        if role is None:
+            continue
+        code = ind["code"]
+        if role not in INVENTORY:
+            raise MethodologyError(f"показатель {code}: неизвестный источник «{role}»")
+        if role in seen:
+            raise MethodologyError(
+                f"показатели {seen[role]} и {code}: один источник инвентаризации у двух показателей"
+            )
+        seen[role] = code
+        values = ind["values"]
+        if role == "component_type":
+            for v in values:
+                if not (v.get("short") or "").strip():
+                    raise MethodologyError(f"значение {v['code']}: нет короткой подписи типа")
+        elif role == "vulnerable_share":
+            for v in values:
+                for k in ("share_min", "share_max"):
+                    if v.get(k) is not None and not 0 <= _dec(v[k], f"{v['code']}, {k}") <= 100:
+                        raise MethodologyError(f"значение {v['code']}: доля от 0 до 100 %")
+            _check_axis(values, what=f"полосы доли показателя {code}", prefix="share_")
+        else:
+            flags = [v.get("internet") for v in values]
+            if sorted(flags, key=str) != [False, True]:
+                raise MethodologyError(
+                    f"показатель {code}: нужны ровно два значения — доступно и недоступно из "
+                    "сети «Интернет»"
+                )
 
 
 def validate(definition: dict[str, Any]) -> None:
@@ -140,6 +187,7 @@ def validate(definition: dict[str, Any]) -> None:
             value_codes.add(vc)
             if _dec(v.get("score"), f"значение {vc}") < 0:
                 raise MethodologyError(f"значение {vc}: оценка не может быть меньше нуля")
+    _check_inventory(indicators)
     for g in GROUPS:
         if not any(i.get("group") == g for i in indicators):
             raise MethodologyError(f"в группе {g} нет показателей")
@@ -224,6 +272,48 @@ def _level_out(lv: dict[str, Any]) -> dict[str, Any]:
     return {k: lv.get(k) for k in ("code", "title", "condition", "deadline", "source")}
 
 
+def indicator_row(ind: dict[str, Any], raw: Any) -> tuple[Decimal, dict[str, Any]]:
+    """«Вес × значение» одного показателя и строка «как посчитано».
+
+    raw — код значения или список кодов (у показателя с multiple: max берётся
+    наибольшее; при равенстве — первое по порядку таблицы)."""
+    code = ind["code"]
+    chosen = [raw] if isinstance(raw, str) else list(raw or [])
+    if not chosen:
+        raise InputError(f"не выбрано значение показателя {code} — {ind['title']}")
+    by_code = {v["code"]: v for v in ind["values"]}
+    if unknown := [c for c in chosen if c not in by_code]:
+        raise InputError(f"показатель {code}: неизвестные значения {', '.join(unknown)}")
+    chosen = list(dict.fromkeys(chosen))
+    if len(chosen) > 1 and ind.get("multiple", "single") != "max":
+        raise InputError(f"показатель {code} принимает одно значение")
+    order = [v["code"] for v in ind["values"]]
+    picked = max(
+        (by_code[c] for c in chosen),
+        key=lambda v: (_dec(v["score"], v["code"]), -order.index(v["code"])),
+    )
+    weight = _dec(ind["weight"], code)
+    score = _dec(picked["score"], picked["code"])
+    product = weight * score
+    return product, {
+        "indicator": code,
+        "group": ind["group"],
+        "title": ind["title"],
+        "weight_symbol": ind.get("weight_symbol"),
+        "weight": fmt(weight),
+        "chosen": [
+            {"code": c, "title": by_code[c]["title"], "score": fmt(_dec(by_code[c]["score"], c))}
+            for c in chosen
+        ],
+        "value": picked["code"],
+        "value_title": picked["title"],
+        "score": fmt(score),
+        "product": fmt(product),
+        "rule": "наибольшее из значений" if len(chosen) > 1 else None,
+        "source": ind.get("source") or {},
+    }
+
+
 def compute(
     definition: dict[str, Any], inputs: dict[str, Any], *, _validated: bool = False
 ) -> Outcome:
@@ -245,7 +335,7 @@ def compute(
         raise InputError("не указана базовая оценка CVSS")
     lo, hi = _dec(cvss_ref.get("min", 0), "cvss.min"), _dec(cvss_ref.get("max", 10), "cvss.max")
     if not lo <= cvss <= hi:
-        raise InputError(f"оценка CVSS должна быть от {_fmt(lo)} до {_fmt(hi)}")
+        raise InputError(f"оценка CVSS должна быть от {fmt(lo)} до {fmt(hi)}")
 
     known = {i["code"] for i in definition["indicators"]}
     if extra := set(inputs) - known - {"cvss", "certified_szi"}:
@@ -256,55 +346,14 @@ def compute(
         {
             "indicator": "cvss",
             "title": f"Уровень опасности уязвимости по CVSS {cvss_ref.get('version', '')}".strip(),
-            "score": _fmt(cvss),
+            "score": fmt(cvss),
             "source": cvss_ref.get("source") or {},
         }
     ]
     for ind in definition["indicators"]:
-        code = ind["code"]
-        raw = inputs.get(code)
-        chosen = [raw] if isinstance(raw, str) else list(raw or [])
-        if not chosen:
-            raise InputError(f"не выбрано значение показателя {code} — {ind['title']}")
-        by_code = {v["code"]: v for v in ind["values"]}
-        if unknown := [c for c in chosen if c not in by_code]:
-            raise InputError(f"показатель {code}: неизвестные значения {', '.join(unknown)}")
-        chosen = list(dict.fromkeys(chosen))
-        if len(chosen) > 1 and ind.get("multiple", "single") != "max":
-            raise InputError(f"показатель {code} принимает одно значение")
-        # Наибольшее из значений; при равенстве — первое по порядку таблицы.
-        order = [v["code"] for v in ind["values"]]
-        picked = max(
-            (by_code[c] for c in chosen),
-            key=lambda v: (_dec(v["score"], v["code"]), -order.index(v["code"])),
-        )
-        weight = _dec(ind["weight"], code)
-        score = _dec(picked["score"], picked["code"])
-        product = weight * score
+        product, row = indicator_row(ind, inputs.get(ind["code"]))
         sums[ind["group"]] += product
-        trace.append(
-            {
-                "indicator": code,
-                "group": ind["group"],
-                "title": ind["title"],
-                "weight_symbol": ind.get("weight_symbol"),
-                "weight": _fmt(weight),
-                "chosen": [
-                    {
-                        "code": c,
-                        "title": by_code[c]["title"],
-                        "score": _fmt(_dec(by_code[c]["score"], c)),
-                    }
-                    for c in chosen
-                ],
-                "value": picked["code"],
-                "value_title": picked["title"],
-                "score": _fmt(score),
-                "product": _fmt(product),
-                "rule": "наибольшее из значений" if len(chosen) > 1 else None,
-                "source": ind.get("source") or {},
-            }
-        )
+        trace.append(row)
 
     exact = cvss * sums["infr"] * (sums["at"] + sums["imp"])
     digits = (definition.get("rounding") or {}).get("digits", 2)
@@ -317,11 +366,11 @@ def compute(
         level = next(lv for lv in definition["levels"] if lv["code"] == szi_rule["level"])
     return Outcome(
         v=format(rounded, "f"),
-        v_exact=_fmt(exact),
+        v_exact=fmt(exact),
         level=_level_out(level),
         level_by_v=by_v["code"] if level is not by_v else None,
-        groups={g: _fmt(s) for g, s in sums.items()},
-        cvss=_fmt(cvss),
+        groups={g: fmt(s) for g, s in sums.items()},
+        cvss=fmt(cvss),
         trace=trace,
         certified_szi=certified,
     )

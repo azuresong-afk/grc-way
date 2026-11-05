@@ -10,6 +10,8 @@ import {
   Trash2,
   Layers,
   DownloadCloud,
+  Calculator,
+  Tags,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
@@ -27,8 +29,13 @@ import {
   KIND_LABELS,
   REGIME_LABELS,
   looksLikeIp,
+  INTERNET_LABELS,
+  internetKey,
+  inventoryGaps,
   type AssetsResponse,
+  type ComponentType,
   type Host,
+  type Inventory,
   type Interconnection,
   type Kind,
   type ObjectFull,
@@ -43,6 +50,7 @@ import { MeasuresTab } from "./MeasuresTab";
 import { SziTab } from "./SziTab";
 import { ThreatModelTab } from "./ThreatModelTab";
 import { RegimeField } from "./ObjectsPage";
+import { BulkTypeDialog, InfrDialog, InventoryCard, TypeChips, TypePicker, useComponentTypes } from "./InventoryParts";
 
 type Tab = "description" | "classification" | "measures" | "threats" | "szi" | "composition";
 const TABS: Tab[] = ["description", "classification", "measures", "threats", "szi", "composition"];
@@ -189,13 +197,7 @@ export function ObjectPage() {
         >
           Модель угроз
         </button>
-        <button
-          type="button"
-          role="tab"
-          className="tab"
-          aria-selected={tab === "szi"}
-          onClick={() => setTab("szi")}
-        >
+        <button type="button" role="tab" className="tab" aria-selected={tab === "szi"} onClick={() => setTab("szi")}>
           СЗИ
         </button>
         <button
@@ -541,7 +543,11 @@ function ObjectDialog({
                 className="select"
                 aria-label="Направление обмена"
                 value={l.direction}
-                onChange={(e) => setL(i, { direction: e.target.value as Interconnection["direction"] })}
+                onChange={(e) =>
+                  setL(i, {
+                    direction: e.target.value as Interconnection["direction"],
+                  })
+                }
               >
                 {Object.entries(DIRECTION_LABELS).map(([v, label]) => (
                   <option key={v} value={v}>
@@ -588,6 +594,8 @@ function hostsPayload(hosts: Host[]) {
       hostname: h.hostname,
       role: h.role,
       segment_id: h.segment_id,
+      component_types: h.component_types,
+      internet_exposed: h.internet_exposed,
     })),
   };
 }
@@ -613,24 +621,53 @@ function CompositionTab({
   const [hostDialog, setHostDialog] = useState<Host | "new" | null>(null);
   const [assets, setAssets] = useState(false);
   const [segments, setSegments] = useState(false);
+  const types = useComponentTypes();
+  const [inventory, setInventory] = useState<Inventory | null>(null);
+  const [gapsOnly, setGapsOnly] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [bulkType, setBulkType] = useState(false);
+  const [infr, setInfr] = useState<string[] | null>(null);
 
-  const segmentName = useMemo(
-    () => new Map(obj.segments.map((s) => [s.id, s.name])),
-    [obj.segments],
-  );
+  useEffect(() => {
+    if (hosts === null) return;
+    apiGet<Inventory>(`/objects/${obj.id}/inventory`).then(setInventory, () => setInventory(null));
+    // Выбор переживает обновление состава только для оставшихся адресов.
+    setPicked((prev) => {
+      const left = new Set(hosts.map((h) => h.address));
+      const next = new Set([...prev].filter((a) => left.has(a)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [hosts, obj.id, obj.internet]);
+
+  const segmentName = useMemo(() => new Map(obj.segments.map((s) => [s.id, s.name])), [obj.segments]);
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return (hosts ?? []).filter(
       (h) =>
-        (segmentFilter === "" ||
-          (segmentFilter === "none" ? h.segment_id === null : h.segment_id === segmentFilter)) &&
+        (segmentFilter === "" || (segmentFilter === "none" ? h.segment_id === null : h.segment_id === segmentFilter)) &&
         (!needle ||
           h.address.startsWith(needle) ||
           (h.hostname ?? "").toLowerCase().includes(needle) ||
-          (h.role ?? "").toLowerCase().includes(needle)),
+          (h.role ?? "").toLowerCase().includes(needle)) &&
+        (!gapsOnly || inventoryGaps(h).length > 0),
     );
-  }, [hosts, segmentFilter, q]);
+  }, [hosts, segmentFilter, q, gapsOnly]);
+
+  function togglePick(addresses: string[], on: boolean) {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      for (const a of addresses) {
+        if (on) next.add(a);
+        else next.delete(a);
+      }
+      return next;
+    });
+  }
+
+  async function patchPicked(patch: Partial<Host>): Promise<boolean> {
+    return save((hosts ?? []).map((x) => (picked.has(x.address) ? { ...x, ...patch } : x)));
+  }
 
   async function save(next: Host[]): Promise<boolean> {
     setError(null);
@@ -727,6 +764,15 @@ function CompositionTab({
         )}
       </section>
 
+      <InventoryCard
+        inventory={inventory}
+        onShowGaps={() => {
+          setGapsOnly(true);
+          setSegmentFilter("");
+          setQ("");
+        }}
+      />
+
       <section className="card">
         <div className="card-head">
           <h2>Хосты</h2>
@@ -774,6 +820,10 @@ function CompositionTab({
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
+          <label className="check-inline">
+            <input type="checkbox" checked={gapsOnly} onChange={(e) => setGapsOnly(e.target.checked)} />
+            Не хватает типа или доступности
+          </label>
           <span className="muted">
             {linked ? `«Сканер»: engagement №${obj.scanner_engagement_id}` : "«Сканер» не связан"}
             {obj.scanner_synced_at && ` · сверено ${formatDateTime(obj.scanner_synced_at)}`}
@@ -796,9 +846,24 @@ function CompositionTab({
             <table className="table">
               <thead>
                 <tr>
+                  <th className="cell-check">
+                    <input
+                      type="checkbox"
+                      aria-label="Выбрать все показанные"
+                      checked={shown.length > 0 && shown.every((h) => picked.has(h.address))}
+                      onChange={(e) =>
+                        togglePick(
+                          shown.map((h) => h.address),
+                          e.target.checked,
+                        )
+                      }
+                    />
+                  </th>
                   <th>Адрес</th>
                   <th>Имя и роль</th>
                   <th>Сегмент</th>
+                  <th>Тип компонента</th>
+                  <th>Из «Интернета»</th>
                   <th>ОС</th>
                   <th>Критичность</th>
                   <th>Источник</th>
@@ -808,7 +873,15 @@ function CompositionTab({
               </thead>
               <tbody>
                 {shown.map((h) => (
-                  <tr key={h.id}>
+                  <tr key={h.id} className={picked.has(h.address) ? "selected" : undefined}>
+                    <td className="cell-check">
+                      <input
+                        type="checkbox"
+                        aria-label={`Выбрать ${h.address}`}
+                        checked={picked.has(h.address)}
+                        onChange={(e) => togglePick([h.address], e.target.checked)}
+                      />
+                    </td>
                     <td className="mono nowrap">{h.address}</td>
                     <td>
                       <div className="cell-title">{h.hostname ?? <span className="muted">—</span>}</div>
@@ -836,7 +909,41 @@ function CompositionTab({
                           ))}
                         </select>
                       ) : (
-                        (h.segment_id && segmentName.get(h.segment_id)) ?? <span className="muted">—</span>
+                        ((h.segment_id && segmentName.get(h.segment_id)) ?? <span className="muted">—</span>)
+                      )}
+                    </td>
+                    <td>
+                      <TypeChips codes={h.component_types} types={types} />
+                    </td>
+                    <td>
+                      {editable ? (
+                        <select
+                          className={`select select-sm${h.internet_exposed === null ? " select-warn" : ""}`}
+                          aria-label={`Доступность из «Интернета» ${h.address}`}
+                          value={internetKey(h.internet_exposed)}
+                          onChange={(e) =>
+                            save(
+                              (hosts ?? []).map((x) =>
+                                x.id === h.id
+                                  ? {
+                                      ...x,
+                                      internet_exposed: fromInternetKey(e.target.value),
+                                    }
+                                  : x,
+                              ),
+                            )
+                          }
+                        >
+                          {Object.entries(INTERNET_LABELS).map(([k, label]) => (
+                            <option key={k} value={k}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : h.internet_exposed === null ? (
+                        <span className="pill pill-warn">не указано</span>
+                      ) : (
+                        INTERNET_LABELS[internetKey(h.internet_exposed)]
                       )}
                     </td>
                     <td>{h.os ?? <span className="muted">—</span>}</td>
@@ -881,7 +988,7 @@ function CompositionTab({
                 ))}
                 {shown.length === 0 && (
                   <tr>
-                    <td colSpan={editable ? 8 : 7} className="muted">
+                    <td colSpan={editable ? 11 : 10} className="muted">
                       Под фильтр ничего не попало
                     </td>
                   </tr>
@@ -892,10 +999,76 @@ function CompositionTab({
         )}
       </section>
 
+      {picked.size > 0 && (
+        <div className="apply-bar">
+          <span>
+            Выбрано хостов: <b>{picked.size}</b>
+          </span>
+          <div className="actions">
+            {editable && (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => setBulkType(true)}
+                  disabled={!types?.length}
+                >
+                  <Tags size={15} />
+                  Тип компонента…
+                </button>
+                <select
+                  className="select select-sm"
+                  aria-label="Доступность из «Интернета» для выбранных"
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value)
+                      void patchPicked({
+                        internet_exposed: fromInternetKey(e.target.value),
+                      });
+                  }}
+                >
+                  <option value="">Из «Интернета»…</option>
+                  {Object.entries(INTERNET_LABELS).map(([k, label]) => (
+                    <option key={k} value={k}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+            <button
+              type="button"
+              className="btn btn-sm btn-primary"
+              onClick={() => setInfr([...picked])}
+              title="Считать выбранные хосты уязвимыми и показать K, L, P и I_infr"
+            >
+              <Calculator size={15} />
+              Проверить I_infr
+            </button>
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setPicked(new Set())}>
+              Снять выбор
+            </button>
+          </div>
+        </div>
+      )}
+      {bulkType && types && (
+        <BulkTypeDialog
+          count={picked.size}
+          types={types}
+          onClose={() => setBulkType(false)}
+          onApply={async (codes) => {
+            const ok = await patchPicked({ component_types: codes });
+            if (ok) setBulkType(false);
+            return ok;
+          }}
+        />
+      )}
+      {infr && <InfrDialog objectId={obj.id} addresses={infr} onClose={() => setInfr(null)} />}
       {hostDialog && hosts && (
         <HostDialog
           host={hostDialog === "new" ? null : hostDialog}
           segments={obj.segments}
+          types={types}
           hosts={hosts}
           onClose={() => setHostDialog(null)}
           onSave={async (next) => {
@@ -953,12 +1126,14 @@ export function syncSummary(r: SyncResult): string {
 function HostDialog({
   host,
   segments,
+  types,
   hosts,
   onClose,
   onSave,
 }: {
   host: Host | null;
   segments: Segment[];
+  types: ComponentType[] | null;
   hosts: Host[];
   onClose: () => void;
   onSave: (next: Host[]) => Promise<boolean>;
@@ -967,6 +1142,8 @@ function HostDialog({
   const [hostname, setHostname] = useState(host?.hostname ?? "");
   const [role, setRole] = useState(host?.role ?? "");
   const [segmentId, setSegmentId] = useState(host?.segment_id ?? "");
+  const [componentTypes, setComponentTypes] = useState<string[]>(host?.component_types ?? []);
+  const [internet, setInternet] = useState(internetKey(host?.internet_exposed ?? null));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -985,6 +1162,8 @@ function HostDialog({
       hostname: hostname.trim() || null,
       role: role.trim() || null,
       segment_id: segmentId || null,
+      component_types: componentTypes.length ? componentTypes : null,
+      internet_exposed: fromInternetKey(internet),
     };
     const next = host
       ? hosts.map((h) => (h.id === host.id ? { ...h, ...patch } : h))
@@ -1060,6 +1239,34 @@ function HostDialog({
             ))}
           </select>
         </label>
+        <label className="field">
+          <span>Доступен из сети «Интернет»</span>
+          <select
+            className="select"
+            value={internet}
+            onChange={(e) => setInternet(e.target.value as keyof typeof INTERNET_LABELS)}
+          >
+            {Object.entries(INTERNET_LABELS).map(([k, label]) => (
+              <option key={k} value={k}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <small>Показатель P Методики 2025: влияние на защищённость периметра</small>
+        </label>
+        <fieldset className="field">
+          <legend className="field-legend">Тип компонента</legend>
+          <small className="muted">
+            Показатель K таблицы 1 Методики 2025. Можно отметить несколько — в расчёте берётся наибольшее.
+          </small>
+          {types === null ? (
+            <Loading />
+          ) : types.length === 0 ? (
+            <span className="muted">Справочник Методики не загружен</span>
+          ) : (
+            <TypePicker types={types} value={componentTypes} onChange={setComponentTypes} />
+          )}
+        </fieldset>
       </form>
     </Modal>
   );
@@ -1082,7 +1289,13 @@ function blankHost(address: string): Host {
     last_seen_at: null,
     scanner_missing: false,
     synced_at: null,
+    component_types: null,
+    internet_exposed: null,
   };
+}
+
+function fromInternetKey(k: string): boolean | null {
+  return k === "yes" ? true : k === "no" ? false : null;
 }
 
 function AssetsDialog({
@@ -1109,9 +1322,10 @@ function AssetsDialog({
   const free = useMemo(() => (data?.assets ?? []).filter((a) => !a.in_object), [data]);
   const groups = useMemo(() => {
     const m = new Map<string, string[]>();
-    for (const a of free) for (const g of a.groups.length ? a.groups : ["Без группы"]) {
-      m.set(g, [...(m.get(g) ?? []), a.address]);
-    }
+    for (const a of free)
+      for (const g of a.groups.length ? a.groups : ["Без группы"]) {
+        m.set(g, [...(m.get(g) ?? []), a.address]);
+      }
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0], "ru"));
   }, [free]);
 
@@ -1151,12 +1365,7 @@ function AssetsDialog({
           <button type="button" className="btn" onClick={onClose}>
             Отмена
           </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={submit}
-            disabled={busy || chosen.size === 0}
-          >
+          <button type="button" className="btn btn-primary" onClick={submit} disabled={busy || chosen.size === 0}>
             Добавить {chosen.size > 0 ? chosen.size : ""}
           </button>
         </>
@@ -1167,21 +1376,15 @@ function AssetsDialog({
       {data && (
         <div className="form-stack">
           <p className="muted">
-            Проект «Сканера» №{data.engagement_id} · {data.source}. Хост сопоставляется по IP-адресу:
-            повторное добавление не создаёт дубликатов.
+            Проект «Сканера» №{data.engagement_id} · {data.source}. Хост сопоставляется по IP-адресу: повторное
+            добавление не создаёт дубликатов.
           </p>
           {groups.length > 0 && (
             <div className="chips" role="group" aria-label="Выбрать группу целиком">
               {groups.map(([g, addrs]) => {
                 const all = addrs.every((a) => chosen.has(a));
                 return (
-                  <button
-                    key={g}
-                    type="button"
-                    className="chip"
-                    aria-pressed={all}
-                    onClick={() => toggle(addrs, !all)}
-                  >
+                  <button key={g} type="button" className="chip" aria-pressed={all} onClick={() => toggle(addrs, !all)}>
                     {g} <span className="count">{addrs.length}</span>
                   </button>
                 );
@@ -1233,15 +1436,7 @@ interface SegmentDraft {
   scanner_group: string;
 }
 
-function SegmentsDialog({
-  obj,
-  onClose,
-  onSaved,
-}: {
-  obj: ObjectFull;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
+function SegmentsDialog({ obj, onClose, onSaved }: { obj: ObjectFull; onClose: () => void; onSaved: () => void }) {
   const [rows, setRows] = useState<SegmentDraft[]>(
     obj.segments.map((s) => ({
       id: s.id,

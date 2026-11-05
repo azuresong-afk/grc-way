@@ -78,6 +78,22 @@ GIS_HOSTS = [
 ]
 PDN_HOSTS = ["10.20.0.15", "10.20.0.16"]
 
+# Инвентаризация для I_infr (задача 2.7): тип компонента (значения K таблицы 1
+# Методики 2025) и доступность из сети «Интернет». У хостов «Бухгалтерии» не
+# заполнено — расчёт покажет, чего не хватает.
+GIS_INVENTORY: dict[str, tuple[list[str], bool]] = {
+    "10.10.1.10": (["K1", "K5"], False),
+    "10.10.1.11": (["K1", "K5"], False),
+    "10.10.1.12": (["K5"], False),
+    "10.10.1.20": (["K5"], False),
+    "10.10.2.5": (["K1", "K5"], True),
+    "10.10.2.6": (["K3"], True),
+    "10.10.3.101": (["K6"], False),
+    "10.10.3.102": (["K6"], False),
+    "10.10.3.103": (["K6"], False),
+    "10.10.3.104": (["K6"], False),
+}
+
 # Исходные данные классификации ГИС по №117, дающие К2.
 GIS_K2 = {
     "damage_confidentiality": "medium",
@@ -517,6 +533,26 @@ def _populate(c: Any, password: str) -> Result:
     _check(
         c.post(
             f"/objects/{oid}/hosts/sync-from-scanner", headers=meth, json={"addresses": GIS_HOSTS}
+        )
+    )
+    hosts = _check(c.get(f"/objects/{oid}/hosts", headers=meth))
+    _check(
+        c.put(
+            f"/objects/{oid}/hosts",
+            headers=meth,
+            json={
+                "items": [
+                    {
+                        "address": x["address"],
+                        "hostname": x["hostname"],
+                        "role": x["role"],
+                        "segment_id": x["segment_id"],
+                        "component_types": GIS_INVENTORY[x["address"]][0],
+                        "internet_exposed": GIS_INVENTORY[x["address"]][1],
+                    }
+                    for x in hosts
+                ]
+            },
         )
     )
     cls = _check(
