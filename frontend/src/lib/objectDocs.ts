@@ -11,7 +11,8 @@ export type FieldTab =
   | "szi"
   | "measures"
   | "threats"
-  | "vulns";
+  | "vulns"
+  | "plan";
 export type FontCode = "astra" | "inter";
 export type DocStatus = "draft" | "review" | "approved" | "superseded";
 
@@ -200,6 +201,7 @@ export const TAB_TITLES: Record<FieldTab, string> = {
   measures: "Меры",
   threats: "Угрозы",
   vulns: "Уязвимости",
+  plan: "Несоответствия",
 };
 
 export const STATE_PILL: Record<FieldState, [string, string]> = {

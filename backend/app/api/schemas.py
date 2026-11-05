@@ -116,6 +116,8 @@ class ProjectIn(BaseModel):
     period_from: date | None = None
     period_to: date | None = None
     scanner_engagement_id: int | None = Field(default=None, ge=1)
+    # Проект в «Устранении» (uuid или код), куда уходят заявки по несоответствиям.
+    vm_project_id: str | None = Field(default=None, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")
 
 
 class ProjectPatch(BaseModel):
@@ -125,6 +127,8 @@ class ProjectPatch(BaseModel):
     period_to: date | None = None
     status: str | None = Field(default=None, pattern=r"^(active|archived)$")
     scanner_engagement_id: int | None = Field(default=None, ge=1)
+    # Проект в «Устранении» (uuid или код), куда уходят заявки по несоответствиям.
+    vm_project_id: str | None = Field(default=None, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")
 
 
 class MemberOut(BaseModel):
@@ -143,6 +147,7 @@ class ProjectOut(BaseModel):
     period_to: date | None
     status: str
     scanner_engagement_id: int | None
+    vm_project_id: str | None
     platform_project_id: uuid.UUID | None
     created_at: datetime
     members: list[MemberOut]

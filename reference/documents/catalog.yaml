@@ -218,4 +218,5 @@ documents:
       - {key: nonconformities, title: Несоответствия по мерам, source: "Объект → Меры → статусы «Не реализована» и «Частично»", tab: measures}
       - {key: "nonconformities[].details", title: Описание нарушения, source: "Объект → Меры → доказательства", tab: measures}
       - {key: vuln_plan, title: Уязвимости к устранению, source: "Объект → Уязвимости → оценённые записи", tab: vulns}
+      - {key: "nonconformities[].responsible", title: Ответственный за мероприятие, source: "Объект → Несоответствия → ответственный", tab: plan}
       - {key: object.responsible, title: Ответственные лица, source: "Объект → Описание → ответственные", tab: description, required: true}

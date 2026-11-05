@@ -24,6 +24,7 @@ TABS = (
     "measures",
     "threats",
     "vulns",
+    "plan",
 )
 # «a.b.c» — поле; «a.b[].c» — поле у каждого элемента списка a.b.
 _KEY = re.compile(r"^[a-z_]+(\.[a-z_]+)*(\[\]\.[a-z_]+)?$")

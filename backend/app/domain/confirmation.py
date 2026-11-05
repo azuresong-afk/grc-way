@@ -20,7 +20,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-MANUAL_KINDS = ("file", "interview", "inspection", "certificate")
+# remediation — повторная проверка «Устранения» подтвердила исправление (задача 3.4).
+MANUAL_KINDS = ("file", "interview", "inspection", "certificate", "remediation")
 NEEDS_EVIDENCE = ("implemented", "partial")
 
 

@@ -120,6 +120,10 @@
 ### `nonconformities[]`, `vuln_plan[]` — строки плана устранения
 `kind_title`, `ref`, `title`, `status_title`, `details`, `action`. У строк `vuln_plan` есть
 ещё `deadline`.
+Из плана устранения (вкладка «Несоответствия», задача 3.4): `responsible`, `state_title`,
+`ticket` (номер и статус заявки «Устранения»), у мер — `due`, `priority_title`, у
+уязвимостей — `method_title` (обновление или компенсирующие меры п. 25). `action` —
+мероприятие из плана, если его внёс специалист.
 
 ### `org` — типовой текст ОРД (`reference/documents/org-docs.yaml`)
 `version`.

@@ -61,6 +61,7 @@ def _project_out(session: Session, p: Project) -> ProjectOut:
         period_to=p.period_to,
         status=p.status,
         scanner_engagement_id=p.scanner_engagement_id,
+        vm_project_id=p.vm_project_id,
         platform_project_id=p.platform_project_id,
         created_at=p.created_at,
         members=sorted(

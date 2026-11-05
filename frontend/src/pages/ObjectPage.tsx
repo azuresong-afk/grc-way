@@ -48,19 +48,30 @@ import { useProject } from "../lib/project";
 import { ClassificationTab } from "./ClassificationTab";
 import { MeasuresTab } from "./MeasuresTab";
 import { ObjectDocsTab } from "./ObjectDocsTab";
+import { PlanTab } from "./PlanTab";
 import { SziTab } from "./SziTab";
 import { ThreatModelTab } from "./ThreatModelTab";
 import { VulnsTab } from "./VulnsTab";
 import { RegimeField } from "./ObjectsPage";
 import { BulkTypeDialog, InfrDialog, InventoryCard, TypeChips, TypePicker, useComponentTypes } from "./InventoryParts";
 
-type Tab = "description" | "classification" | "measures" | "threats" | "vulns" | "szi" | "composition" | "documents";
+type Tab =
+  | "description"
+  | "classification"
+  | "measures"
+  | "threats"
+  | "vulns"
+  | "plan"
+  | "szi"
+  | "composition"
+  | "documents";
 const TABS: Tab[] = [
   "description",
   "classification",
   "measures",
   "threats",
   "vulns",
+  "plan",
   "szi",
   "composition",
   "documents",
@@ -106,6 +117,7 @@ export function ObjectPage() {
     setParams(
       (prev) => {
         const next = new URLSearchParams(prev);
+        next.delete("item"); // открытая карточка пункта плана — только на своей вкладке
         if (t === "description") next.delete("tab");
         else next.set("tab", t);
         return next;
@@ -217,6 +229,9 @@ export function ObjectPage() {
         >
           Уязвимости
         </button>
+        <button type="button" role="tab" className="tab" aria-selected={tab === "plan"} onClick={() => setTab("plan")}>
+          Несоответствия
+        </button>
         <button type="button" role="tab" className="tab" aria-selected={tab === "szi"} onClick={() => setTab("szi")}>
           СЗИ
         </button>
@@ -250,6 +265,7 @@ export function ObjectPage() {
       )}
       {tab === "threats" && <ThreatModelTab obj={obj} editable={known && obj.status === "active"} />}
       {tab === "vulns" && <VulnsTab obj={obj} editable={known && obj.status === "active"} />}
+      {tab === "plan" && <PlanTab obj={obj} editable={known && obj.status === "active"} />}
       {tab === "szi" && <SziTab obj={obj} editable={known && obj.status === "active"} />}
       {tab === "documents" && <ObjectDocsTab obj={obj} editable={known && obj.status === "active"} />}
       {tab === "composition" && (

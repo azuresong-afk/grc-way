@@ -1267,8 +1267,9 @@ def remediation_plan() -> Document:
                 "{{ loop.index }}",
                 "{{ n.ref }} {{ n.title }}",
                 "{{ n.status_title }}. {{ n.details }}",
-                "{{ n.action }}",
-                "",
+                "{{ n.action }}{% if n.due %} Срок — до {{ n.due }}.{% endif %}"
+                "{% if n.ticket %} Заявка «Устранения» {{ n.ticket }}.{% endif %}",
+                "{{ n.responsible or '' }}",
             ],
             [0.8, 4, 5.2, 4.5, 2.5],
         ),
@@ -1279,7 +1280,9 @@ def remediation_plan() -> Document:
         doc,
         "Уязвимости с оценкой по Методике оценки уровня критичности уязвимостей (ФСТЭК России, "
         "30.06.2025); срок устранения — по п. 21 от даты оценки. Способ устранения — "
-        "обновление или компенсирующие меры.",
+        "обновление (для зарубежного и open source ПО — после тестирования по Методике "
+        "тестирования обновлений безопасности, п. 23) или компенсирующие меры из перечня "
+        "п. 25.",
     )
     if_else(
         doc,
@@ -1292,9 +1295,10 @@ def remediation_plan() -> Document:
                 "{{ loop.index }}",
                 "{{ v.ref }} {{ v.title }}{% if v.details %} ({{ v.details }}){% endif %}",
                 "{{ v.status_title }}",
-                "{{ v.action }}",
+                "{{ v.method_title or v.action }}"
+                "{% if v.ticket %}. Заявка «Устранения» {{ v.ticket }}{% endif %}",
                 "{{ v.deadline or '—' }}",
-                "",
+                "{{ v.responsible or '' }}",
             ],
             [0.8, 5, 2.6, 3.6, 2.6, 2.4],
         ),

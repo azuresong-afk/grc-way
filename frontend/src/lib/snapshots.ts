@@ -144,7 +144,7 @@ export interface ScannerEvidenceData {
 
 export interface Evidence {
   id: string;
-  kind: "scanner" | "file" | "interview" | "inspection" | "certificate";
+  kind: "scanner" | "file" | "interview" | "inspection" | "certificate" | "remediation";
   status: AutoStatus | null;
   summary: string;
   data: ScannerEvidenceData;
