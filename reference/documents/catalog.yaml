@@ -1,4 +1,4 @@
-# Каталог документов комплекта (задача 3.1 — движок; остальные документы — задача 3.2).
+# Каталог документов комплекта (задача 3.1 — движок, 3.2 — девять документов из ТЗ).
 #
 # Для каждого документа: шаблон в templates/docx/, для каких режимов он нужен и
 # какие данные в него попадают. Поле fields — карта «из каких данных собран»:
@@ -7,13 +7,89 @@
 #   title    — как поле называется в документе;
 #   source   — откуда берётся (экран и поле), показывается пользователю;
 #   tab      — вкладка карточки объекта, где поле заполняют
-#              (description | classification | composition | szi | project);
+#              (project | description | classification | composition | szi |
+#              measures | threats | vulns);
 #   required — без поля документ формально неполон: оно подсвечивается в карте,
 #              в документе на его месте — «[не заполнено: …]».
-# Формулировки шаблона — рабочие, не нормативный текст (структура паспорта
-# уточняется в задаче 3.2 по ГОСТ Р 51583-2014 и приказу ФСТЭК №77).
+# titles — заголовок по режиму (117 | 21 | 239), если он отличается.
+# Порядок документов — как в ТЗ (docs/brief.md, «Комплект документов»).
+# Формулировки шаблонов — рабочие, не нормативный текст: структура документов
+# требует сверки с ГОСТ Р 51583-2014, приказом ФСТЭК России №77 и текстами
+# приказов №117 / №21 / №239. Типовой текст ОРД — reference/documents/org-docs.yaml.
+#
+# Документ выводит только те разделы контекста, которые использует его шаблон:
+# от них считается хэш версии и по ним ставится водяной знак за несверенные
+# записи справочников.
 
 documents:
+  - code: classification-act
+    title: Акт классификации
+    titles:
+      "117": Акт классификации государственной информационной системы
+      "21": Акт определения уровня защищённости персональных данных
+      "239": Сведения о результатах присвоения категории значимости
+    description: >-
+      Исходные данные и результат классификации: класс защищённости ГИС, уровень
+      защищённости ПДн или категория значимости объекта КИИ с шагами расчёта и
+      строками таблицы. Собирается из утверждённого расчёта на вкладке «Классификация».
+    template: classification-act.docx
+    regimes: ["117", "21", "239"]
+    fields:
+      - {key: customer.name, title: Заказчик, source: "Проект → заказчик → наименование", tab: project, required: true}
+      - {key: object.name, title: Наименование объекта, source: "Объект → Описание → наименование", tab: description, required: true}
+      - {key: object.kind_title, title: Тип объекта, source: "Объект → Описание → тип", tab: description, required: true}
+      - {key: object.purpose, title: Назначение, source: "Объект → Описание → назначение", tab: description, required: true}
+      - {key: classification.result_label, title: Класс / уровень / категория, source: "Объект → Классификация → утверждённый расчёт", tab: classification, required: true}
+      - {key: classification.approved, title: Дата утверждения классификации, source: "Объект → Классификация → утверждение", tab: classification, required: true}
+      - {key: classification.approved_by, title: Кто утвердил классификацию, source: "Объект → Классификация → утверждение", tab: classification, required: true}
+      - {key: classification.steps, title: Шаги расчёта, source: "Объект → Классификация → расчёт по таблице", tab: classification, required: true}
+      - {key: classification.justification, title: Обоснование, source: "Объект → Классификация → обоснование", tab: classification}
+      - {key: object.responsible, title: Ответственные лица, source: "Объект → Описание → ответственные", tab: description, required: true}
+
+  - code: threat-model
+    title: Модель угроз безопасности информации
+    description: >-
+      Структура по Методике оценки угроз 2021: негативные последствия, объекты
+      воздействия, нарушители, способы реализации, сценарии и перечень актуальных угроз
+      БДУ с обоснованием. Берётся утверждённая версия модели, без неё — последний черновик.
+    template: threat-model.docx
+    regimes: ["117", "21", "239", null]
+    fields:
+      - {key: customer.name, title: Заказчик, source: "Проект → заказчик → наименование", tab: project, required: true}
+      - {key: object.name, title: Наименование объекта, source: "Объект → Описание → наименование", tab: description, required: true}
+      - {key: object.purpose, title: Назначение, source: "Объект → Описание → назначение", tab: description, required: true}
+      - {key: object.boundaries, title: Границы объекта, source: "Объект → Описание → границы", tab: description, required: true}
+      - {key: threat_model.version, title: Модель угроз, source: "Объект → Угрозы → версия модели", tab: threats, required: true}
+      - {key: threat_model.approved, title: Утверждение модели угроз, source: "Объект → Угрозы → утверждение", tab: threats, required: true}
+      - {key: threat_model.consequences, title: Негативные последствия, source: "Объект → Угрозы → шаг «Последствия»", tab: threats, required: true}
+      - {key: threat_model.objects, title: Объекты воздействия, source: "Объект → Угрозы → шаг «Объекты воздействия»", tab: threats, required: true}
+      - {key: threat_model.intruders, title: Нарушители, source: "Объект → Угрозы → шаг «Нарушители»", tab: threats, required: true}
+      - {key: threat_model.methods, title: Способы реализации угроз, source: "Объект → Угрозы → шаг «Способы»", tab: threats, required: true}
+      - {key: threat_model.scenarios, title: Сценарии (тактики), source: "Объект → Угрозы → шаг «Сценарии»", tab: threats, required: true}
+      - {key: threat_model.relevant_threats, title: Актуальные угрозы, source: "Объект → Угрозы → угрозы БДУ, решение «актуальна»", tab: threats, required: true}
+      - {key: "threat_model.threats[].justification", title: Обоснование решения по угрозе, source: "Объект → Угрозы → угроза → обоснование", tab: threats, required: true}
+      - {key: threat_model.threats, title: Рассмотренные угрозы БДУ, source: "Объект → Угрозы → угрозы БДУ", tab: threats, required: true}
+
+  - code: protection-spec
+    title: Частное техническое задание на систему защиты информации
+    description: >-
+      Требования к системе защиты: класс (уровень, категория), актуальные угрозы, набор
+      мер после адаптации с обоснованием исключений и компенсирующих мер, требования к
+      средствам защиты информации.
+    template: protection-spec.docx
+    regimes: ["117", "21", "239", null]
+    fields:
+      - {key: customer.name, title: Заказчик, source: "Проект → заказчик → наименование", tab: project, required: true}
+      - {key: object.name, title: Наименование объекта, source: "Объект → Описание → наименование", tab: description, required: true}
+      - {key: object.purpose, title: Назначение, source: "Объект → Описание → назначение", tab: description, required: true}
+      - {key: object.boundaries, title: Границы объекта, source: "Объект → Описание → границы", tab: description, required: true}
+      - {key: classification.result_label, title: Класс / уровень / категория, source: "Объект → Классификация → утверждённый расчёт", tab: classification, required: true}
+      - {key: threat_model.relevant_threats, title: Актуальные угрозы, source: "Объект → Угрозы → угрозы БДУ, решение «актуальна»", tab: threats, required: true}
+      - {key: measures.groups, title: Набор мер после адаптации, source: "Объект → Меры → базовый набор и адаптация", tab: measures, required: true}
+      - {key: measures.adaptation.approved, title: Утверждение адаптации, source: "Объект → Меры → адаптация → утверждение", tab: measures, required: true}
+      - {key: szi, title: Средства защиты информации, source: "Объект → СЗИ", tab: szi, required: true}
+      - {key: object.interconnections, title: Взаимодействие с другими системами, source: "Объект → Описание → взаимодействие", tab: description}
+
   - code: tech-passport
     title: Технический паспорт объекта
     description: >-
@@ -47,3 +123,99 @@ documents:
       - {key: "szi[].cert_number", title: Номер сертификата СЗИ, source: "Объект → СЗИ → сертификат", tab: szi, required: true}
       - {key: "szi[].valid_to", title: Срок действия сертификата, source: "Объект → СЗИ → срок (из реестра СЗИ или вручную)", tab: szi, required: true}
       - {key: "szi[].placement", title: Где установлено СЗИ, source: "Объект → СЗИ → размещение", tab: szi}
+
+  - code: org-docs
+    title: Организационно-распорядительные документы
+    description: >-
+      Политика, положение о разграничении прав доступа, инструкции администратора
+      безопасности и пользователя, порядки управления конфигурацией, уязвимостями и
+      обновлениями (со ссылкой на Методику 2025 и таблицей уровней), реагирования на
+      инциденты, резервного копирования. Типовой текст — reference/documents/org-docs.yaml,
+      меры объекта по каждому документу — с текущим статусом.
+    template: org-docs.docx
+    regimes: ["117", "21", "239"]
+    fields:
+      - {key: customer.name, title: Заказчик, source: "Проект → заказчик → наименование", tab: project, required: true}
+      - {key: object.name, title: Наименование объекта, source: "Объект → Описание → наименование", tab: description, required: true}
+      - {key: object.responsible, title: Ответственные лица, source: "Объект → Описание → ответственные", tab: description, required: true}
+      - {key: org.sections, title: Типовые формулировки ОРД, source: "reference/documents/org-docs.yaml", tab: project, required: true}
+      - {key: measures.groups, title: Набор мер после адаптации, source: "Объект → Меры → базовый набор и адаптация", tab: measures, required: true}
+      - {key: vulns.methodology.version, title: Методика оценки критичности уязвимостей, source: "Справочники → Методика критичности уязвимостей 2025", tab: vulns, required: true}
+
+  - code: test-program
+    title: Программа и методики аттестационных испытаний
+    description: >-
+      Цель, объект и сроки испытаний, состав исходных данных, перечень проверок по
+      группам мер с методом (автоматически — прогон «Сканера», вручную — документ,
+      интервью, осмотр) и средства контроля.
+    template: test-program.docx
+    regimes: ["117", "21", "239"]
+    fields:
+      - {key: customer.name, title: Заказчик, source: "Проект → заказчик → наименование", tab: project, required: true}
+      - {key: object.name, title: Наименование объекта, source: "Объект → Описание → наименование", tab: description, required: true}
+      - {key: project.contract_ref, title: Договор, source: "Проект → номер договора", tab: project, required: true}
+      - {key: project.period_from, title: Срок работ (начало), source: "Проект → сроки работ", tab: project, required: true}
+      - {key: project.period_to, title: Срок работ (окончание), source: "Проект → сроки работ", tab: project, required: true}
+      - {key: classification.result_label, title: Класс / уровень / категория, source: "Объект → Классификация → утверждённый расчёт", tab: classification, required: true}
+      - {key: measures.groups, title: Набор мер после адаптации, source: "Объект → Меры → базовый набор и адаптация", tab: measures, required: true}
+      - {key: hosts, title: Хосты, source: "Объект → Состав → хосты (вручную и из активов «Сканера»)", tab: composition, required: true}
+      - {key: szi, title: Средства защиты информации, source: "Объект → СЗИ", tab: szi, required: true}
+      - {key: object.responsible, title: Ответственные лица, source: "Объект → Описание → ответственные", tab: description, required: true}
+
+  - code: test-protocols
+    title: Протоколы аттестационных испытаний
+    description: >-
+      Результаты по группам мер: статус каждой меры, автоматические доказательства
+      (прогон, дата, процент, хосты с нарушениями) и ручные (документ, интервью, осмотр),
+      подтверждение эксперта; протокол анализа уязвимостей — Методика 2025 и таблица V с уровнями.
+    template: test-protocols.docx
+    regimes: ["117", "21", "239"]
+    fields:
+      - {key: customer.name, title: Заказчик, source: "Проект → заказчик → наименование", tab: project, required: true}
+      - {key: object.name, title: Наименование объекта, source: "Объект → Описание → наименование", tab: description, required: true}
+      - {key: classification.result_label, title: Класс / уровень / категория, source: "Объект → Классификация → утверждённый расчёт", tab: classification, required: true}
+      - {key: measures.groups, title: Набор мер после адаптации, source: "Объект → Меры → базовый набор и адаптация", tab: measures, required: true}
+      - {key: snapshot.number, title: Снимок прогона «Сканера», source: "Объект → Меры → импорт прогона «Сканера»", tab: measures, required: true}
+      - {key: snapshot.percent, title: Процент «Сканера» по прогону, source: "Объект → Меры → снимок прогона", tab: measures}
+      - {key: vulns.methodology.version, title: Методика оценки критичности уязвимостей, source: "Справочники → Методика критичности уязвимостей 2025", tab: vulns, required: true}
+      - {key: vulns.rows, title: Оценки критичности уязвимостей, source: "Объект → Уязвимости → реестр (находки «Сканера» и контроль защищённости)", tab: vulns}
+      - {key: "vulns.rows[].v", title: Уровень V, source: "Объект → Уязвимости → оценка", tab: vulns, required: true}
+
+  - code: conclusion
+    title: Заключение по результатам аттестационных испытаний
+    description: >-
+      Итоги испытаний: процент реализации мер (авто / вручную / всего), несоответствия,
+      уязвимости по уровням, вывод и проект аттестата соответствия. Номер и срок
+      действия аттестата заполняются в документе вручную.
+    template: conclusion.docx
+    regimes: ["117", "21", "239"]
+    fields:
+      - {key: customer.name, title: Заказчик, source: "Проект → заказчик → наименование", tab: project, required: true}
+      - {key: object.name, title: Наименование объекта, source: "Объект → Описание → наименование", tab: description, required: true}
+      - {key: customer.address, title: Адрес заказчика, source: "Проект → заказчик → адрес", tab: project, required: true}
+      - {key: project.contract_ref, title: Договор, source: "Проект → номер договора", tab: project, required: true}
+      - {key: classification.result_label, title: Класс / уровень / категория, source: "Объект → Классификация → утверждённый расчёт", tab: classification, required: true}
+      - {key: classification.approved, title: Дата утверждения классификации, source: "Объект → Классификация → утверждение", tab: classification, required: true}
+      - {key: measures.groups, title: Набор мер после адаптации, source: "Объект → Меры → базовый набор и адаптация", tab: measures, required: true}
+      - {key: snapshot.number, title: Снимок прогона «Сканера», source: "Объект → Меры → импорт прогона «Сканера»", tab: measures, required: true}
+      - {key: threat_model.approved, title: Утверждение модели угроз, source: "Объект → Угрозы → утверждение", tab: threats, required: true}
+      - {key: szi, title: Средства защиты информации, source: "Объект → СЗИ", tab: szi, required: true}
+      - {key: "szi[].cert_number", title: Номер сертификата СЗИ, source: "Объект → СЗИ → сертификат", tab: szi, required: true}
+      - {key: vulns.counts.total, title: Обнаруженные уязвимости, source: "Объект → Уязвимости → реестр", tab: vulns}
+
+  - code: remediation-plan
+    title: План мероприятий по устранению несоответствий
+    description: >-
+      Меры с нарушениями (не реализованы или реализованы частично) и уязвимости
+      с оценкой по Методике 2025. Сроки для мер по умолчанию не выводятся (п. 9 ТЗ),
+      для уязвимостей — срок по п. 21 Методики от даты оценки.
+    template: remediation-plan.docx
+    regimes: ["117", "21", "239", null]
+    fields:
+      - {key: customer.name, title: Заказчик, source: "Проект → заказчик → наименование", tab: project, required: true}
+      - {key: object.name, title: Наименование объекта, source: "Объект → Описание → наименование", tab: description, required: true}
+      - {key: classification.result_label, title: Класс / уровень / категория, source: "Объект → Классификация → утверждённый расчёт", tab: classification, required: true}
+      - {key: nonconformities, title: Несоответствия по мерам, source: "Объект → Меры → статусы «Не реализована» и «Частично»", tab: measures}
+      - {key: "nonconformities[].details", title: Описание нарушения, source: "Объект → Меры → доказательства", tab: measures}
+      - {key: vuln_plan, title: Уязвимости к устранению, source: "Объект → Уязвимости → оценённые записи", tab: vulns}
+      - {key: object.responsible, title: Ответственные лица, source: "Объект → Описание → ответственные", tab: description, required: true}

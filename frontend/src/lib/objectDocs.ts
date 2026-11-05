@@ -1,8 +1,18 @@
-// Документы комплекта объекта (задача 3.1): карта данных, версии, скачивание.
+// Документы комплекта объекта (задачи 3.1–3.2): карта данных, версии, скачивание,
+// шрифт комплекта и свой шаблон документа.
 import { apiFetch } from "./api";
 
 export type FieldState = "filled" | "empty" | "partial" | "na";
-export type FieldTab = "project" | "description" | "classification" | "composition" | "szi";
+export type FieldTab =
+  | "project"
+  | "description"
+  | "classification"
+  | "composition"
+  | "szi"
+  | "measures"
+  | "threats"
+  | "vulns";
+export type FontCode = "astra" | "inter";
 
 export interface DocField {
   key: string;
@@ -26,6 +36,7 @@ export interface DocCounts {
 export interface Unverified {
   title: string;
   note: string;
+  section?: string;
 }
 
 export interface DocBrief {
@@ -43,13 +54,25 @@ export interface DocBrief {
   pdf_error: string | null;
   created_at: string;
   created_by_name: string | null;
+  template_name: string;
+  template_custom: boolean;
+  font: FontCode | null;
+  font_title: string | null;
 }
 
 export interface DocFull extends DocBrief {
-  template_name: string;
   context_hash: string;
   fields: DocField[];
   unverified: Unverified[];
+}
+
+export interface TemplateRef {
+  custom: boolean;
+  name: string;
+  id: string | null;
+  uploaded_at: string | null;
+  uploaded_by_name: string | null;
+  comment: string | null;
 }
 
 export interface DocType {
@@ -58,6 +81,8 @@ export interface DocType {
   description: string;
   template: string;
   template_found: boolean;
+  template_ref: TemplateRef;
+  font: FontCode | null;
   counts: DocCounts;
   watermark_reasons: string[];
   changed: boolean;
@@ -75,6 +100,36 @@ export interface DocumentsList {
   pdf_available: boolean;
   can_edit: boolean;
   sees_drafts: boolean;
+  font: FontCode;
+  fonts: { code: FontCode; title: string }[];
+}
+
+export interface TemplateRow {
+  id: string;
+  doc_type: string;
+  name: string;
+  size: number;
+  variables: string[];
+  active: boolean;
+  comment: string | null;
+  uploaded_at: string;
+  uploaded_by_name: string | null;
+  deactivated_at: string | null;
+  deactivated_by_name: string | null;
+}
+
+export interface TemplateType {
+  code: string;
+  title: string;
+  builtin: string;
+  active: TemplateRow | null;
+  history: TemplateRow[];
+}
+
+export interface TemplatesList {
+  types: TemplateType[];
+  can_manage: boolean;
+  allowed_names: string[];
 }
 
 export const TAB_TITLES: Record<FieldTab, string> = {
@@ -83,6 +138,9 @@ export const TAB_TITLES: Record<FieldTab, string> = {
   classification: "Классификация",
   composition: "Состав",
   szi: "СЗИ",
+  measures: "Меры",
+  threats: "Угрозы",
+  vulns: "Уязвимости",
 };
 
 export const STATE_PILL: Record<FieldState, [string, string]> = {
@@ -120,8 +178,13 @@ export function dispositionName(header: string | null, fallback: string): string
 
 /** Скачивание версии с токеном: fetch → blob → временная ссылка. */
 export async function downloadDocument(d: DocBrief, format: "docx" | "pdf"): Promise<void> {
-  const res = await apiFetch(`/documents/${d.id}/file?format=${format}`);
-  const name = dispositionName(res.headers.get("Content-Disposition"), `${d.title} v${d.version}.${format}`);
+  await downloadFile(`/documents/${d.id}/file?format=${format}`, `${d.title} v${d.version}.${format}`);
+}
+
+/** Скачивание файла API с токеном (документ, шаблон). */
+export async function downloadFile(path: string, fallback: string): Promise<void> {
+  const res = await apiFetch(path);
+  const name = dispositionName(res.headers.get("Content-Disposition"), fallback);
   const url = URL.createObjectURL(await res.blob());
   try {
     const a = document.createElement("a");

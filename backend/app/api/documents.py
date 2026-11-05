@@ -8,6 +8,13 @@
   те же данные — та же версия, без дубля.
 - `GET /documents/{id}` — версия с картой полей на момент формирования.
 - `GET /documents/{id}/file?format=docx|pdf` — скачивание.
+- (3.2) `PUT /objects/{id}/documents/settings {font}` — шрифт комплекта объекта
+  (PT Astra Serif или Inter) для встроенных шаблонов.
+- (3.2) Свой шаблон документа — общий для всех проектов: `GET /document-templates`,
+  `GET /document-templates/{code}/builtin` (встроенный — основа для своего),
+  `POST /document-templates/{code}` (multipart: file, comment), `POST
+  /document-templates/{code}/reset` (вернуть встроенный),
+  `GET /document-templates/files/{id}` — загруженный файл.
 
 Проекты (черновики) видят методист, эксперт и утверждающий. Наблюдатель
 (представитель заказчика) видит только утверждённые документы — они появятся
@@ -22,19 +29,22 @@ from typing import Annotated, Any, Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import select, true
 from sqlalchemy.orm import Session
+from starlette.datastructures import UploadFile
 
 from app import audit
 from app.api.deps import DbSession, client_ip, require
 from app.api.objects import _editable, get_object_for
 from app.core.config import get_settings
 from app.core.rbac import Perm, perms_for
-from app.db.models import AssessedObject, GeneratedDocument, User
-from app.docs_gen import fieldmap, pdf
+from app.db.models import AssessedObject, DocumentTemplate, GeneratedDocument, User
+from app.docs_gen import context, fieldmap, pdf, render
 from app.domain import documents as svc
+from app.domain.evidence_files import clean_name
 
 router = APIRouter(tags=["documents"])
 Viewer = Annotated[User, Depends(require(Perm.VIEW))]
@@ -89,13 +99,27 @@ class DocBrief(BaseModel):
     pdf_error: str | None
     created_at: datetime
     created_by_name: str | None
+    template_name: str
+    template_custom: bool
+    font: str | None
+    font_title: str | None
 
 
 class DocOut(DocBrief):
-    template_name: str
     context_hash: str
     fields: list[FieldOut]
     unverified: list[dict[str, str]]
+
+
+class TemplateRef(BaseModel):
+    """Действующий шаблон документа: встроенный или свой."""
+
+    custom: bool
+    name: str
+    id: uuid.UUID | None = None
+    uploaded_at: datetime | None = None
+    uploaded_by_name: str | None = None
+    comment: str | None = None
 
 
 class TypeOut(BaseModel):
@@ -104,6 +128,9 @@ class TypeOut(BaseModel):
     description: str
     template: str
     template_found: bool
+    template_ref: TemplateRef
+    # Шрифт, которым соберётся документ; None — свой шаблон (шрифты его).
+    font: str | None
     counts: Counts
     watermark_reasons: list[str]
     # Данные изменились после последней версии (или версий ещё нет).
@@ -117,11 +144,54 @@ class TypeDetail(TypeOut):
     unverified: list[dict[str, str]]
 
 
+class FontOut(BaseModel):
+    code: str
+    title: str
+
+
 class DocumentsOut(BaseModel):
     types: list[TypeOut]
     pdf_available: bool
     can_edit: bool
     sees_drafts: bool
+    font: str
+    fonts: list[FontOut]
+
+
+class SettingsIn(BaseModel):
+    font: Literal["astra", "inter"]
+
+
+class SettingsOut(BaseModel):
+    font: str
+
+
+class TemplateOut(BaseModel):
+    id: uuid.UUID
+    doc_type: str
+    name: str
+    size: int
+    variables: list[str]
+    active: bool
+    comment: str | None
+    uploaded_at: datetime
+    uploaded_by_name: str | None
+    deactivated_at: datetime | None
+    deactivated_by_name: str | None
+
+
+class TemplateTypeOut(BaseModel):
+    code: str
+    title: str
+    builtin: str
+    active: TemplateOut | None
+    history: list[TemplateOut]
+
+
+class TemplatesOut(BaseModel):
+    types: list[TemplateTypeOut]
+    can_manage: bool
+    allowed_names: list[str]
 
 
 class GenerateIn(BaseModel):
@@ -156,13 +226,16 @@ def _brief(d: GeneratedDocument) -> DocBrief:
         pdf_error=d.pdf_error,
         created_at=d.created_at,
         created_by_name=d.created_by_name,
+        template_name=d.template_name,
+        template_custom=d.template_id is not None,
+        font=d.font,
+        font_title=render.FONTS.get(d.font or ""),
     )
 
 
 def _out(d: GeneratedDocument) -> DocOut:
     return DocOut(
         **_brief(d).model_dump(),
-        template_name=d.template_name,
         context_hash=d.context_hash,
         fields=[FieldOut(**f) for f in d.field_map or []],
         unverified=d.unverified or [],
@@ -192,12 +265,22 @@ def _type_out(
     session: Session, obj: AssessedObject, pv: svc.Preview, versions: list[DocBrief]
 ) -> dict[str, Any]:
     last = svc.latest(session, obj.id, pv.doc.code)
+    custom = pv.template.custom
     return {
         "code": pv.doc.code,
-        "title": pv.doc.title,
+        "title": pv.title,
         "description": pv.doc.description,
-        "template": pv.doc.template,
+        "template": pv.template.name,
         "template_found": pv.template_sha256 is not None,
+        "template_ref": TemplateRef(
+            custom=custom is not None,
+            name=pv.template.name,
+            id=custom.id if custom else None,
+            uploaded_at=custom.uploaded_at if custom else None,
+            uploaded_by_name=custom.uploaded_by_name if custom else None,
+            comment=custom.comment if custom else None,
+        ),
+        "font": pv.font,
         "counts": _counts(pv.states),
         "watermark_reasons": pv.watermark_reasons,
         "changed": last is None or last.context_hash != pv.context_hash,
@@ -233,16 +316,43 @@ def _get_doc(session: Session, doc_id: uuid.UUID, user: User) -> GeneratedDocume
 def list_documents(object_id: uuid.UUID, user: Viewer, session: DbSession) -> DocumentsOut:
     obj = get_object_for(session, object_id, user)
     versions = _versions(session, obj, user)
+    ctx = context.build(session, obj)  # один раз на все документы комплекта
     types = []
     for doc in _applicable(obj):
-        pv = svc.preview(session, obj, doc)
+        pv = svc.preview(session, obj, doc, full_context=ctx)
         types.append(TypeOut(**_type_out(session, obj, pv, versions.get(doc.code, []))))
     return DocumentsOut(
         types=types,
         pdf_available=pdf.converter_path(get_settings().pdf_converter) is not None,
         can_edit=Perm.DOCUMENTS_EDIT in perms_for(user.roles),
         sees_drafts=sees_drafts(user),
+        font=svc.object_font(obj),
+        fonts=[FontOut(code=k, title=v) for k, v in render.FONTS.items()],
     )
+
+
+@router.put("/objects/{object_id}/documents/settings")
+def document_settings(
+    object_id: uuid.UUID, body: SettingsIn, request: Request, user: Editor, session: DbSession
+) -> SettingsOut:
+    """Шрифт комплекта объекта; документы со встроенным шаблоном станут «изменёнными»."""
+    obj = get_object_for(session, object_id, user)
+    _editable(session, obj)
+    before = svc.object_font(obj)
+    if before != body.font:
+        obj.doc_font = body.font
+        audit.record(
+            session,
+            action="documents.settings",
+            actor=user,
+            entity="object",
+            entity_id=obj.id,
+            project_id=obj.project_id,
+            ip=client_ip(request),
+            details={"font": {"from": before, "to": body.font}},
+        )
+        session.commit()
+    return SettingsOut(font=body.font)
 
 
 @router.get("/objects/{object_id}/documents/types/{code}")
@@ -346,3 +456,171 @@ def download_document(
             "Cache-Control": "private, no-store",
         },
     )
+
+
+# ---------- Свой шаблон документа (задача 3.2) ----------
+
+_DOCX = MIME["docx"]
+
+
+def _template_out(t: DocumentTemplate) -> TemplateOut:
+    return TemplateOut(
+        id=t.id,
+        doc_type=t.doc_type,
+        name=t.name,
+        size=t.size,
+        variables=list(t.variables or []),
+        active=t.active,
+        comment=t.comment,
+        uploaded_at=t.uploaded_at,
+        uploaded_by_name=t.uploaded_by_name,
+        deactivated_at=t.deactivated_at,
+        deactivated_by_name=t.deactivated_by_name,
+    )
+
+
+def _doc_type(code: str):
+    try:
+        return svc.get_type(code)
+    except svc.DocumentError as e:
+        raise HTTPException(e.status, detail=str(e)) from e
+
+
+def _attachment(path, name: str) -> FileResponse:
+    ascii_name = name.encode("ascii", "replace").decode().replace('"', "_").replace("?", "_")
+    return FileResponse(
+        path,
+        media_type=_DOCX,
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(name)}"
+            ),
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; sandbox",
+            "Cache-Control": "private, no-store",
+        },
+    )
+
+
+@router.get("/document-templates")
+def list_templates(user: Viewer, session: DbSession) -> TemplatesOut:
+    rows = list(
+        session.scalars(select(DocumentTemplate).order_by(DocumentTemplate.uploaded_at.desc()))
+    )
+    by_type: dict[str, list[DocumentTemplate]] = {}
+    for t in rows:
+        by_type.setdefault(t.doc_type, []).append(t)
+    types = []
+    for doc in svc.doc_types().values():
+        hist = by_type.get(doc.code, [])
+        active = next((t for t in hist if t.active), None)
+        types.append(
+            TemplateTypeOut(
+                code=doc.code,
+                title=doc.title,
+                builtin=doc.template,
+                active=_template_out(active) if active else None,
+                history=[_template_out(t) for t in hist],
+            )
+        )
+    return TemplatesOut(
+        types=types,
+        can_manage=Perm.DOCUMENTS_EDIT in perms_for(user.roles),
+        allowed_names=sorted(svc.allowed_names()),
+    )
+
+
+@router.get("/document-templates/{code}/builtin")
+def download_builtin(code: str, user: Editor) -> FileResponse:
+    """Встроенный шаблон — основа для своего (поля Jinja уже расставлены)."""
+    doc = _doc_type(code)
+    path = svc.builtin_path(doc)
+    if not path.is_file():
+        raise HTTPException(404, detail=f"Шаблон {doc.template} не найден")
+    return _attachment(path, f"Шаблон — {doc.title}.docx")
+
+
+@router.get("/document-templates/files/{template_id}")
+def download_custom(template_id: uuid.UUID, user: Editor, session: DbSession) -> FileResponse:
+    t = session.get(DocumentTemplate, template_id)
+    if t is None:
+        raise HTTPException(404, detail="Шаблон не найден")
+    path = svc.custom_dir() / t.sha256
+    if not path.is_file():
+        raise HTTPException(
+            410,
+            detail="Шаблон есть в базе, но файла нет в хранилище — восстановите том из копии",
+            headers={"X-Error-Code": "file_missing"},
+        )
+    return _attachment(path, t.name)
+
+
+@router.post("/document-templates/{code}", status_code=201)
+async def upload_template(
+    code: str, request: Request, user: Editor, session: DbSession
+) -> TemplateOut:
+    """Свой шаблон (multipart: file — DOCX, comment — необязательно). Сразу действует
+    для всех проектов; прежний свой шаблон остаётся в истории."""
+    doc = _doc_type(code)
+    if not request.headers.get("content-type", "").startswith("multipart/form-data"):
+        raise HTTPException(422, detail="Приложите шаблон DOCX (multipart/form-data, поле file)")
+    form = await request.form(max_files=1, max_fields=5)
+    got = form.get("file")
+    if not isinstance(got, UploadFile):
+        raise HTTPException(422, detail="Приложите шаблон DOCX (поле file)")
+    comment = form.get("comment")
+    comment = comment.strip()[:1000] or None if isinstance(comment, str) else None
+    data = await got.read(svc.MAX_TEMPLATE_BYTES + 1)
+    name = clean_name(got.filename or "") or "template.docx"
+    return await run_in_threadpool(
+        _store_template, doc, data, name, comment, user, session, client_ip(request)
+    )
+
+
+def _store_template(
+    doc, data: bytes, name: str, comment: str | None, user: User, session: Session, ip
+) -> TemplateOut:
+    if not name.lower().endswith(".docx"):
+        raise HTTPException(422, detail="Нужен шаблон в формате DOCX")
+    try:
+        row = svc.upload_template(session, doc, data, name, user, comment)
+    except svc.DocumentError as e:
+        audit.record_now(
+            session,
+            action="documents.template.rejected",
+            actor=user,
+            result="error",
+            ip=ip,
+            details={"type": doc.code, "name": name, "reason": str(e)[:300]},
+        )
+        raise HTTPException(e.status, detail=str(e), headers={"X-Error-Code": e.code}) from e
+    audit.record(
+        session,
+        action="documents.template.upload",
+        actor=user,
+        entity="document_template",
+        entity_id=row.id,
+        ip=ip,
+        details={"type": doc.code, "name": name, "sha256": row.sha256, "size": row.size},
+    )
+    session.commit()
+    return _template_out(row)
+
+
+@router.post("/document-templates/{code}/reset")
+def reset_template(code: str, request: Request, user: Editor, session: DbSession) -> TemplatesOut:
+    """Вернуть встроенный шаблон документа."""
+    doc = _doc_type(code)
+    prev = svc.reset_template(session, doc, user)
+    if prev is not None:
+        audit.record(
+            session,
+            action="documents.template.reset",
+            actor=user,
+            entity="document_template",
+            entity_id=prev.id,
+            ip=client_ip(request),
+            details={"type": doc.code, "name": prev.name},
+        )
+        session.commit()
+    return list_templates(user, session)

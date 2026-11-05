@@ -20,7 +20,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.db.models import AssessedObject, Classification, ObjectSzi, Project
+from app.db.models import AssessedObject, Classification, ObjectMeasure, ObjectSzi, Project
+from app.docs_gen import sections
 from app.domain import szi as szi_domain
 
 KIND_TITLES = {
@@ -51,6 +52,32 @@ def _s(v: Any) -> str | None:
         return None
     v = str(v).strip()
     return v or None
+
+
+def _label(defn: dict[str, Any], value: Any) -> str:
+    options = {str(o.get("value")): o.get("label") for o in defn.get("options") or []}
+    values = value if isinstance(value, list) else [value]
+    return ", ".join(str(options.get(str(v), v)) for v in values)
+
+
+def _inputs(cls: Classification) -> list[dict[str, Any]]:
+    """Исходные данные расчёта с подписями из снимка таблицы классификации."""
+    defs = {d.get("key"): d for d in (cls.table_snapshot or {}).get("inputs") or []}
+    out = []
+    for key, value in (cls.inputs or {}).items():
+        d = defs.get(key) or {}
+        out.append({"name": d.get("label") or key, "value": _label(d, value) if d else _s(value)})
+    return out
+
+
+def empty_classification() -> dict[str, Any]:
+    """Раздел classification без утверждённого расчёта: те же ключи, пустые значения."""
+    keys = ("result", "result_label", "regime_title", "approved", "approved_by")
+    return {
+        **dict.fromkeys((*keys, "justification", "table_version")),
+        "steps": [],
+        "inputs": [],
+    }
 
 
 def _classification(session: Session, obj: AssessedObject) -> Classification | None:
@@ -110,8 +137,11 @@ def build(session: Session, obj: AssessedObject, *, today: date | None = None) -
     segments = {s.id: s for s in obj.segments}
 
     unverified: list[dict[str, str]] = []
-    classification: dict[str, Any] = {}
+    classification = empty_classification()
     if cls is not None:
+        defs = {d.get("key"): d for d in (cls.table_snapshot or {}).get("inputs") or []}
+        labels = {k: d.get("label") or k for k, d in defs.items()}
+        labels.update({t.get("key"): t.get("label") for t in cls.trace or [] if t.get("key")})
         classification = {
             "result": cls.result,
             "result_label": cls.result_label,
@@ -120,14 +150,48 @@ def build(session: Session, obj: AssessedObject, *, today: date | None = None) -
             "approved_by": _s(cls.approved_by_name),
             "justification": _s(cls.justification),
             "table_version": cls.table_version,
+            "steps": [
+                {
+                    "label": _s(t.get("label")) or t.get("key"),
+                    "value": _s(t.get("value")),
+                    "matched": "; ".join(
+                        f"{labels.get(k, k)}: {_label(defs.get(k) or {}, v) if k in defs else v}"
+                        for k, v in (t.get("matched") or {}).items()
+                    )
+                    or None,
+                    "source": "; ".join(
+                        str(x)
+                        for x in (
+                            (t.get("source") or {}).get("document"),
+                            (t.get("source") or {}).get("clause"),
+                        )
+                        if x
+                    )
+                    or None,
+                }
+                for t in cls.trace or []
+            ],
+            "inputs": _inputs(cls),
         }
         if not cls.table_verified:
             unverified.append(
                 {
+                    "section": "classification",
                     "title": f"Таблица классификации ({REGIME_TITLES.get(cls.regime, cls.regime)})",
                     "note": f"версия {cls.table_version}, ревизия {cls.table_revision}",
                 }
             )
+
+    snap = sections.latest_snapshot(session, obj)
+    measures, nonconf, u_measures = sections.measures_section(
+        session, obj, snap, get_settings().partial_weight
+    )
+    threat_model, u_threats = sections.threat_model_section(session, obj)
+    vulns, vuln_plan, u_vulns = sections.vulns_section(session, obj)
+    org, u_org = sections.org_docs_section(
+        get_settings().reference_dir, measures, _profile_id(session, obj)
+    )
+    unverified += u_measures + u_threats + u_vulns + u_org
 
     return {
         "customer": {
@@ -194,8 +258,55 @@ def build(session: Session, obj: AssessedObject, *, today: date | None = None) -
             for h in obj.hosts
         ],
         "szi": _szi(session, obj, today),
+        "snapshot": sections.snapshot_section(snap),
+        "measures": measures,
+        "threat_model": threat_model,
+        "vulns": vulns,
+        # План устранения: меры с нарушениями, затем уязвимости по уровню.
+        "nonconformities": nonconf,
+        "vuln_plan": vuln_plan,
+        "org": org,
+        "normative": sections.normative_section(
+            session, [c for c in NORMATIVE.get(obj.regime or "", ())]
+        ),
         "unverified": unverified,
     }
+
+
+# Разделы контекста (ключи верхнего уровня) — их может использовать свой шаблон.
+CONTEXT_KEYS = (
+    "customer",
+    "project",
+    "object",
+    "classification",
+    "segments",
+    "hosts",
+    "szi",
+    "snapshot",
+    "measures",
+    "threat_model",
+    "vulns",
+    "nonconformities",
+    "vuln_plan",
+    "org",
+    "normative",
+    "unverified",
+)
+
+
+# Нормативные документы, на которые ссылается комплект (коды ref_documents).
+NORMATIVE = {
+    "117": ("fstec-117", "fstec-threats-2021", "fstec-vuln-2025", "fstec-updates-2022"),
+    "21": ("fstec-21", "fstec-threats-2021", "fstec-vuln-2025", "fstec-updates-2022"),
+    "239": ("fstec-239", "fstec-threats-2021", "fstec-vuln-2025", "fstec-updates-2022"),
+    "": ("fstec-threats-2021", "fstec-vuln-2025"),
+}
+
+
+def _profile_id(session: Session, obj: AssessedObject) -> str | None:
+    return session.scalars(
+        select(ObjectMeasure.profile_id).where(ObjectMeasure.object_id == obj.id).limit(1)
+    ).first()
 
 
 def context_hash(context: dict[str, Any], template_sha256: str) -> str:

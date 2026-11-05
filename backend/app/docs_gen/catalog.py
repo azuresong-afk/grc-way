@@ -15,8 +15,18 @@ from typing import Any
 
 import yaml
 
-TABS = ("project", "description", "classification", "composition", "szi")
-_KEY = re.compile(r"^[a-z_]+(\[\])?(\.[a-z_]+)?$")
+TABS = (
+    "project",
+    "description",
+    "classification",
+    "composition",
+    "szi",
+    "measures",
+    "threats",
+    "vulns",
+)
+# «a.b.c» — поле; «a.b[].c» — поле у каждого элемента списка a.b.
+_KEY = re.compile(r"^[a-z_]+(\.[a-z_]+)*(\[\]\.[a-z_]+)?$")
 
 
 class CatalogError(ValueError):
@@ -45,9 +55,14 @@ class DocType:
     template: str
     regimes: tuple[str | None, ...]
     fields: tuple[FieldSpec, ...]
+    # Заголовок по режиму: акт классификации ГИС, УЗ ПДн, сведения о категорировании.
+    titles: tuple[tuple[str, str], ...] = ()
 
     def applies_to(self, regime: str | None) -> bool:
         return regime in self.regimes
+
+    def title_for(self, regime: str | None) -> str:
+        return dict(self.titles).get(regime or "", self.title)
 
 
 def _field(doc: str, raw: dict[str, Any]) -> FieldSpec:
@@ -89,6 +104,7 @@ def parse(data: dict[str, Any]) -> dict[str, DocType]:
             template=str(raw["template"]),
             regimes=tuple(None if r is None else str(r) for r in raw.get("regimes") or []),
             fields=fields,
+            titles=tuple((str(k), str(v)) for k, v in (raw.get("titles") or {}).items()),
         )
     return out
 

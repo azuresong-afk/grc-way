@@ -6,10 +6,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
 WORKDIR /srv
 
 # LibreOffice (без графики) — DOCX → PDF для документов комплекта; шрифты с кириллицей.
-# Liberation метрически совместимы с Times New Roman и Arial из шаблонов.
+# Шрифты комплекта (3.2): Inter — пакет fonts-inter; PT Astra Serif — файлы *.ttf из
+# backend/fonts/, если их туда положили, иначе Liberation Serif (метрически совместим,
+# см. backend/fonts/60-grc-fonts.conf).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends libreoffice-writer-nogui fonts-liberation fonts-dejavu-core \
+    fonts-inter fontconfig \
  && rm -rf /var/lib/apt/lists/*
+COPY backend/fonts/ /usr/local/share/fonts/grc/
+RUN cp /usr/local/share/fonts/grc/60-grc-fonts.conf /etc/fonts/conf.d/60-grc-fonts.conf && fc-cache -f
 
 RUN groupadd --system grc && useradd --system --gid grc --home /srv grc
 
