@@ -1,4 +1,8 @@
-"""Вход, выход, текущий пользователь (режим AUTH_MODE=local)."""
+"""Вход, выход, текущий пользователь.
+
+В режиме AUTH_MODE=platform своего входа нет: токен выдаёт «Платформа»
+(`POST /api/platform/auth/login`), `POST /auth/token` отвечает 409.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +12,7 @@ from sqlalchemy import select
 from app import audit
 from app.api.deps import CurrentUser, DbSession, client_ip
 from app.api.schemas import LoginIn, MeOut, TokenOut
+from app.core.config import get_settings
 from app.core.rbac import perms_for
 from app.core.security import DUMMY_HASH, verify_password
 from app.db.models import User, utcnow
@@ -17,6 +22,8 @@ router = APIRouter(tags=["auth"])
 
 @router.post("/auth/token", response_model=TokenOut)
 def login(body: LoginIn, request: Request, session: DbSession) -> TokenOut:
+    if get_settings().auth_mode == "platform":
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Вход — через «Платформу»")
     throttle = request.app.state.throttle
     username = body.username.strip().lower()
     ip = client_ip(request)
@@ -71,4 +78,6 @@ def me(user: CurrentUser) -> MeOut:
         display_name=user.display_name,
         roles=sorted(user.roles),
         permissions=sorted(str(p) for p in perms_for(user.roles)),
+        auth_mode=get_settings().auth_mode,
+        service=user.platform_typ == "service",
     )

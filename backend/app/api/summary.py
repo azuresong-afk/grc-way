@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import DbSession, require
 from app.api.measures import StatsOut
 from app.api.objects import ClassBrief, current_classes
-from app.api.projects import get_project_for
+from app.api.projects import get_project_for, visible_project_ids
 from app.api.szi import SziCounts, count_states, szi_states
 from app.core.config import get_settings
 from app.core.rbac import Perm
@@ -37,7 +37,6 @@ from app.db.models import (
     ObjectMeasure,
     ObjectSzi,
     Project,
-    ProjectMember,
     RefClassificationTable,
     RefMeasure,
     ScannerSnapshot,
@@ -136,6 +135,8 @@ class SearchItem(BaseModel):
     # Маршрут SPA («/objects/…») и полный адрес в платформе (base_path + маршрут).
     path: str
     url: str
+    # Для Ctrl+K оболочки платформы (контракт v1.1, п. 7): то же, что url.
+    link: str
 
 
 class SearchOut(BaseModel):
@@ -371,16 +372,19 @@ def search(
     session: DbSession,
     q: Annotated[str, Query(max_length=200)] = "",
     project_id: uuid.UUID | None = None,
+    # Оболочка платформы передаёт ?project=<uuid>&limit=8.
+    project: uuid.UUID | None = None,
+    limit: Annotated[int | None, Query(ge=1, le=50)] = None,
 ) -> SearchOut:
     text = q.strip()
     needle = _fold(text)
     if len(needle) < 2:
         return SearchOut(q=text, items=[])
     base = get_settings().base_path.rstrip("/")
-    visible = select(ProjectMember.project_id).where(ProjectMember.user_id == user.id)
-    stmt = select(Project).where(Project.id.in_(visible))
+    stmt = select(Project).where(Project.id.in_(visible_project_ids(session, user)))
+    project_id = project_id or project
     if project_id is not None:
-        stmt = stmt.where(Project.id == project_id)
+        stmt = stmt.where((Project.id == project_id) | (Project.platform_project_id == project_id))
     projects = {p.id: p for p in session.scalars(stmt)}
     if not projects:
         return SearchOut(q=text, items=[])
@@ -389,7 +393,10 @@ def search(
 
     def add(rank: int, kind: SearchKind, sort: str, item: dict) -> None:
         path = item.pop("path")
-        found[kind].append((rank, sort, SearchItem(kind=kind, path=path, url=base + path, **item)))
+        url = base + path
+        found[kind].append(
+            (rank, sort, SearchItem(kind=kind, path=path, url=url, link=url, **item))
+        )
 
     for p in projects.values():
         rank = _hit(needle, p.name, p.customer.name, p.contract_ref)
@@ -477,4 +484,8 @@ def search(
     for kind in ("project", "object", "host", "measure"):
         hits = sorted(found.get(kind, []), key=lambda t: (t[0], t[1]))
         items.extend(h[2] for h in hits[:PER_KIND])
+    if limit is not None:
+        # Оболочке — лучшие совпадения по всем видам, а не первые виды целиком.
+        ranked = sorted((h for hits in found.values() for h in hits), key=lambda t: (t[0], t[1]))
+        items = [h[2] for h in ranked[:limit]]
     return SearchOut(q=text, items=items)

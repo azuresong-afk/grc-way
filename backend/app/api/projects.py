@@ -1,9 +1,21 @@
-"""Заказчики и проекты (режим AUTH_MODE=local; в режиме platform проекты — у платформы)."""
+"""Заказчики и проекты.
+
+Режим AUTH_MODE=platform (задача 3.5, контракт v1.1, п. 3): проекты создаются
+только в «Платформе». Неизвестный uuid проекта превращается в «тень» по данным
+`GET {PLATFORM_URL}/projects/{id}` с токеном пользователя; id тени равен uuid
+платформы, поэтому все адреса API и ссылки ?project= одинаковы в обоих продуктах.
+Доступ — из утверждения `projects` токена (403 `no_project_access`); поля
+договора сверяются с платформой не реже раза в 5 минут и по событию
+`platform.project.updated`; архивный проект — только чтение (409 `project_archived`).
+Участие в проекте у теневых пользователей отражается строками project_members
+(для выбора ответственных), но права всегда из токена.
+"""
 
 from __future__ import annotations
 
 import uuid
-from typing import Annotated
+from datetime import date, timedelta
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import Select, func, or_, select
@@ -21,8 +33,11 @@ from app.api.schemas import (
     ProjectOut,
     ProjectPatch,
 )
+from app.core.config import get_settings
 from app.core.rbac import Perm, Role
-from app.db.models import Customer, Project, ProjectMember, User
+from app.db.models import Customer, Project, ProjectMember, User, utcnow
+from app.integrations.platform.client import PlatformUnavailable, get_client
+from app.request_ctx import is_write
 
 router = APIRouter(tags=["projects"])
 Viewer = Annotated[User, Depends(require(Perm.VIEW))]
@@ -35,13 +50,148 @@ def _not_found() -> HTTPException:
 
 
 def _visible(stmt: Select, user: User) -> Select:
-    """Проекты, где пользователь — участник."""
+    """Проекты, где пользователь — участник; в режиме platform — проекты из токена."""
+    if user.token_projects is not None:
+        if "*" in user.token_projects:
+            return stmt.where(Project.platform_project_id.is_not(None))
+        ids = [_uuid(p) for p in user.token_projects]
+        return stmt.where(Project.platform_project_id.in_([i for i in ids if i]))
     return stmt.where(
         Project.id.in_(select(ProjectMember.project_id).where(ProjectMember.user_id == user.id))
     )
 
 
+def visible_project_ids(session: Session, user: User) -> list[uuid.UUID]:
+    return list(session.scalars(_visible(select(Project.id), user)))
+
+
+def _uuid(v: object) -> uuid.UUID | None:
+    try:
+        return uuid.UUID(str(v))
+    except ValueError:
+        return None
+
+
+def platform_mode() -> bool:
+    return get_settings().auth_mode == "platform"
+
+
+# Тень проекта сверяется с платформой не реже, чем раз в 5 минут (контракт v1.1, п. 3.1).
+SHADOW_TTL = timedelta(minutes=5)
+
+
+def _date(v: Any) -> date | None:
+    if not v:
+        return None
+    try:
+        return date.fromisoformat(str(v)[:10])
+    except ValueError:
+        return None
+
+
+def _customer_named(session: Session, name: str) -> Customer:
+    c = session.scalar(select(Customer).where(Customer.name == name).limit(1))
+    if c is None:
+        c = Customer(name=name, contacts=[])
+        session.add(c)
+        session.flush()
+    return c
+
+
+def apply_platform_project(session: Session, p: Project, data: dict[str, Any]) -> list[str]:
+    """Переносит поля проекта платформы в тень; возвращает имена изменённых полей."""
+    changed: list[str] = []
+    fields: dict[str, Any] = {}
+    if "name" in data:
+        fields["name"] = (str(data.get("name") or "") or "Проект платформы")[:300]
+    for k in ("contract_ref",):
+        if k in data:
+            fields[k] = str(data[k])[:200] if data[k] else None
+    for k in ("period_from", "period_to"):
+        if k in data:
+            fields[k] = _date(data[k])
+    if data.get("status") in ("active", "archived"):
+        fields["status"] = data["status"]
+    if "client" in data:
+        client = (str(data.get("client") or "") or "Заказчик не указан")[:300]
+        if p.customer_id is None or p.customer is None or p.customer.name != client:
+            p.customer = _customer_named(session, client)
+            changed.append("client")
+    for k, v in fields.items():
+        if getattr(p, k) != v:
+            setattr(p, k, v)
+            changed.append(k)
+    p.platform_synced_at = utcnow()
+    return changed
+
+
+def _sync_shadow(session: Session, project_id: uuid.UUID, p: Project | None, user: User) -> Project:
+    try:
+        data = get_client(get_settings()).fetch_project(str(project_id), user.token or "")
+    except PlatformUnavailable as e:
+        if p is not None:
+            return p  # платформа недоступна — работаем с последней сверенной копией
+        raise HTTPException(503, detail="«Платформа» недоступна, проект не загружен") from e
+    if data is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Проект не найден в «Платформе»")
+    if p is None:
+        p = Project(id=project_id, platform_project_id=project_id, name="", status="active")
+        with session.no_autoflush:
+            apply_platform_project(session, p, data)
+        session.add(p)
+        session.flush()
+        audit.record(
+            session,
+            action="project.shadow_create",
+            actor=user,
+            entity="project",
+            entity_id=p.id,
+            project_id=p.id,
+            details={"name": p.name, "platform_project_id": str(project_id)},
+        )
+    else:
+        changed = apply_platform_project(session, p, data)
+        if changed:
+            audit.record(
+                session,
+                action="project.shadow_sync",
+                actor=user,
+                entity="project",
+                entity_id=p.id,
+                project_id=p.id,
+                details={"fields": changed},
+            )
+    session.commit()
+    return p
+
+
+def _platform_project_for(session: Session, project_id: uuid.UUID, user: User) -> Project:
+    p = session.get(Project, project_id) or session.scalar(
+        select(Project).where(Project.platform_project_id == project_id)
+    )
+    if p is not None and p.platform_project_id is None:
+        raise _not_found()  # локальный проект не виден в режиме платформы
+    platform_id = p.platform_project_id if p is not None else project_id
+    if not user.can_platform_project(platform_id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="no_project_access")
+    synced = p.platform_synced_at if p is not None else None
+    if synced is not None and synced.tzinfo is None:
+        synced = synced.replace(tzinfo=utcnow().tzinfo)
+    if p is None or synced is None or utcnow() - synced > SHADOW_TTL:
+        p = _sync_shadow(session, platform_id, p, user)
+    if user.id not in {m.user_id for m in p.members}:
+        # Участие — чтобы пользователя можно было выбрать ответственным; права — из токена.
+        p.members.append(ProjectMember(user_id=user.id))
+        session.commit()
+    return p
+
+
 def get_project_for(session: Session, project_id: uuid.UUID, user: User) -> Project:
+    if user.token_projects is not None:
+        project = _platform_project_for(session, project_id, user)
+        if project.status == "archived" and is_write():
+            raise HTTPException(status.HTTP_409_CONFLICT, detail="project_archived")
+        return project
     project = session.get(Project, project_id)
     if project is None or user.id not in {m.user_id for m in project.members}:
         raise _not_found()
@@ -69,6 +219,10 @@ def _project_out(session: Session, p: Project) -> ProjectOut:
             key=lambda m: m.display_name,
         ),
     )
+
+
+# Поля договора: в режиме platform их источник — платформа.
+_PLATFORM_FIELDS = {"name", "contract_ref", "period_from", "period_to", "status"}
 
 
 def _check_period(p: Project) -> None:
@@ -188,6 +342,8 @@ def list_projects(
 def create_project(
     body: ProjectIn, request: Request, user: Manager, session: DbSession
 ) -> ProjectOut:
+    if platform_mode():
+        raise HTTPException(409, detail="Проекты создаются в «Платформе»")
     if session.get(Customer, body.customer_id) is None:
         raise HTTPException(422, detail="Заказчик не найден")
     p = Project(**body.model_dump(), created_by=user.id)
@@ -225,6 +381,10 @@ def update_project(
 ) -> ProjectOut:
     p = get_project_for(session, project_id, user)
     data = body.model_dump(exclude_unset=True)
+    if platform_mode() and data.keys() & _PLATFORM_FIELDS:
+        raise HTTPException(
+            409, detail="Название, договор, срок и статус проекта меняются в «Платформе»"
+        )
     if "name" in data and not data["name"]:
         raise HTTPException(422, detail="Укажите название проекта")
     for k, v in data.items():
@@ -253,6 +413,8 @@ def set_members(
     user: Manager,
     session: DbSession,
 ) -> ProjectOut:
+    if platform_mode():
+        raise HTTPException(409, detail="Доступ к проекту выдаётся в «Платформе»")
     p = get_project_for(session, project_id, user)
     wanted = set(body.user_ids)
     if user.id not in wanted:

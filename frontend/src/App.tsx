@@ -1,6 +1,8 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { RequireAuth, RequirePerm } from "./lib/auth";
+import { PLATFORM, goToLogin } from "./lib/platform";
+import { PlatformEventsPage } from "./pages/PlatformEventsPage";
 import { ProjectProvider } from "./lib/project";
 import { AuditPage } from "./pages/AuditPage";
 import { BduPage } from "./pages/BduPage";
@@ -20,10 +22,17 @@ import { DocumentsPage } from "./pages/DocumentsPage";
 import { ThreatRefsPage } from "./pages/ThreatRefsPage";
 import { UsersPage } from "./pages/UsersPage";
 
+/** В платформе своей страницы входа нет — уводим на вход оболочки с тем же next. */
+function ShellLogin() {
+  const next = new URLSearchParams(window.location.search).get("next");
+  goToLogin(next ?? import.meta.env.BASE_URL);
+  return null;
+}
+
 export function App() {
   return (
     <Routes>
-      <Route path="login" element={<LoginPage />} />
+      <Route path="login" element={PLATFORM ? <ShellLogin /> : <LoginPage />} />
       <Route
         element={
           <RequireAuth>
@@ -88,6 +97,14 @@ export function App() {
           element={
             <RequirePerm perm="audit.view">
               <AuditPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="admin/platform"
+          element={
+            <RequirePerm perm="integrations.manage">
+              <PlatformEventsPage />
             </RequirePerm>
           }
         />

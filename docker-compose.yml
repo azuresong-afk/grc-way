@@ -52,6 +52,7 @@ services:
       args:
         VITE_BASE: ${VITE_BASE:-/}
         VITE_API_BASE: ${VITE_API_BASE:-/api}
+        VITE_PLATFORM: ${VITE_PLATFORM:-0}
     restart: unless-stopped
     ports:
       - "${GRC_WEB_PORT:-18082}:8080"

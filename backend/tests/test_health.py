@@ -19,7 +19,12 @@ def test_manifest_matches_platform_contract():
     assert data["base_path"] == "/grc/"
     assert data["api_base"] == "/api/grc/"
     assert data["health_url"] == "/api/grc/health/ready"
-    assert set(data["roles"]) == {"methodologist", "assessor", "viewer", "admin"}
+    assert set(data["roles"]) == {"methodologist", "assessor", "viewer", "admin", "approve"}
+    assert data["admin_roles"] == ["admin"]
+    assert data["summary_url"] == "/api/grc/summary"
+    assert data["search_url"] == "/api/grc/search"
+    assert data["events"]["webhook"] == "/events/platform"
+    assert "platform.keys.rotated" in data["events"]["subscribe"]
     for item in data["nav"]:
         assert item["path"].startswith("/grc/")
 

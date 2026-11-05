@@ -8,6 +8,7 @@ import { apiPage, apiSend, query } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { formatDateTime } from "../lib/format";
 import { ROLE_HINTS, ROLE_ORDER, ROLE_TITLES, roleList } from "../lib/roles";
+import { PLATFORM } from "../lib/platform";
 
 interface User {
   id: string;
@@ -17,6 +18,8 @@ interface User {
   is_active: boolean;
   created_at: string;
   last_login_at: string | null;
+  platform_sub?: string | null;
+  platform_typ?: string | null;
 }
 
 const LIMIT = 50;
@@ -47,13 +50,22 @@ export function UsersPage() {
           <div className="crumbs">Администрирование</div>
           <h1>Пользователи и роли</h1>
         </div>
-        <div className="actions">
-          <button type="button" className="btn btn-primary" onClick={() => setEditing("new")}>
-            <UserPlus size={15} />
-            Добавить пользователя
-          </button>
-        </div>
+        {!PLATFORM && (
+          <div className="actions">
+            <button type="button" className="btn btn-primary" onClick={() => setEditing("new")}>
+              <UserPlus size={15} />
+              Добавить пользователя
+            </button>
+          </div>
+        )}
       </div>
+
+      {PLATFORM && (
+        <p className="muted">
+          Пользователи и роли ведутся в «Платформе». Здесь — теневые записи: появляются при первом
+          входе, роли показаны по последнему входу.
+        </p>
+      )}
 
       {error && <ErrorAlert message={error} onRetry={load} />}
 
@@ -79,7 +91,10 @@ export function UsersPage() {
                   <tr key={u.id}>
                     <td>
                       <div className="cell-title">{u.display_name}</div>
-                      <div className="cell-sub mono">{u.username}</div>
+                      <div className="cell-sub mono">
+                        {u.username}
+                        {u.platform_typ === "service" && " · сервис"}
+                      </div>
                     </td>
                     <td>{roleList(u.roles)}</td>
                     <td>
@@ -91,14 +106,16 @@ export function UsersPage() {
                     </td>
                     <td>{formatDateTime(u.last_login_at)}</td>
                     <td className="cell-actions">
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        aria-label={`Изменить ${u.display_name}`}
-                        onClick={() => setEditing(u)}
-                      >
-                        <Pencil size={15} />
-                      </button>
+                      {!PLATFORM && (
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          aria-label={`Изменить ${u.display_name}`}
+                          onClick={() => setEditing(u)}
+                        >
+                          <Pencil size={15} />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

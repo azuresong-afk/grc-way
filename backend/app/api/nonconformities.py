@@ -486,7 +486,11 @@ def _iso(at: datetime | None) -> str | None:
 
 
 def _ticket_url(nc: Nonconformity) -> str | None:
-    base = get_settings().vm_web_url.rstrip("/")
+    s = get_settings()
+    base = s.vm_web_url.rstrip("/")
+    if not base and s.auth_mode == "platform":
+        # Межпродуктовая ссылка того же origin: /vm/tickets/<id>?project=<uuid> (контракт, п. 7).
+        base = "/vm"
     if not base or not nc.vm_ticket_id:
         return None
     q = f"?project={nc.vm_project_id}" if nc.vm_project_id else ""

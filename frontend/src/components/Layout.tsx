@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  RadioTower,
   ScrollText,
   Search,
   Server,
@@ -16,6 +17,8 @@ import { useAuth } from "../lib/auth";
 import { CommandPalette } from "./CommandPalette";
 import { initials } from "../lib/format";
 import { roleList } from "../lib/roles";
+import { PLATFORM } from "../lib/platform";
+import { PlatformTabs } from "./PlatformTabs";
 import { ProjectPicker } from "./ProjectPicker";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -37,6 +40,12 @@ const NAV: NavItem[] = [
 const ADMIN_NAV: NavItem[] = [
   { to: "/admin/users", label: "Пользователи и роли", icon: <Users size={18} />, perm: "users.manage" },
   { to: "/admin/audit", label: "Журнал аудита", icon: <ScrollText size={18} />, perm: "audit.view" },
+  {
+    to: "/admin/platform",
+    label: "События платформы",
+    icon: <RadioTower size={18} />,
+    perm: "integrations.manage",
+  },
 ];
 
 function NavItems({ items }: { items: NavItem[] }) {
@@ -74,7 +83,7 @@ export function Layout() {
 
   const adminItems = ADMIN_NAV.filter((i) => !i.perm || can(i.perm));
 
-  return (
+  const shell = (
     <div className={`shell${navOpen ? " nav-open" : ""}`}>
       <aside className="sidebar" aria-label="Главное меню">
         <div className="brand">
@@ -144,6 +153,14 @@ export function Layout() {
         </main>
       </div>
       {searchOpen && <CommandPalette onClose={() => setSearchOpen(false)} />}
+    </div>
+  );
+  if (!PLATFORM) return shell;
+  // В платформе над интерфейсом продукта — строка вкладок продуктов (контракт, п. 9).
+  return (
+    <div className="platform-frame">
+      <PlatformTabs />
+      {shell}
     </div>
   );
 }

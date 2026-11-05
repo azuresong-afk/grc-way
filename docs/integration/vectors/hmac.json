@@ -1,0 +1,102 @@
+{
+  "algorithm": "HMAC-SHA256",
+  "header": "X-Signature",
+  "cases": [
+    {
+      "name": "product_to_platform",
+      "description": "«Сканер» отправляет событие в POST /api/platform/events. Тело UTF-8, кириллица без \\u.",
+      "direction": "scanner → platform",
+      "secret": "test-scanner-events-secret",
+      "secret_of": "scanner",
+      "body": "{\"id\":\"7c9e6679-7425-40de-944b-e07fc1f90001\",\"type\":\"scanner.run.finished\",\"source\":\"scanner\",\"time\":\"2026-11-04T16:54:52Z\",\"project_id\":\"3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61\",\"subject\":\"run/123\",\"data\":{\"run_id\":\"123\",\"name\":\"Периметр, ноябрь\",\"status\":\"done\",\"started_at\":\"2026-11-04T15:10:00Z\",\"finished_at\":\"2026-11-04T16:54:50Z\",\"counts\":{\"critical\":2,\"high\":7,\"medium\":19,\"low\":4,\"info\":31},\"initiated_by\":{\"sub\":\"6f1d2c3b-4a59-4e6f-8a7b-9c0d1e2f3a4b\",\"name\":\"Иванов И. И.\"}}}",
+      "body_sha256": "2700cca845f786ad0c12f726a595fd56e5ebb0d9aad6f1aaf513b58c4f311cd2",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-Platform-Product": "scanner",
+        "X-Event-Id": "7c9e6679-7425-40de-944b-e07fc1f90001",
+        "X-Signature": "sha256=907f5948fad05d3d1ce3ccb28c8a4bdb6438c11cca9fd4e8225582f0605aeb8f"
+      },
+      "valid": true
+    },
+    {
+      "name": "product_to_platform_pretty",
+      "description": "То же событие с отступами: подпись считается от этих байтов, а не от «того же JSON».",
+      "direction": "scanner → platform",
+      "secret": "test-scanner-events-secret",
+      "secret_of": "scanner",
+      "body": "{\n  \"id\": \"7c9e6679-7425-40de-944b-e07fc1f90001\",\n  \"type\": \"scanner.run.finished\",\n  \"source\": \"scanner\",\n  \"time\": \"2026-11-04T16:54:52Z\",\n  \"project_id\": \"3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61\",\n  \"subject\": \"run/123\",\n  \"data\": {\n    \"run_id\": \"123\",\n    \"name\": \"Периметр, ноябрь\",\n    \"status\": \"done\",\n    \"started_at\": \"2026-11-04T15:10:00Z\",\n    \"finished_at\": \"2026-11-04T16:54:50Z\",\n    \"counts\": {\n      \"critical\": 2,\n      \"high\": 7,\n      \"medium\": 19,\n      \"low\": 4,\n      \"info\": 31\n    },\n    \"initiated_by\": {\n      \"sub\": \"6f1d2c3b-4a59-4e6f-8a7b-9c0d1e2f3a4b\",\n      \"name\": \"Иванов И. И.\"\n    }\n  }\n}",
+      "body_sha256": "cbace6722a7c2f0ff2a0b947c5c3e0f6fa3df2473dcbbe3df407999417d3cff5",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-Platform-Product": "scanner",
+        "X-Event-Id": "7c9e6679-7425-40de-944b-e07fc1f90001",
+        "X-Signature": "sha256=4338f3f9189dd2e005319343333b0ad4198a546be664344ca9fcac8d69307f0c"
+      },
+      "valid": true
+    },
+    {
+      "name": "reserialized_body",
+      "description": "Тело переформатировано после подписи (подпись от компактного варианта) — 401.",
+      "direction": "scanner → platform",
+      "secret": "test-scanner-events-secret",
+      "secret_of": "scanner",
+      "body": "{\n  \"id\": \"7c9e6679-7425-40de-944b-e07fc1f90001\",\n  \"type\": \"scanner.run.finished\",\n  \"source\": \"scanner\",\n  \"time\": \"2026-11-04T16:54:52Z\",\n  \"project_id\": \"3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61\",\n  \"subject\": \"run/123\",\n  \"data\": {\n    \"run_id\": \"123\",\n    \"name\": \"Периметр, ноябрь\",\n    \"status\": \"done\",\n    \"started_at\": \"2026-11-04T15:10:00Z\",\n    \"finished_at\": \"2026-11-04T16:54:50Z\",\n    \"counts\": {\n      \"critical\": 2,\n      \"high\": 7,\n      \"medium\": 19,\n      \"low\": 4,\n      \"info\": 31\n    },\n    \"initiated_by\": {\n      \"sub\": \"6f1d2c3b-4a59-4e6f-8a7b-9c0d1e2f3a4b\",\n      \"name\": \"Иванов И. И.\"\n    }\n  }\n}",
+      "body_sha256": "cbace6722a7c2f0ff2a0b947c5c3e0f6fa3df2473dcbbe3df407999417d3cff5",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-Platform-Product": "scanner",
+        "X-Event-Id": "7c9e6679-7425-40de-944b-e07fc1f90001",
+        "X-Signature": "sha256=907f5948fad05d3d1ce3ccb28c8a4bdb6438c11cca9fd4e8225582f0605aeb8f"
+      },
+      "valid": false
+    },
+    {
+      "name": "wrong_secret",
+      "description": "Подписано секретом «Устранения», а X-Platform-Product: scanner — 401.",
+      "direction": "scanner → platform",
+      "secret": "test-scanner-events-secret",
+      "secret_of": "scanner",
+      "body": "{\"id\":\"7c9e6679-7425-40de-944b-e07fc1f90001\",\"type\":\"scanner.run.finished\",\"source\":\"scanner\",\"time\":\"2026-11-04T16:54:52Z\",\"project_id\":\"3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61\",\"subject\":\"run/123\",\"data\":{\"run_id\":\"123\",\"name\":\"Периметр, ноябрь\",\"status\":\"done\",\"started_at\":\"2026-11-04T15:10:00Z\",\"finished_at\":\"2026-11-04T16:54:50Z\",\"counts\":{\"critical\":2,\"high\":7,\"medium\":19,\"low\":4,\"info\":31},\"initiated_by\":{\"sub\":\"6f1d2c3b-4a59-4e6f-8a7b-9c0d1e2f3a4b\",\"name\":\"Иванов И. И.\"}}}",
+      "body_sha256": "2700cca845f786ad0c12f726a595fd56e5ebb0d9aad6f1aaf513b58c4f311cd2",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-Platform-Product": "scanner",
+        "X-Event-Id": "7c9e6679-7425-40de-944b-e07fc1f90001",
+        "X-Signature": "sha256=697f7bb510d4dbbdd0018e02d5b071eff92365290754d02e9769761f6611b2fa"
+      },
+      "valid": false
+    },
+    {
+      "name": "missing_prefix",
+      "description": "Нет префикса sha256= — 401.",
+      "direction": "scanner → platform",
+      "secret": "test-scanner-events-secret",
+      "secret_of": "scanner",
+      "body": "{\"id\":\"7c9e6679-7425-40de-944b-e07fc1f90001\",\"type\":\"scanner.run.finished\",\"source\":\"scanner\",\"time\":\"2026-11-04T16:54:52Z\",\"project_id\":\"3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61\",\"subject\":\"run/123\",\"data\":{\"run_id\":\"123\",\"name\":\"Периметр, ноябрь\",\"status\":\"done\",\"started_at\":\"2026-11-04T15:10:00Z\",\"finished_at\":\"2026-11-04T16:54:50Z\",\"counts\":{\"critical\":2,\"high\":7,\"medium\":19,\"low\":4,\"info\":31},\"initiated_by\":{\"sub\":\"6f1d2c3b-4a59-4e6f-8a7b-9c0d1e2f3a4b\",\"name\":\"Иванов И. И.\"}}}",
+      "body_sha256": "2700cca845f786ad0c12f726a595fd56e5ebb0d9aad6f1aaf513b58c4f311cd2",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-Platform-Product": "scanner",
+        "X-Event-Id": "7c9e6679-7425-40de-944b-e07fc1f90001",
+        "X-Signature": "907f5948fad05d3d1ce3ccb28c8a4bdb6438c11cca9fd4e8225582f0605aeb8f"
+      },
+      "valid": false
+    },
+    {
+      "name": "platform_to_subscriber",
+      "description": "Платформа доставляет vm.ticket.created в webhook «Сканера» ; секрет — получателя.",
+      "direction": "platform → scanner",
+      "secret": "test-scanner-events-secret",
+      "secret_of": "scanner",
+      "body": "{\"id\":\"7c9e6679-7425-40de-944b-e07fc1f90004\",\"type\":\"vm.ticket.created\",\"source\":\"vm\",\"time\":\"2026-11-04T16:54:52Z\",\"project_id\":\"3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61\",\"subject\":\"ticket/125\",\"data\":{\"ticket_id\":\"125\",\"title\":\"Обновить OpenSSH на srv-db01\",\"severity\":\"critical\",\"assignee_sub\":\"6f1d2c3b-4a59-4e6f-8a7b-9c0d1e2f3a4b\",\"due_at\":\"2026-11-11T00:00:00Z\",\"finding_keys\":[\"8b1f59c8ac37d18f7dc8c77f0a84cd3426c0e350064485dda1d1325efb683342\"]},\"notify\":{\"users\":[\"6f1d2c3b-4a59-4e6f-8a7b-9c0d1e2f3a4b\"],\"title\":\"Вам назначена заявка №125\",\"link\":\"/vm/tickets/125?project=3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61\"}}",
+      "body_sha256": "260ec62f3a9014b8f0679511d053887e601198a1e3d73ed86ede222ef4e9eaa6",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-Platform-Product": "platform",
+        "X-Event-Id": "7c9e6679-7425-40de-944b-e07fc1f90004",
+        "X-Signature": "sha256=604b7f17d869768f6c49da95680dd02850ef4da5c092495964d0c43432cb31a9"
+      },
+      "valid": true
+    }
+  ]
+}

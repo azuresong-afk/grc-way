@@ -138,6 +138,16 @@ make demo          # docker compose exec app python -m app.demo
 
 Заявки создаются запросом `POST /projects/{id}/external-tickets` «Устранения» (повтор с тем же `external_id` обновляет заявку). Этот вход в «Устранении» — отдельная задача его плана; формат тела описан в `backend/app/integrations/vm/client.py` и `docs/roadmap.md` (задача 3.4).
 
+## 4б. Работа внутри «Платформы» (`AUTH_MODE=platform`)
+
+Требования платформы — в [`docs/integration/README.md`](integration/README.md) и [`docs/integration/grc.md`](integration/grc.md) (копия из репозитория платформы, коммит `42d07db`; каталог `vectors/` не правится руками).
+
+1. Комплект платформы передаёт переменные без префикса: `AUTH_MODE=platform`, `PLATFORM_PRODUCT_ID=grc`, `DATABASE_URL`, `PLATFORM_URL`, `PLATFORM_JWKS_URL`, `PLATFORM_EVENTS_URL`, `PLATFORM_EVENTS_SECRET` (см. `.env.example`). Свои секреты — `GRC_SECRET_KEY` — в `deploy/env/grc.env` комплекта. Если заданы обе формы (`GRC_AUTH_MODE` и `AUTH_MODE`), действует `GRC_…`.
+2. Фронтенд собирается с `VITE_BASE=/grc/ VITE_API_BASE=/api/grc VITE_PLATFORM=1`: над интерфейсом строка вкладок продуктов, своей страницы входа нет (вход, refresh и выход — у оболочки), выход в любой вкладке уводит на вход все вкладки.
+3. Первый администратор в этом режиме не создаётся: пользователи — теневые записи по `sub` токена, роли — из `products.grc` каждого запроса. Проекты создаются только в платформе: при первом обращении к uuid проекта «Аттестация» создаёт его «тень» с тем же id по `GET {PLATFORM_URL}/projects/{id}` (токеном пользователя), сверяет не реже раза в 5 минут и по событию `platform.project.updated`; архивный проект — только чтение (`409 project_archived`).
+4. Платформа доставляет события на `POST /events/platform` (манифест `events.webhook`): `platform.keys.rotated` (непустой `revoked` сразу сбрасывает кэш ключей), `platform.project.updated`, статусы заявок «Устранения».
+5. Исходящие события (`audit.recorded`, `grc.assessment.updated`, `grc.document.approval_requested`) пишутся в таблицу `outbox` в той же транзакции и доставляются фоновым потоком API (`GRC_OUTBOX_POLL_SECONDS`, повторы 1/5/15/60 мин). Состояние и ручной повтор недоставленных — «Администрирование → События платформы». Без `PLATFORM_EVENTS_URL` (или `PLATFORM_URL` в режиме платформы) и секрета outbox не ведётся.
+
 ## 5. Обновление
 
 ```sh

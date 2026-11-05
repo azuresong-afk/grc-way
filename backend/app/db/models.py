@@ -43,15 +43,38 @@ class User(Base):
     password_hash: Mapped[str | None] = mapped_column(String(255))
     # Режим platform: sub из токена «Платформы» (этап 3).
     platform_sub: Mapped[str | None] = mapped_column(String(64), unique=True)
+    # Теневая запись (задача 3.5): user | service. Роли и проекты из последнего
+    # токена — только чтобы выбрать адресатов уведомлений; права каждого запроса
+    # считаются из его собственного токена.
+    platform_typ: Mapped[str | None] = mapped_column(String(16))
+    platform_roles: Mapped[list | None] = mapped_column(JsonType)
+    platform_projects: Mapped[list | None] = mapped_column(JsonType)
+    platform_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     role_rows: Mapped[list[UserRole]] = relationship(cascade="all, delete-orphan", lazy="selectin")
 
+    # Режим platform: роли и проекты из токена текущего запроса (не хранятся).
+    # (без аннотаций: это не столбцы, SQLAlchemy их не отображает)
+    token_roles = None  # set[str] | None
+    token_projects = None  # list[str] | None
+    token = None  # str | None — сам токен, для GET /projects/{id} платформы
+
     @property
     def roles(self) -> set[str]:
+        if self.token_roles is not None:
+            return set(self.token_roles)
+        if not self.role_rows and self.platform_roles:
+            # Теневой пользователь в чужом запросе: роли из его последнего токена (для показа).
+            return set(self.platform_roles)
         return {r.role for r in self.role_rows}
+
+    def can_platform_project(self, project_id: object) -> bool:
+        """Режим platform: есть ли проект в утверждении projects токена."""
+        allowed = self.token_projects or []
+        return "*" in allowed or (project_id is not None and str(project_id) in allowed)
 
     def set_roles(self, roles: set[str]) -> None:
         keep = [r for r in self.role_rows if r.role in roles]
@@ -128,6 +151,8 @@ class Project(Base):
     scanner_engagement_id: Mapped[int | None] = mapped_column(Integer)
     # Проект в «Устранении», куда уходят заявки по несоответствиям (задача 3.4).
     vm_project_id: Mapped[str | None] = mapped_column(String(64))
+    # Тень проекта платформы: когда поля сверялись с GET /projects/{id} (задача 3.5).
+    platform_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     updated_at: Mapped[datetime] = mapped_column(
@@ -1408,3 +1433,41 @@ class InboxEvent(Base):
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     # applied | ignored | unknown_ticket | stale
     result: Mapped[str] = mapped_column(String(32))
+
+
+class OutboxEvent(Base):
+    """Событие для «Платформы» (контракт v1.1, п. 6.1). Тело — ровно те байты,
+    что подписываются и уходят в сеть; id неизменен при повторах."""
+
+    __tablename__ = "outbox"
+    __table_args__ = (
+        Index("ix_outbox_due", "status", "next_at"),
+        Index("ix_outbox_created", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    type: Mapped[str] = mapped_column(String(64))
+    project_id: Mapped[str | None] = mapped_column(String(64))
+    subject: Mapped[str | None] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text)
+    # pending | delivered | rejected (422, повторять бессмысленно) | dead (повторы кончились)
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_error: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AssessmentFeed(Base):
+    """Последнее отправленное grc.assessment.updated по объекту."""
+
+    __tablename__ = "assessment_feed"
+
+    object_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("objects.id", ondelete="CASCADE"), primary_key=True
+    )
+    percent: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(32))
+    title: Mapped[str] = mapped_column(String(300))
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
