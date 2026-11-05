@@ -360,7 +360,39 @@ def run(app: FastAPI, session: Session, password: str | None = None) -> Result:
         for t in types:
             _check(TestClient(app).post(url, headers=meth, json={"type": t["code"]}), 201)
         result.notes.append(f"комплект документов ГИС: {len(types)} документов, версия 1 (проект)")
+        _approve_docs(TestClient(app), meth, password, result.object_id)
+        result.notes.append(
+            "согласование: технический паспорт утверждён, акт классификации на согласовании"
+        )
     return result
+
+
+def _approve_docs(c: Any, meth: dict[str, str], password: str, object_id: str) -> None:
+    """Согласование (задача 3.3): паспорт утверждён, акт классификации ждёт утверждения."""
+    tok = _check(c.post("/auth/token", json={"username": "demo-boss", "password": password}))
+    boss = {"Authorization": f"Bearer {tok['access_token']}"}
+    types = {
+        t["code"]: t
+        for t in _check(c.get(f"/objects/{object_id}/documents", headers=meth))["types"]
+    }
+    for code in ("tech-passport", "classification-act"):
+        if types.get(code, {}).get("latest"):
+            did = types[code]["latest"]["id"]
+            _check(
+                c.post(
+                    f"/documents/{did}/submit",
+                    headers=meth,
+                    json={"comment": "Прошу согласовать"},
+                )
+            )
+    if types.get("tech-passport", {}).get("latest"):
+        _check(
+            c.post(
+                f"/documents/{types['tech-passport']['latest']['id']}/approve",
+                headers=boss,
+                json={"comment": "Согласовано", "acknowledge_unverified": True},
+            )
+        )
 
 
 # Реестр уязвимостей ГИС (задача 2.8): выбор специалиста по находкам прогона №7.

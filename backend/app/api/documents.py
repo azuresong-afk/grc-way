@@ -16,9 +16,15 @@
   /document-templates/{code}/reset` (вернуть встроенный),
   `GET /document-templates/files/{id}` — загруженный файл.
 
+- (3.3) Согласование: `POST /documents/{id}/submit {comment}` — на согласование
+  (право `documents.edit`); `POST /documents/{id}/return {comment}` — вернуть на
+  доработку (утверждающий) или отозвать (методист), причина обязательна;
+  `POST /documents/{id}/approve {comment, acknowledge_unverified}` — утвердить
+  (право `approve`, не автор и не отправивший версию);
+  `GET /documents/{id}/compare?with={id}` — сравнение двух версий документа.
+
 Проекты (черновики) видят методист, эксперт и утверждающий. Наблюдатель
-(представитель заказчика) видит только утверждённые документы — они появятся
-с согласованием в задаче 3.3.
+(представитель заказчика) видит только утверждённые и заменённые версии.
 """
 
 from __future__ import annotations
@@ -41,8 +47,13 @@ from app.api.deps import DbSession, client_ip, require
 from app.api.objects import _editable, get_object_for
 from app.core.config import get_settings
 from app.core.rbac import Perm, perms_for
-from app.db.models import AssessedObject, DocumentTemplate, GeneratedDocument, User
-from app.docs_gen import context, fieldmap, pdf, render
+from app.db.models import (
+    AssessedObject,
+    DocumentTemplate,
+    GeneratedDocument,
+    User,
+)
+from app.docs_gen import compare, context, fieldmap, pdf, render
 from app.domain import documents as svc
 from app.domain.evidence_files import clean_name
 
@@ -103,12 +114,42 @@ class DocBrief(BaseModel):
     template_custom: bool
     font: str | None
     font_title: str | None
+    submitted_at: datetime | None = None
+    submitted_by_name: str | None = None
+    approved_at: datetime | None = None
+    approved_by_name: str | None = None
+    approval_comment: str | None = None
+    unverified_acknowledged: bool = False
+    superseded_at: datetime | None = None
+
+
+class ReviewOut(BaseModel):
+    action: str
+    from_status: str
+    to_status: str
+    comment: str | None
+    actor_name: str | None
+    at: datetime
+
+
+class Actions(BaseModel):
+    """Что текущий пользователь может сделать с версией."""
+
+    submit: bool = False
+    send_back: bool = False
+    approve: bool = False
+    # Почему утвердить нельзя (самоутверждение, не последняя версия).
+    approve_blocker: str | None = None
 
 
 class DocOut(DocBrief):
     context_hash: str
     fields: list[FieldOut]
     unverified: list[dict[str, str]]
+    reviews: list[ReviewOut] = []
+    actions: Actions = Actions()
+    # Версии того же документа для сравнения (видимые пользователю), новые сверху.
+    siblings: list[DocBrief] = []
 
 
 class TemplateRef(BaseModel):
@@ -136,6 +177,8 @@ class TypeOut(BaseModel):
     # Данные изменились после последней версии (или версий ещё нет).
     changed: bool
     latest: DocBrief | None
+    # Действующая утверждённая версия (3.3).
+    approved: DocBrief | None = None
     versions: list[DocBrief]
 
 
@@ -153,6 +196,7 @@ class DocumentsOut(BaseModel):
     types: list[TypeOut]
     pdf_available: bool
     can_edit: bool
+    can_approve: bool = False
     sees_drafts: bool
     font: str
     fonts: list[FontOut]
@@ -202,6 +246,59 @@ class GenerateOut(DocOut):
     created: bool
 
 
+class SubmitIn(BaseModel):
+    comment: str | None = None
+
+
+class ReturnIn(BaseModel):
+    comment: str
+
+
+class ApproveIn(BaseModel):
+    comment: str | None = None
+    acknowledge_unverified: bool = False
+
+
+class FieldChange(BaseModel):
+    key: str
+    title: str
+    tab: str | None
+    before: str | None
+    after: str | None
+    state_before: str | None
+    state_after: str | None
+
+
+class DiffLine(BaseModel):
+    op: Literal["same", "add", "del"]
+    text: str
+
+
+class DiffHunk(BaseModel):
+    old_start: int
+    new_start: int
+    lines: list[DiffLine]
+
+
+class MetaChange(BaseModel):
+    title: str
+    before: str | None
+    after: str | None
+
+
+class CompareOut(BaseModel):
+    old: DocBrief
+    new: DocBrief
+    meta: list[MetaChange]
+    fields: list[FieldChange]
+    hunks: list[DiffHunk]
+    added: int
+    removed: int
+    truncated: bool
+    # Текст не сравнить: нет файла в хранилище и т. п.
+    text_error: str | None = None
+
+
 # ---------- Вспомогательное ----------
 
 
@@ -230,23 +327,80 @@ def _brief(d: GeneratedDocument) -> DocBrief:
         template_custom=d.template_id is not None,
         font=d.font,
         font_title=render.FONTS.get(d.font or ""),
+        submitted_at=d.submitted_at,
+        submitted_by_name=d.submitted_by_name,
+        approved_at=d.approved_at,
+        approved_by_name=d.approved_by_name,
+        approval_comment=d.approval_comment,
+        unverified_acknowledged=d.unverified_acknowledged,
+        superseded_at=d.superseded_at,
     )
 
 
-def _out(d: GeneratedDocument) -> DocOut:
-    return DocOut(
+def _out(d: GeneratedDocument, session: Session | None = None, user: User | None = None) -> DocOut:
+    out = DocOut(
         **_brief(d).model_dump(),
         context_hash=d.context_hash,
         fields=[FieldOut(**f) for f in d.field_map or []],
         unverified=d.unverified or [],
     )
+    if session is None or user is None:
+        return out
+    out.reviews = [
+        ReviewOut(
+            action=r.action,
+            from_status=r.from_status,
+            to_status=r.to_status,
+            comment=r.comment,
+            actor_name=r.actor_name,
+            at=r.at,
+        )
+        for r in svc.reviews(session, d.id)
+    ]
+    out.actions = _actions(session, d, user)
+    out.siblings = [
+        _brief(x)
+        for x in session.scalars(
+            select(GeneratedDocument)
+            .where(
+                GeneratedDocument.object_id == d.object_id,
+                GeneratedDocument.doc_type == d.doc_type,
+                _visible(user),
+            )
+            .order_by(GeneratedDocument.version.desc())
+        )
+    ]
+    return out
+
+
+def _actions(session: Session, d: GeneratedDocument, user: User) -> Actions:
+    perms = perms_for(user.roles)
+    obj = session.get(AssessedObject, d.object_id)
+    if obj is None:
+        return Actions()
+    try:
+        _editable(session, obj)
+    except HTTPException:
+        return Actions()  # архив — только просмотр
+    last = svc.latest(session, d.object_id, d.doc_type)
+    is_last = last is not None and last.id == d.id
+    a = Actions()
+    if Perm.DOCUMENTS_EDIT in perms and d.status == "draft" and is_last:
+        a.submit = True
+    if d.status == "review" and (Perm.DOCUMENTS_EDIT in perms or Perm.APPROVE in perms):
+        a.send_back = True
+    if Perm.APPROVE in perms and d.status == "review":
+        blocker = svc.approval_blockers(d, user)
+        a.approve = blocker is None
+        a.approve_blocker = blocker
+    return a
 
 
 def _visible(user: User):
     """Условие: какие версии видит пользователь."""
     if sees_drafts(user):
         return true()
-    return GeneratedDocument.status == "approved"
+    return GeneratedDocument.status.in_(svc.PUBLISHED)
 
 
 def _versions(session: Session, obj: AssessedObject, user: User) -> dict[str, list[DocBrief]]:
@@ -285,6 +439,7 @@ def _type_out(
         "watermark_reasons": pv.watermark_reasons,
         "changed": last is None or last.context_hash != pv.context_hash,
         "latest": versions[0] if versions else None,
+        "approved": next((v for v in versions if v.status == "approved"), None),
         "versions": versions,
     }
 
@@ -300,7 +455,7 @@ def _applicable(obj: AssessedObject, code: str | None = None) -> list:
 
 def _get_doc(session: Session, doc_id: uuid.UUID, user: User) -> GeneratedDocument:
     d = session.get(GeneratedDocument, doc_id)
-    if d is None or (d.status != "approved" and not sees_drafts(user)):
+    if d is None or (d.status not in svc.PUBLISHED and not sees_drafts(user)):
         raise HTTPException(404, detail="Документ не найден")
     try:
         get_object_for(session, d.object_id, user)
@@ -325,6 +480,7 @@ def list_documents(object_id: uuid.UUID, user: Viewer, session: DbSession) -> Do
         types=types,
         pdf_available=pdf.converter_path(get_settings().pdf_converter) is not None,
         can_edit=Perm.DOCUMENTS_EDIT in perms_for(user.roles),
+        can_approve=Perm.APPROVE in perms_for(user.roles),
         sees_drafts=sees_drafts(user),
         font=svc.object_font(obj),
         fonts=[FontOut(code=k, title=v) for k, v in render.FONTS.items()],
@@ -398,12 +554,198 @@ def generate_document(
             },
         )
     session.commit()
-    return GenerateOut(**_out(row).model_dump(), created=created)
+    return GenerateOut(**_out(row, session, user).model_dump(), created=created)
 
 
 @router.get("/documents/{doc_id}")
 def get_document(doc_id: uuid.UUID, user: Viewer, session: DbSession) -> DocOut:
-    return _out(_get_doc(session, doc_id, user))
+    return _out(_get_doc(session, doc_id, user), session, user)
+
+
+# ---------- Согласование (задача 3.3) ----------
+
+
+def _for_action(session: Session, doc_id: uuid.UUID, user: User) -> GeneratedDocument:
+    d = _get_doc(session, doc_id, user)
+    obj = session.get(AssessedObject, d.object_id)
+    assert obj is not None  # noqa: S101 — внешний ключ
+    _editable(session, obj)
+    return d
+
+
+def _fail(e: svc.DocumentError) -> HTTPException:
+    return HTTPException(e.status, detail=str(e), headers={"X-Error-Code": e.code})
+
+
+def _review_audit(
+    session: Session, request: Request, user: User, d: GeneratedDocument, action: str, **extra: Any
+) -> None:
+    audit.record(
+        session,
+        action=f"documents.{action}",
+        actor=user,
+        entity="document",
+        entity_id=d.id,
+        project_id=d.project_id,
+        ip=client_ip(request),
+        details={
+            "object_id": str(d.object_id),
+            "type": d.doc_type,
+            "version": d.version,
+            **extra,
+        },
+    )
+
+
+@router.post("/documents/{doc_id}/submit")
+def submit_document(
+    doc_id: uuid.UUID, body: SubmitIn, request: Request, user: Editor, session: DbSession
+) -> DocOut:
+    d = _for_action(session, doc_id, user)
+    try:
+        ev = svc.submit(session, d, user, body.comment)
+    except svc.DocumentError as e:
+        raise _fail(e) from e
+    _review_audit(session, request, user, d, "submit", comment=ev.comment)
+    session.commit()
+    return _out(d, session, user)
+
+
+@router.post("/documents/{doc_id}/return")
+def return_document(
+    doc_id: uuid.UUID, body: ReturnIn, request: Request, user: Viewer, session: DbSession
+) -> DocOut:
+    perms = perms_for(user.roles)
+    if not perms & {Perm.DOCUMENTS_EDIT, Perm.APPROVE}:
+        raise HTTPException(403, detail="Недостаточно прав")
+    d = _for_action(session, doc_id, user)
+    try:
+        ev = svc.return_to_draft(session, d, user, body.comment)
+    except svc.DocumentError as e:
+        raise _fail(e) from e
+    _review_audit(session, request, user, d, "return", comment=ev.comment)
+    session.commit()
+    return _out(d, session, user)
+
+
+@router.post("/documents/{doc_id}/approve")
+def approve_document(
+    doc_id: uuid.UUID,
+    body: ApproveIn,
+    request: Request,
+    user: Annotated[User, Depends(require(Perm.APPROVE))],
+    session: DbSession,
+) -> DocOut:
+    d = _for_action(session, doc_id, user)
+    blocker = svc.approval_blockers(d, user)
+    if blocker:
+        audit.record_now(
+            session,
+            action="documents.approve",
+            actor=user,
+            entity="document",
+            entity_id=d.id,
+            project_id=d.project_id,
+            result="denied",
+            ip=client_ip(request),
+            details={"reason": "self", "version": d.version, "type": d.doc_type},
+        )
+        raise HTTPException(403, detail=blocker, headers={"X-Error-Code": "self_approval"})
+    try:
+        replaced = svc.approve(
+            session,
+            d,
+            user,
+            comment=body.comment,
+            acknowledge_unverified=body.acknowledge_unverified,
+        )
+    except svc.DocumentError as e:
+        raise _fail(e) from e
+    _review_audit(
+        session,
+        request,
+        user,
+        d,
+        "approve",
+        comment=d.approval_comment,
+        unverified_acknowledged=d.unverified_acknowledged,
+        docx_sha256=d.docx_sha256,
+        pdf_sha256=d.pdf_sha256,
+        replaced=[str(p.id) for p in replaced],
+    )
+    session.commit()
+    return _out(d, session, user)
+
+
+def _status_text(d: GeneratedDocument) -> str:
+    return svc.STATUS_TITLES.get(d.status, d.status)
+
+
+def _meta_changes(a: GeneratedDocument, b: GeneratedDocument) -> list[MetaChange]:
+    def tpl(d: GeneratedDocument) -> str:
+        return ("свой: " if d.template_id else "встроенный: ") + d.template_name
+
+    def font(d: GeneratedDocument) -> str:
+        return render.FONTS.get(d.font or "", "из своего шаблона")
+
+    def unv(d: GeneratedDocument) -> str:
+        return "; ".join(u.get("title", "") for u in d.unverified or []) or "нет"
+
+    pairs = [
+        ("Статус", _status_text(a), _status_text(b)),
+        ("Шаблон", tpl(a), tpl(b)),
+        ("Шрифт", font(a), font(b)),
+        ("Несверенные записи справочников", unv(a), unv(b)),
+    ]
+    if a.template_sha256 != b.template_sha256 and tpl(a) == tpl(b):
+        pairs.append(("Файл шаблона", a.template_sha256[:12], b.template_sha256[:12]))
+    return [MetaChange(title=t, before=x, after=y) for t, x, y in pairs if x != y]
+
+
+@router.get("/documents/{doc_id}/compare")
+def compare_documents(
+    doc_id: uuid.UUID,
+    user: Viewer,
+    session: DbSession,
+    with_: Annotated[uuid.UUID, Query(alias="with")],
+) -> CompareOut:
+    """Сравнение версий одного документа: старшая версия — «стало»."""
+    x = _get_doc(session, doc_id, user)
+    y = _get_doc(session, with_, user)
+    if x.object_id != y.object_id or x.doc_type != y.doc_type:
+        raise HTTPException(422, detail="Сравниваются версии одного документа одного объекта")
+    old, new = (x, y) if x.version <= y.version else (y, x)
+    hunks: list[compare.Hunk] = []
+    stats = {"added": 0, "removed": 0}
+    truncated = False
+    text_error = None
+    try:
+        hunks, stats, truncated = compare.text_diff(
+            compare.text_lines(svc.read_file(old.docx_sha256)),
+            compare.text_lines(svc.read_file(new.docx_sha256)),
+        )
+    except FileNotFoundError:
+        text_error = "Файла версии нет в хранилище — восстановите том из копии"
+    except Exception as e:  # повреждённый DOCX: python-docx бросает разное
+        text_error = f"Текст не прочитан: {type(e).__name__}"
+    return CompareOut(
+        old=_brief(old),
+        new=_brief(new),
+        meta=_meta_changes(old, new),
+        fields=[FieldChange(**f) for f in compare.field_changes(old.field_map, new.field_map)],
+        hunks=[
+            DiffHunk(
+                old_start=h.old_start,
+                new_start=h.new_start,
+                lines=[DiffLine(**ln) for ln in h.lines],
+            )
+            for h in hunks
+        ],
+        added=stats["added"],
+        removed=stats["removed"],
+        truncated=truncated,
+        text_error=text_error,
+    )
 
 
 def _file_name(session: Session, d: GeneratedDocument, fmt: str) -> str:

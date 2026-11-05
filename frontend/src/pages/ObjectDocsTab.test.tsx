@@ -4,7 +4,14 @@ import { App } from "../App";
 import { TOKEN_KEY } from "../lib/api";
 import { AuthProvider } from "../lib/auth";
 import type { ObjectFull } from "../lib/objects";
-import { dispositionName, type DocBrief, type DocField, type DocTypeDetail, type DocumentsList } from "../lib/objectDocs";
+import {
+  dispositionName,
+  type DocBrief,
+  type DocField,
+  type DocFull,
+  type DocTypeDetail,
+  type DocumentsList,
+} from "../lib/objectDocs";
 import { fakeApi, json } from "../test/fakeApi";
 
 const METH = {
@@ -96,6 +103,13 @@ const V1: DocBrief = {
   template_custom: false,
   font: "astra",
   font_title: "PT Astra Serif",
+  submitted_at: null,
+  submitted_by_name: null,
+  approved_at: null,
+  approved_by_name: null,
+  approval_comment: null,
+  unverified_acknowledged: false,
+  superseded_at: null,
 };
 
 const TYPE: DocTypeDetail = {
@@ -117,6 +131,7 @@ const TYPE: DocTypeDetail = {
   watermark_reasons: ["Документ не утверждён"],
   changed: true,
   latest: V1,
+  approved: null,
   versions: [V1],
   fields: FIELDS,
   unverified: [{ title: "Таблица классификации (Приказ ФСТЭК России №117)", note: "версия 117-stub-1" }],
@@ -141,6 +156,7 @@ const LIST: DocumentsList = {
   types: [TYPE, PLAN],
   pdf_available: false,
   can_edit: true,
+  can_approve: false,
   sees_drafts: true,
   font: "astra",
   fonts: FONTS,
@@ -253,9 +269,138 @@ it("наблюдатель видит пояснение вместо проек
     "GET /objects/o1/documents/types/tech-passport": () => json({ ...TYPE, versions: [], latest: null }),
   });
   renderAt("/objects/o1?tab=documents");
-  expect(await screen.findByText(/Здесь появятся утверждённые документы/)).toBeInTheDocument();
+  expect(await screen.findByText(/Здесь — утверждённые документы/)).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Сформировать/ })).not.toBeInTheDocument();
   expect(screen.getByText("Документ ещё не формировался.")).toBeInTheDocument();
+});
+
+const BOSS = {
+  id: "u3",
+  username: "boss",
+  display_name: "Смирнов С. С.",
+  roles: ["viewer", "approve"],
+  permissions: ["view", "approve"],
+};
+
+const V2: DocBrief = {
+  ...V1,
+  id: "d2",
+  version: 2,
+  status: "review",
+  status_title: "На согласовании",
+  submitted_at: "2026-11-05T11:00:00Z",
+  submitted_by_name: "Иванова А. А.",
+};
+
+const V2_FULL: DocFull = {
+  ...V2,
+  context_hash: "h",
+  fields: FIELDS,
+  unverified: [{ title: "Таблица классификации (Приказ ФСТЭК России №117)", note: "" }],
+  reviews: [
+    {
+      action: "submit",
+      from_status: "draft",
+      to_status: "review",
+      comment: "Прошу согласовать",
+      actor_name: "Иванова А. А.",
+      at: "2026-11-05T11:00:00Z",
+    },
+  ],
+  actions: {
+    submit: false,
+    send_back: true,
+    approve: true,
+    approve_blocker: null,
+  },
+  siblings: [V2, V1],
+};
+
+it("утверждающий утверждает версию с отметкой о несверенных записях и сравнивает версии", async () => {
+  sessionStorage.setItem(TOKEN_KEY, "tok");
+  const withV2 = { ...TYPE, latest: V2, versions: [V2, V1] };
+  const calls = fakeApi({
+    "GET /me": () => json(BOSS),
+    "GET /projects": () => json([PROJECT]),
+    "GET /objects/o1": () => json(OBJ),
+    "GET /objects/o1/hosts": () => json([]),
+    "GET /objects/o1/documents": () => json({ ...LIST, can_edit: false, can_approve: true, types: [withV2] }),
+    "GET /objects/o1/documents/types/tech-passport": () => json(withV2),
+    "GET /documents/d2": () => json(V2_FULL),
+    "POST /documents/d2/approve": () =>
+      json({
+        ...V2_FULL,
+        status: "approved",
+        status_title: "Утверждён",
+        approved_at: "2026-11-05T12:00:00Z",
+        approved_by_name: "Смирнов С. С.",
+        unverified_acknowledged: true,
+        actions: {
+          submit: false,
+          send_back: false,
+          approve: false,
+          approve_blocker: null,
+        },
+      }),
+    "GET /documents/d2/compare": () =>
+      json({
+        old: V1,
+        new: V2,
+        meta: [{ title: "Статус", before: "Проект", after: "На согласовании" }],
+        fields: [
+          {
+            key: "object.boundaries",
+            title: "Границы объекта",
+            tab: "description",
+            before: null,
+            after: "Здание 1",
+            state_before: "empty",
+            state_after: "filled",
+          },
+        ],
+        hunks: [
+          {
+            old_start: 4,
+            new_start: 4,
+            lines: [
+              { op: "same", text: "1. Общие сведения" },
+              { op: "del", text: "Границы | [не заполнено: Границы объекта]" },
+              { op: "add", text: "Границы | Здание 1" },
+            ],
+          },
+        ],
+        added: 1,
+        removed: 1,
+        truncated: false,
+        text_error: null,
+      }),
+  });
+  renderAt("/objects/o1?tab=documents");
+  await screen.findByRole("heading", { name: /Технический паспорт объекта/ });
+  expect(screen.getAllByText("На согласовании").length).toBeGreaterThan(0);
+
+  fireEvent.click(document.querySelector(".doc-versions tbody tr")!);
+  const drawer = await screen.findByRole("dialog");
+  expect(await within(drawer).findByText("Прошу согласовать")).toBeInTheDocument();
+  fireEvent.click(within(drawer).getByRole("button", { name: /Утвердить/ }));
+  const modal = (await screen.findAllByRole("dialog")).at(-1)!;
+  const ok = within(modal).getByRole("button", { name: "Утвердить" });
+  expect(ok).toBeDisabled(); // несверенные записи — нужна отметка
+  fireEvent.click(within(modal).getByRole("checkbox"));
+  fireEvent.click(ok);
+  await waitFor(() => expect(calls.some((c) => c.path === "/documents/d2/approve")).toBe(true));
+  expect(calls.find((c) => c.path === "/documents/d2/approve")?.body).toEqual({
+    comment: null,
+    acknowledge_unverified: true,
+  });
+  expect(await within(drawer).findByText(/утверждён с несверенными записями/)).toBeInTheDocument();
+
+  fireEvent.click(within(drawer).getByRole("button", { name: /Сравнить/ }));
+  expect(await screen.findByText("Сравнение версий")).toBeInTheDocument();
+  expect(await screen.findByText("Здание 1")).toBeInTheDocument();
+  expect(screen.getByText("Границы | Здание 1").closest(".text-diff-line")).toHaveClass("add");
+  expect(screen.queryByText("1. Общие сведения")).not.toBeInTheDocument(); // только изменения
+  expect(calls.some((c) => c.path.startsWith("/documents/d2/compare"))).toBe(true);
 });
 
 it("имя файла из Content-Disposition", () => {

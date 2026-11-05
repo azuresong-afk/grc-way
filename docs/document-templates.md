@@ -49,7 +49,10 @@
 
 ### `doc` — сам документ
 `title` (заголовок по режиму объекта), `version`, `generated` (дата формирования),
-`status_title`.
+`status_title` («Проект», «Утверждён»), `approved` (дата утверждения) и `approved_by`
+(кто утвердил) — у проекта пустые, заполняются, когда утверждение пересобирает документ
+(задача 3.3). Пример: `{{ doc.status_title }}{% if doc.approved %} {{ doc.approved }},
+{{ doc.approved_by }}{% endif %}`.
 
 ### `customer`, `project`
 - `customer`: `name`, `inn`, `ogrn`, `address`.

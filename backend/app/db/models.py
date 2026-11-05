@@ -1183,8 +1183,11 @@ class GeneratedDocument(Base):
     сохраняются. В записи — контекст, по которому собран документ, карта полей
     («из каких данных собран / что пусто») и несверенные записи справочников:
     что попало в версию, видно и после правки данных. Файлы — в томе
-    GRC_DOCUMENTS_DIR под именем sha256. Статусы согласования (на согласовании,
-    утверждён) появятся в задаче 3.3; до утверждения документ — «Проект».
+    GRC_DOCUMENTS_DIR под именем sha256.
+
+    Согласование (задача 3.3): проект → на согласовании → утверждён; прежняя
+    утверждённая версия после утверждения новой — «заменён». Утверждение
+    пересобирает файлы без отметки «Проект» (файлы проекта — draft_*_sha256).
     """
 
     __tablename__ = "documents"
@@ -1199,7 +1202,8 @@ class GeneratedDocument(Base):
     doc_type: Mapped[str] = mapped_column(String(64))
     title: Mapped[str] = mapped_column(String(300))
     version: Mapped[int] = mapped_column(Integer)
-    # draft — проект (задача 3.3 добавит review и approved).
+    # draft — проект; review — на согласовании; approved — утверждён;
+    # superseded — заменён более новой утверждённой версией.
     status: Mapped[str] = mapped_column(String(16), default="draft")
     template_name: Mapped[str] = mapped_column(String(200))
     template_sha256: Mapped[str] = mapped_column(String(64))
@@ -1224,6 +1228,41 @@ class GeneratedDocument(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     created_by_name: Mapped[str | None] = mapped_column(String(200))
+    # Согласование (задача 3.3).
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    submitted_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    submitted_by_name: Mapped[str | None] = mapped_column(String(200))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    approved_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    approved_by_name: Mapped[str | None] = mapped_column(String(200))
+    approval_comment: Mapped[str | None] = mapped_column(String(2000))
+    # Утверждён, хотя в нём есть несверенные записи справочников.
+    unverified_acknowledged: Mapped[bool] = mapped_column(Boolean, default=False)
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Файлы проекта, если утверждение пересобрало документ.
+    draft_docx_sha256: Mapped[str | None] = mapped_column(String(64))
+    draft_pdf_sha256: Mapped[str | None] = mapped_column(String(64))
+
+
+class DocumentReview(Base):
+    """Событие согласования версии документа (задача 3.3).
+
+    submit — отправлен на согласование; return — возвращён на доработку (с
+    причиной); approve — утверждён; supersede — заменён новой утверждённой.
+    """
+
+    __tablename__ = "document_reviews"
+    __table_args__ = (Index("ix_document_reviews_doc", "document_id", "at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    action: Mapped[str] = mapped_column(String(16))
+    from_status: Mapped[str] = mapped_column(String(16))
+    to_status: Mapped[str] = mapped_column(String(16))
+    comment: Mapped[str | None] = mapped_column(String(2000))
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    actor_name: Mapped[str | None] = mapped_column(String(200))
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class DocumentTemplate(Base):

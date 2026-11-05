@@ -129,7 +129,8 @@ def test_catalog_fields_and_templates_match():
         # Шаблон собирается и на пустых данных: на месте пустого — заглушки.
         filled = fieldmap.fill_placeholders(ctx, doc)
         filled["doc"] = {"title": doc.title, "version": 1, "generated": "05.11.2026",
-                         "status_title": "Проект"}  # fmt: skip
+                         "status_title": "Проект", "approved": None,
+                         "approved_by": None}  # fmt: skip
         xml = _xml(render.render(tpl, filled, watermark=False, font="astra"))
         assert "{%" not in xml and "{{" not in xml, doc.code
 
@@ -179,7 +180,8 @@ def test_render_escapes_values_and_adds_watermark():
     ctx["object"]["purpose"] = "<w:p>опасно</w:p> & {{ 7*7 }}\nвторая строка"
     filled = fieldmap.fill_placeholders(ctx, doc)
     filled["doc"] = {"title": doc.title, "version": 1, "generated": "05.11.2026",
-                     "status_title": "Проект"}  # fmt: skip
+                     "status_title": "Проект", "approved": None,
+                     "approved_by": None}  # fmt: skip
     xml = _xml(render.render(TEMPLATES / doc.template, filled, watermark=True))
     assert "&lt;w:p&gt;опасно&lt;/w:p&gt; &amp; {{ 7*7 }}" in xml
     assert "<w:br/>" in xml  # перевод строки — разрыв строки, а не склейка
