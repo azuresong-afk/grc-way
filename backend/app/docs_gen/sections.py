@@ -57,6 +57,7 @@ EVIDENCE_TITLES = {
     "interview": "Интервью",
     "inspection": "Осмотр",
     "certificate": "Сертификат СЗИ",
+    "remediation": "Проверка «Устранения»",
 }
 MODEL_STATUS_TITLES = {"draft": "Черновик", "approved": "Утверждена", "superseded": "Заменена"}
 ADAPTATION_STATUS_TITLES = {"draft": "Черновик", "approved": "Утверждена", "superseded": "Заменена"}
@@ -665,6 +666,7 @@ def vulns_section(
                     "action": "Устранить уязвимость (обновление или компенсирующие меры)",
                     "deadline": row["deadline"],
                     "level_order": LEVEL_ORDER.get(a.level, 9),
+                    "vuln_id": str(r.id),
                 }
             )
     detected = [i for i in items if i["detected"]]

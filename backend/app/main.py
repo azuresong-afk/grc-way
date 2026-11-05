@@ -15,6 +15,7 @@ from app.api import (
     health,
     manifest,
     measures,
+    nonconformities,
     object_vulns,
     objects,
     projects,
@@ -75,6 +76,7 @@ def create_app() -> FastAPI:
         scanner_import,
         evidence,
         documents,
+        nonconformities,
         summary,
     ):
         app.include_router(module.router)

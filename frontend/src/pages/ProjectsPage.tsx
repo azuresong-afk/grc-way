@@ -169,6 +169,7 @@ export function ProjectDialog({
   const [from, setFrom] = useState(project?.period_from ?? "");
   const [to, setTo] = useState(project?.period_to ?? "");
   const [engagement, setEngagement] = useState(project?.scanner_engagement_id?.toString() ?? "");
+  const [vmProject, setVmProject] = useState(project?.vm_project_id ?? "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -192,6 +193,7 @@ export function ProjectDialog({
       period_from: from || null,
       period_to: to || null,
       scanner_engagement_id: engagement ? Number(engagement) : null,
+      vm_project_id: vmProject.trim() || null,
     };
     try {
       if (project) {
@@ -300,6 +302,16 @@ export function ProjectDialog({
             inputMode="numeric"
           />
           <small>Номер engagement — оттуда придут активы и результаты проверок</small>
+        </label>
+        <label className="field">
+          <span>Проект в «Устранении»</span>
+          <input
+            className="input mono"
+            value={vmProject}
+            onChange={(e) => setVmProject(e.target.value.replace(/[^A-Za-z0-9_.:-]/g, ""))}
+            maxLength={64}
+          />
+          <small>Идентификатор проекта — туда уйдут заявки по несоответствиям</small>
         </label>
       </form>
     </Modal>

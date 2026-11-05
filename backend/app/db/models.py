@@ -126,6 +126,8 @@ class Project(Base):
     status: Mapped[str] = mapped_column(String(16), default="active")  # active | archived
     platform_project_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, unique=True)
     scanner_engagement_id: Mapped[int | None] = mapped_column(Integer)
+    # Проект в «Устранении», куда уходят заявки по несоответствиям (задача 3.4).
+    vm_project_id: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     updated_at: Mapped[datetime] = mapped_column(
@@ -1301,3 +1303,108 @@ class DocumentTemplate(Base):
     uploaded_by_name: Mapped[str | None] = mapped_column(String(200))
     deactivated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deactivated_by_name: Mapped[str | None] = mapped_column(String(200))
+
+
+# ---------- Несоответствия и «Устранение» (задача 3.4) ----------
+
+
+class Nonconformity(Base):
+    """Пункт плана устранения: мера «Не реализована / Частично» или уязвимость.
+
+    План собирается из текущих данных объекта (app/api/nonconformities.sync_plan);
+    здесь хранится то, что вносит специалист, копия оценки уязвимости и заявка в
+    «Устранении». Пункт, источник которого перестал быть несоответствием,
+    закрывается (closed_at), а не удаляется: история заявки остаётся.
+    """
+
+    __tablename__ = "nonconformities"
+    __table_args__ = (
+        Index("ix_nonconformities_object", "object_id"),
+        Index("ux_nonconformities_measure", "object_measure_id", unique=True),
+        Index("ux_nonconformities_vuln", "object_vuln_id", unique=True),
+        Index("ix_nonconformities_ticket", "vm_ticket_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    object_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("objects.id", ondelete="CASCADE"))
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(8))  # measure | vuln
+    object_measure_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("object_measures.id", ondelete="CASCADE")
+    )
+    object_vuln_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("object_vulns.id", ondelete="CASCADE")
+    )
+    # Мера — её код (УПД.1); уязвимость — идентификатор БДУ или «без БДУ».
+    ref: Mapped[str] = mapped_column(String(64))
+    title: Mapped[str] = mapped_column(String(2000))
+    # Мера — итоговый статус (not_implemented | partial); уязвимость — состояние реестра.
+    source_status: Mapped[str | None] = mapped_column(String(16))
+    hosts: Mapped[list] = mapped_column(JsonType, default=list)
+    details: Mapped[str | None] = mapped_column(String(4000))
+    assessment_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    v: Mapped[str | None] = mapped_column(String(16))
+    level: Mapped[str | None] = mapped_column(String(16))
+    level_title: Mapped[str | None] = mapped_column(String(100))
+    assessed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    certified_szi: Mapped[bool] = mapped_column(Boolean, default=False)
+    priority: Mapped[str | None] = mapped_column(String(8))  # high | medium | low
+    due_date: Mapped[date | None] = mapped_column(Date)
+    action: Mapped[str | None] = mapped_column(String(2000))
+    responsible: Mapped[str | None] = mapped_column(String(300))
+    comment: Mapped[str | None] = mapped_column(String(2000))
+    # Способ устранения уязвимости (п. 22): update | compensating.
+    method: Mapped[str | None] = mapped_column(String(16))
+    # Обновление: чьё ПО (foreign | opensource | domestic) и отметка о тестировании (п. 23).
+    update_origin: Mapped[str | None] = mapped_column(String(16))
+    update_tested: Mapped[bool | None] = mapped_column(Boolean)
+    # Компенсирующие меры из перечня п. 25: коды CM1…CM5.
+    compensating: Mapped[list] = mapped_column(JsonType, default=list)
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    close_reason: Mapped[str | None] = mapped_column(String(500))
+    vm_ticket_id: Mapped[str | None] = mapped_column(String(64))
+    vm_project_id: Mapped[str | None] = mapped_column(String(64))
+    vm_status: Mapped[str | None] = mapped_column(String(32))
+    vm_status_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    vm_verified_result: Mapped[str | None] = mapped_column(String(32))
+    vm_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    vm_verified_run_id: Mapped[str | None] = mapped_column(String(64))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sent_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    sent_by_name: Mapped[str | None] = mapped_column(String(200))
+    # Хэш отправленного содержимого: изменилась оценка или способ — «отправьте повторно».
+    sent_hash: Mapped[str | None] = mapped_column(String(64))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_by_name: Mapped[str | None] = mapped_column(String(200))
+
+
+class NonconformityEvent(Base):
+    """История пункта плана: открыт, закрыт, отправлен, статус заявки, проверка."""
+
+    __tablename__ = "nonconformity_events"
+    __table_args__ = (Index("ix_nonconformity_events_nc", "nonconformity_id", "at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    nonconformity_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("nonconformities.id", ondelete="CASCADE")
+    )
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    kind: Mapped[str] = mapped_column(String(32))
+    text: Mapped[str] = mapped_column(String(1000))
+    data: Mapped[dict] = mapped_column(JsonType, default=dict)
+    actor_name: Mapped[str | None] = mapped_column(String(200))
+
+
+class InboxEvent(Base):
+    """Принятое событие «Платформы» или «Устранения»: повтор с тем же id не обрабатывается."""
+
+    __tablename__ = "inbox"
+
+    event_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    type: Mapped[str] = mapped_column(String(64))
+    source: Mapped[str] = mapped_column(String(32))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # applied | ignored | unknown_ticket | stale
+    result: Mapped[str] = mapped_column(String(32))

@@ -49,6 +49,7 @@ import type { ObjectFull } from "../lib/objects";
 import { useProject } from "../lib/project";
 import { ConfirmSection, ManualEvidenceSection } from "./ManualEvidence";
 import { MeasureEvidence, ScannerCard } from "./ScannerResults";
+import { MeasureRemediation } from "./PlanTab";
 import { MeasureSziSection } from "./SziTab";
 
 type Filter =
@@ -1411,6 +1412,13 @@ function MeasureDrawer({
       {m.method !== "manual" && (
         <MeasureEvidence m={m} canAssess={canAssess} onChanged={onChanged} />
       )}
+
+      <MeasureRemediation
+        key={`${m.status}-${m.status_at ?? ""}`}
+        measureId={m.id}
+        objectId={objectId}
+        canAssess={canAssess}
+      />
 
       <ManualEvidenceSection
         m={m}

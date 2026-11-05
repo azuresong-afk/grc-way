@@ -19,6 +19,7 @@ export interface Project {
   period_to: string | null;
   status: "active" | "archived";
   scanner_engagement_id: number | null;
+  vm_project_id?: string | null;
   platform_project_id: string | null;
   created_at: string;
   members: Member[];

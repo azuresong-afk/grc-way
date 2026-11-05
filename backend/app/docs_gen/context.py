@@ -188,6 +188,7 @@ def build(session: Session, obj: AssessedObject, *, today: date | None = None) -
     )
     threat_model, u_threats = sections.threat_model_section(session, obj)
     vulns, vuln_plan, u_vulns = sections.vulns_section(session, obj)
+    _plan_overrides(session, obj, nonconf, vuln_plan)
     org, u_org = sections.org_docs_section(
         get_settings().reference_dir, measures, _profile_id(session, obj)
     )
@@ -271,6 +272,26 @@ def build(session: Session, obj: AssessedObject, *, today: date | None = None) -
         ),
         "unverified": unverified,
     }
+
+
+_PLAN_KEYS = ("responsible", "due", "priority_title", "method_title", "ticket", "state_title")
+
+
+def _plan_overrides(
+    session: Session, obj: AssessedObject, nonconf: list[dict], vuln_plan: list[dict]
+) -> None:
+    """Мероприятие, ответственный, срок, способ и заявка из плана (задача 3.4)."""
+    from app.api.nonconformities import document_overrides
+
+    ov = document_overrides(session, obj)
+    for kind, rows in (("measure", nonconf), ("vuln", vuln_plan)):
+        for row in rows:
+            key = row["ref"] if kind == "measure" else row.pop("vuln_id", None)
+            o = ov.get((kind, str(key)), {})
+            if o.get("action"):
+                row["action"] = o["action"]
+            for k in _PLAN_KEYS:
+                row[k] = o.get(k)
 
 
 # Разделы контекста (ключи верхнего уровня) — их может использовать свой шаблон.

@@ -29,7 +29,7 @@ export interface ManualData {
 
 export interface ManualEvidence {
   id: string;
-  kind: ManualKind | "certificate" | "scanner";
+  kind: ManualKind | "certificate" | "scanner" | "remediation";
   status: string | null;
   summary: string;
   data: ManualData;
@@ -49,6 +49,7 @@ export const KIND_LABELS: Record<ManualEvidence["kind"], string> = {
   inspection: "Осмотр",
   certificate: "Сертификат",
   scanner: "«Сканер»",
+  remediation: "«Устранение»",
 };
 
 export const CATEGORY_LABELS: Record<FileCategory, string> = {

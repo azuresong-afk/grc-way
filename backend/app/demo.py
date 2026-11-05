@@ -57,6 +57,7 @@ from app.core.security import hash_password, password_problem
 from app.db.models import BduImport, BduThreat, Project, RefProfile, SziImport, User, utcnow
 from app.db.session import get_engine
 from app.integrations.scanner.client import FixtureScannerClient, get_scanner_client
+from app.integrations.vm.client import FixtureVmClient, get_vm_client
 
 DEMO_PROJECT = "Аттестация ГИС «Учёт» (демо)"
 DEMO_CUSTOMER = "ГБУ «Центр учёта» (демо)"
@@ -349,6 +350,20 @@ def run(app: FastAPI, session: Session, password: str | None = None) -> Result:
         )
         n = _vulns(TestClient(app), {"Authorization": f"Bearer {tok['access_token']}"}, result)
         result.notes.append(f"реестр уязвимостей ГИС: оценено {n}, по одной не хватает данных")
+    if result.object_id:
+        tok = _check(
+            TestClient(app).post("/auth/token", json={"username": "demo-exp", "password": password})
+        )
+        app.dependency_overrides[get_vm_client] = FixtureVmClient
+        try:
+            n = _plan(
+                TestClient(app), session, {"Authorization": f"Bearer {tok['access_token']}"}, result
+            )
+        finally:
+            app.dependency_overrides.pop(get_vm_client, None)
+        result.notes.append(
+            f"план устранения ГИС: в «Устранение» отправлено {n}, статусы пришли событиями"
+        )
     if _load_szi_samples(session):
         result.notes.append("реестр СЗИ: загружен образец, вторая версия ждёт применения")
     if result.object_id:
@@ -435,6 +450,99 @@ def _vulns(c: Any, exp: dict[str, str], result: Result) -> int:
             n += int(d["assessments"] > 0)
     d = _check(c.post(f"/objects/{oid}/vulns", headers=exp, json=DEMO_MANUAL_VULN), 201)
     return n + int(d["assessments"] > 0)
+
+
+# План устранения (задача 3.4): проект в «Устранении» и что вносит специалист.
+DEMO_VM_PROJECT = "vm-demo-gis"
+DEMO_PLAN_VULNS: dict[str, dict[str, Any]] = {
+    "BDU:2024-04835": {
+        "method": "update",
+        "update_origin": "opensource",
+        "update_tested": True,
+        "responsible": "Петров П. П., администратор",
+        "action": "Обновить OpenSSH до 9.8p1 из репозитория дистрибутива",
+    },
+    "BDU:2021-06061": {
+        "method": "compensating",
+        "compensating": ["CM2", "CM4"],
+        "responsible": "Сидорова А. В., администратор безопасности",
+        "comment": "Обновление приложения портала — после выпуска версии разработчиком",
+    },
+}
+# Мера с проверками «Сканера», которую отправляем и «Устранение» подтверждает.
+DEMO_PLAN_MEASURE_STATUSES = ("in_progress", "fixed", "verified")
+
+
+def _plan(c: Any, session: Session, exp: dict[str, str], result: Result) -> int:
+    """Две уязвимости и одна техническая мера уходят в «Устранение»; статусы — событиями.
+
+    События «Устранения» в демо подаются прямо в обработчик (так же, как их принял бы
+    POST /events с подписью): мера проходит путь до «Подтверждено» и получает
+    доказательство, OpenSSH — «В работе», Log4Shell — «Принят риск» (ждёт решения).
+    """
+    from app.api.nonconformities import handle_event
+
+    oid = result.object_id
+    plan = _check(c.get(f"/objects/{oid}/nonconformities", headers=exp))
+    by_ref = {i["ref"]: i for i in plan["items"] if i["state"] != "closed"}
+    send: list[str] = []
+    for ref, body in DEMO_PLAN_VULNS.items():
+        if ref in by_ref:
+            _check(c.patch(f"/nonconformities/{by_ref[ref]['id']}", headers=exp, json=body))
+            send.append(by_ref[ref]["id"])
+    measure = next(
+        (
+            i
+            for i in plan["items"]
+            if i["kind"] == "measure" and i["state"] == "open" and not i["send_blocker"]
+        ),
+        None,
+    )
+    if measure is not None:
+        _check(
+            c.patch(
+                f"/nonconformities/{measure['id']}",
+                headers=exp,
+                json={"responsible": "Петров П. П., администратор", "priority": "high"},
+            )
+        )
+        send.append(measure["id"])
+    if not send:
+        return 0
+    out = _check(c.post(f"/objects/{oid}/nonconformities/send", headers=exp, json={"ids": send}))
+    tickets = {r["id"]: r["ticket_id"] for r in out["results"] if r["ok"]}
+
+    def event(n: int, etype: str, ticket: str, data: dict[str, Any]) -> None:
+        handle_event(
+            session,
+            {
+                "id": f"demo-{ticket}-{n}",
+                "type": etype,
+                "source": "vm",
+                "time": utcnow().isoformat(),
+                "project_id": DEMO_VM_PROJECT,
+                "data": {"ticket_id": int(ticket), **data},
+            },
+        )
+
+    if measure is not None and measure["id"] in tickets:
+        t = tickets[measure["id"]]
+        prev = "new"
+        for n, st in enumerate(DEMO_PLAN_MEASURE_STATUSES):
+            event(n, "vm.ticket.status_changed", t, {"from": prev, "to": st})
+            prev = st
+        event(
+            9,
+            "vm.remediation.verified",
+            t,
+            {"run_id": 12, "scanner_run_id": 8, "result": "verified"},
+        )
+    for ref, st in (("BDU:2024-04835", "in_progress"), ("BDU:2021-06061", "risk_accepted")):
+        nid = by_ref.get(ref, {}).get("id")
+        if nid in tickets:
+            event(0, "vm.ticket.status_changed", tickets[nid], {"from": "new", "to": st})
+    session.commit()
+    return out["sent"]
 
 
 # Наименование, вид, номер сертификата (образец), меры, размещение.
@@ -592,6 +700,7 @@ def _populate(c: Any, password: str) -> Result:
                 "name": DEMO_PROJECT,
                 "contract_ref": "Договор № 17-ДЕМО от 01.10.2026",
                 "scanner_engagement_id": 1,
+                "vm_project_id": DEMO_VM_PROJECT,
             },
         ),
         201,

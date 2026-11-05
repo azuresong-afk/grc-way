@@ -102,6 +102,8 @@ export function ProjectPage() {
             <dd>{formatPeriod(project)}</dd>
             <dt>Проект в «Сканере»</dt>
             <dd className="mono">{project.scanner_engagement_id ?? "не связан"}</dd>
+            <dt>Проект в «Устранении»</dt>
+            <dd className="mono">{project.vm_project_id ?? "не связан"}</dd>
             <dt>Создан</dt>
             <dd>{formatDateTime(project.created_at)}</dd>
           </dl>
