@@ -36,6 +36,13 @@ FONT = "Times New Roman"
 GREY = RGBColor(0x55, 0x55, 0x55)
 
 
+# Статус на титуле; у утверждённого — дата и кто утвердил (задача 3.3).
+STATUS_LINE = (
+    "{{ doc.status_title }}{% if doc.approved %} {{ doc.approved }}"
+    "{% if doc.approved_by %}, {{ doc.approved_by }}{% endif %}{% endif %}"
+)
+
+
 def _base() -> Document:
     doc = Document()
     sec = doc.sections[0]
@@ -197,7 +204,7 @@ def tech_passport() -> Document:
     for _ in range(10):
         _p(doc)
     _p(doc, "Версия {{ doc.version }} от {{ doc.generated }}", align=WD_ALIGN_PARAGRAPH.CENTER)
-    _p(doc, "{{ doc.status_title }}", align=WD_ALIGN_PARAGRAPH.CENTER, color=GREY)
+    _p(doc, STATUS_LINE, align=WD_ALIGN_PARAGRAPH.CENTER, color=GREY)
     doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
 
     doc.add_heading("1. Общие сведения", level=1)
@@ -364,7 +371,7 @@ def cover(doc: Document, title: str, *, subtitle: str = "{{ object.name }}") -> 
     for _ in range(9):
         _p(doc)
     _p(doc, "Версия {{ doc.version }} от {{ doc.generated }}", align=WD_ALIGN_PARAGRAPH.CENTER)
-    _p(doc, "{{ doc.status_title }}", align=WD_ALIGN_PARAGRAPH.CENTER, color=GREY)
+    _p(doc, STATUS_LINE, align=WD_ALIGN_PARAGRAPH.CENTER, color=GREY)
     page_break(doc)
 
 

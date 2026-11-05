@@ -240,8 +240,16 @@ def test_demo_document_kit(client, demo_env):
     assert f["classification.result_label"]["state"] == "filled"
     assert f["hosts"]["value"] == "10 шт." and f["szi"]["value"] == "5 шт."
     assert d["unverified"]  # таблица классификации №117 — заглушка, не сверена
-    # Наблюдатель проектов не видит.
-    assert client.get(f"/documents/{d['id']}", headers=h["demo-viewer"]).status_code == 404
+    # Согласование (3.3): паспорт утверждён (водяной знак остался из-за несверенной
+    # таблицы), акт классификации на согласовании, остальные — проекты.
+    assert t["latest"]["status"] == "approved" and d["unverified_acknowledged"]
+    assert d["approved_by_name"].startswith("Смирнов")
+    assert types["classification-act"]["latest"]["status"] == "review"
+    assert types["threat-model"]["latest"]["status"] == "draft"
+    # Наблюдатель видит утверждённый паспорт, проектов и согласуемых — нет.
+    assert client.get(f"/documents/{d['id']}", headers=h["demo-viewer"]).status_code == 200
+    act = types["classification-act"]["latest"]["id"]
+    assert client.get(f"/documents/{act}", headers=h["demo-viewer"]).status_code == 404
 
     def xml(code: str) -> str:
         doc_id = types[code]["latest"]["id"]

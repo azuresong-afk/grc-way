@@ -14,6 +14,13 @@
   шаблон: от них считается хэш и по ним — несверенные записи. Шаблон —
   встроенный (templates/docx, шрифт объекта: PT Astra Serif или Inter) или
   свой, загруженный пользователем (document_templates; шрифты — его).
+- (3.3) Согласование: проект → на согласовании → утверждён; прежняя
+  утверждённая версия — «заменён». Отправить и утвердить можно только
+  последнюю версию; новая версия возвращает версию «на согласовании» в
+  проекты. Утверждение пересобирает документ из сохранённого контекста по тому
+  же шаблону — без отметки «Проект» и с датой и именем утвердившего; если в
+  документе есть несверенные записи справочников, утвердить можно только с
+  явным подтверждением, и водяной знак остаётся.
 """
 
 from __future__ import annotations
@@ -24,7 +31,7 @@ import os
 import tempfile
 import zipfile
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date
 from pathlib import Path
 from typing import Any
 
@@ -32,10 +39,24 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.db.models import AssessedObject, DocumentTemplate, GeneratedDocument, User, utcnow
+from app.db.models import (
+    AssessedObject,
+    DocumentReview,
+    DocumentTemplate,
+    GeneratedDocument,
+    User,
+    utcnow,
+)
 from app.docs_gen import catalog, context, fieldmap, pdf, render
 
-STATUS_TITLES = {"draft": "Проект", "review": "На согласовании", "approved": "Утверждён"}
+STATUS_TITLES = {
+    "draft": "Проект",
+    "review": "На согласовании",
+    "approved": "Утверждён",
+    "superseded": "Заменён",
+}
+# Статусы, которые видит наблюдатель (представитель заказчика).
+PUBLISHED = ("approved", "superseded")
 REASON_DRAFT = "Документ не утверждён"
 REASON_UNVERIFIED = "Использованы записи справочников, не сверенные методистом"
 
@@ -121,7 +142,7 @@ def object_font(obj: AssessedObject) -> str:
 
 def watermark_reasons(status: str, unverified: list[dict[str, str]]) -> list[str]:
     out = []
-    if status != "approved":
+    if status not in PUBLISHED:
         out.append(REASON_DRAFT)
     if unverified:
         out.append(REASON_UNVERIFIED)
@@ -251,12 +272,7 @@ def generate(
     status = "draft"
     reasons = watermark_reasons(status, pv.unverified)
     tpl_ctx = fieldmap.fill_placeholders(pv.context, doc)
-    tpl_ctx["doc"] = {
-        "title": pv.title,
-        "version": version,
-        "generated": today.strftime("%d.%m.%Y"),
-        "status_title": STATUS_TITLES[status],
-    }
+    tpl_ctx["doc"] = doc_meta(pv.title, version, today, status)
     try:
         docx = render.render(pv.template.path, tpl_ctx, watermark=bool(reasons), font=pv.font)
     except render.RenderError as e:
@@ -291,7 +307,36 @@ def generate(
     )
     session.add(row)
     session.flush()
+    # Версия «на согласовании» устарела: возвращается в проекты.
+    if last is not None and last.status == "review":
+        _move(
+            session,
+            last,
+            "return",
+            "draft",
+            user,
+            f"Сформирована версия {version} — согласуется последняя версия",
+        )
     return row, True
+
+
+def doc_meta(
+    title: str,
+    version: int,
+    generated: date,
+    status: str,
+    approved: date | None = None,
+    approved_by: str | None = None,
+) -> dict[str, Any]:
+    """Раздел doc шаблона: заголовок, версия, дата, статус, кто утвердил."""
+    return {
+        "title": title,
+        "version": version,
+        "generated": generated.strftime("%d.%m.%Y"),
+        "status_title": STATUS_TITLES[status],
+        "approved": approved.strftime("%d.%m.%Y") if approved else None,
+        "approved_by": approved_by,
+    }
 
 
 # ---------- Свой шаблон ----------
@@ -408,3 +453,188 @@ def reset_template(session: Session, doc: catalog.DocType, user: User) -> Docume
     prev.deactivated_by_name = user.display_name
     session.flush()
     return prev
+
+
+# ---------- Согласование (задача 3.3) ----------
+
+
+def _move(
+    session: Session,
+    d: GeneratedDocument,
+    action: str,
+    to: str,
+    user: User | None,
+    comment: str | None = None,
+) -> DocumentReview:
+    ev = DocumentReview(
+        document_id=d.id,
+        action=action,
+        from_status=d.status,
+        to_status=to,
+        comment=comment,
+        actor_id=user.id if user else None,
+        actor_name=user.display_name if user else None,
+        at=utcnow(),
+    )
+    d.status = to
+    session.add(ev)
+    session.flush()
+    return ev
+
+
+def reviews(session: Session, doc_id: Any) -> list[DocumentReview]:
+    return list(
+        session.scalars(
+            select(DocumentReview)
+            .where(DocumentReview.document_id == doc_id)
+            .order_by(DocumentReview.at, DocumentReview.id)
+        )
+    )
+
+
+def _ensure_latest(session: Session, d: GeneratedDocument, what: str) -> None:
+    last = latest(session, d.object_id, d.doc_type)
+    if last is not None and last.id != d.id:
+        raise DocumentError(
+            f"{what} можно только последнюю версию — есть версия {last.version}",
+            "not_latest",
+        )
+
+
+def _clean(comment: str | None) -> str | None:
+    return (comment or "").strip()[:2000] or None
+
+
+def submit(
+    session: Session, d: GeneratedDocument, user: User, comment: str | None = None
+) -> DocumentReview:
+    """Проект → на согласовании."""
+    if d.status != "draft":
+        raise DocumentError("На согласование отправляется только проект", "bad_status")
+    _ensure_latest(session, d, "Отправить на согласование")
+    d.submitted_at = utcnow()
+    d.submitted_by = user.id
+    d.submitted_by_name = user.display_name
+    return _move(session, d, "submit", "review", user, _clean(comment))
+
+
+def return_to_draft(
+    session: Session, d: GeneratedDocument, user: User, comment: str | None
+) -> DocumentReview:
+    """На согласовании → проект (вернуть на доработку или отозвать); причина обязательна."""
+    if d.status != "review":
+        raise DocumentError("Вернуть можно только документ на согласовании", "bad_status")
+    reason = _clean(comment)
+    if not reason:
+        raise DocumentError("Укажите, что нужно доработать", "comment_required", 422)
+    return _move(session, d, "return", "draft", user, reason)
+
+
+def approval_blockers(d: GeneratedDocument, user: User) -> str | None:
+    """Почему этот пользователь не может утвердить версию (самоутверждение)."""
+    if d.created_by is not None and d.created_by == user.id:
+        return "Вы сформировали эту версию — утверждает другой сотрудник"
+    if d.submitted_by is not None and d.submitted_by == user.id:
+        return "Вы отправили эту версию на согласование — утверждает другой сотрудник"
+    return None
+
+
+def _template_for(session: Session, d: GeneratedDocument, doc: catalog.DocType) -> Path:
+    """Тот же шаблон, по которому собрана версия; иначе — ошибка."""
+    if d.template_id is not None:
+        tpl = session.get(DocumentTemplate, d.template_id)
+        path = custom_dir() / (tpl.sha256 if tpl else d.template_sha256)
+    else:
+        path = builtin_path(doc)
+    if not path.is_file() or catalog.file_sha256(path) != d.template_sha256:
+        raise DocumentError(
+            "Шаблон, по которому собрана версия, с тех пор изменился — сформируйте новую "
+            "версию и отправьте её на согласование",
+            "template_changed",
+        )
+    return path
+
+
+def _local_date(ts: Any) -> date:
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=UTC)
+    return ts.astimezone().date()
+
+
+def approve(
+    session: Session,
+    d: GeneratedDocument,
+    user: User,
+    *,
+    comment: str | None = None,
+    acknowledge_unverified: bool = False,
+    today: date | None = None,
+) -> list[GeneratedDocument]:
+    """На согласовании → утверждён; возвращает заменённые прежние утверждённые версии.
+
+    Самоутверждение проверяет вызывающий (approval_blockers) — и база (CHECK).
+    """
+    if d.status != "review":
+        raise DocumentError("Утвердить можно только документ на согласовании", "bad_status")
+    _ensure_latest(session, d, "Утвердить")
+    if d.unverified and not acknowledge_unverified:
+        raise DocumentError(
+            f"В документе записи справочников, не сверенные методистом ({len(d.unverified)}): "
+            "подтвердите, что утверждаете с ними — водяной знак «Проект» останется",
+            "unverified_refs",
+        )
+    doc = get_type(d.doc_type)
+    path = _template_for(session, d, doc)
+    today = today or date.today()
+    reasons = watermark_reasons("approved", d.unverified or [])
+    tpl_ctx = fieldmap.fill_placeholders(d.context, doc)
+    tpl_ctx["doc"] = doc_meta(
+        d.title,
+        d.version,
+        _local_date(d.created_at),
+        "approved",
+        approved=today,
+        approved_by=user.display_name,
+    )
+    try:
+        docx = render.render(path, tpl_ctx, watermark=bool(reasons), font=d.font)
+    except render.RenderError as e:
+        raise DocumentError(str(e), "template_error") from e
+    pdf_bytes, pdf_error = _pdf(docx)
+
+    now = utcnow()
+    replaced = list(
+        session.scalars(
+            select(GeneratedDocument).where(
+                GeneratedDocument.object_id == d.object_id,
+                GeneratedDocument.doc_type == d.doc_type,
+                GeneratedDocument.status == "approved",
+                GeneratedDocument.id != d.id,
+            )
+        )
+    )
+    for p in replaced:
+        p.superseded_at = now
+        _move(session, p, "supersede", "superseded", user, f"Утверждена версия {d.version}")
+
+    directory = get_settings().documents_dir
+    d.draft_docx_sha256 = d.docx_sha256
+    d.draft_pdf_sha256 = d.pdf_sha256
+    d.docx_sha256 = put_file(docx, directory)
+    d.docx_size = len(docx)
+    d.pdf_sha256 = put_file(pdf_bytes, directory) if pdf_bytes else None
+    d.pdf_size = len(pdf_bytes) if pdf_bytes else None
+    d.pdf_error = pdf_error
+    d.watermark = bool(reasons)
+    d.watermark_reasons = reasons
+    d.approved_at = now
+    d.approved_by = user.id
+    d.approved_by_name = user.display_name
+    d.approval_comment = _clean(comment)
+    d.unverified_acknowledged = bool(d.unverified)
+    _move(session, d, "approve", "approved", user, d.approval_comment)
+    return replaced
+
+
+def read_file(sha: str) -> bytes:
+    return (get_settings().documents_dir / sha).read_bytes()
