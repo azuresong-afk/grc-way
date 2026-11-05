@@ -18,6 +18,7 @@ from sqlalchemy import (
     String,
     Text,
     Uuid,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -1066,3 +1067,105 @@ class RefDocument(Base):
     file_hash: Mapped[str | None] = mapped_column(String(64))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+
+
+# ---------- Реестр уязвимостей объекта ----------
+
+
+class ObjectVuln(Base):
+    """Уязвимость в реестре объекта (Методика оценки критичности уязвимостей 2025, задача 2.8).
+
+    Одна запись на идентификатор БДУ в объекте: хосты берутся из находок текущего
+    снимка «Сканера» (scanner_hosts) и из результатов контроля защищённости,
+    внесённых специалистом (manual_hosts, п. 8 «г»). Уязвимость без идентификатора
+    БДУ вносится только вручную. Выбор специалиста (CVSS, если в БДУ нет 3.1; E; H;
+    отметка п. 4) хранится здесь, оценки — в ObjectVulnAssessment.
+    """
+
+    __tablename__ = "object_vulns"
+    __table_args__ = (
+        Index("ix_object_vulns_object", "object_id"),
+        Index("ix_object_vulns_bdu", "bdu_id"),
+        Index(
+            "ux_object_vulns_bdu",
+            "object_id",
+            "bdu_id",
+            unique=True,
+            postgresql_where=text("bdu_id IS NOT NULL"),
+            sqlite_where=text("bdu_id IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    object_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("objects.id", ondelete="CASCADE"))
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    # Ключ записи в объекте: BDU:2024-04835; NULL — уязвимость без идентификатора БДУ.
+    bdu_id: Mapped[str | None] = mapped_column(String(32))
+    title: Mapped[str] = mapped_column(String(2000))
+    description: Mapped[str | None] = mapped_column(Text)
+    origin: Mapped[str] = mapped_column(String(16))  # scanner | manual
+    # Результаты контроля защищённости: pentest | exercise | experiment | other.
+    manual_source: Mapped[str | None] = mapped_column(String(16))
+    manual_hosts: Mapped[list] = mapped_column(JsonType, default=list)
+    # Из текущего снимка «Сканера»: адреса и находки (поля FINDING_FIELDS).
+    scanner_hosts: Mapped[list] = mapped_column(JsonType, default=list)
+    scanner_findings: Mapped[list] = mapped_column(JsonType, default=list)
+    snapshot_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    snapshot_number: Mapped[int | None] = mapped_column(Integer)
+    # Снимок, в котором уязвимость последний раз была найдена.
+    last_seen_snapshot: Mapped[int | None] = mapped_column(Integer)
+    # Выбор специалиста.
+    cvss_choice: Mapped[dict | None] = mapped_column(JsonType)
+    e_choice: Mapped[list] = mapped_column(JsonType, default=list)
+    h_choice: Mapped[list] = mapped_column(JsonType, default=list)
+    certified_szi: Mapped[bool] = mapped_column(Boolean, default=False)
+    comment: Mapped[str | None] = mapped_column(String(2000))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    created_by_name: Mapped[str | None] = mapped_column(String(200))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    updated_by_name: Mapped[str | None] = mapped_column(String(200))
+
+
+class ObjectVulnAssessment(Base):
+    """Оценка критичности уязвимости объекта. Неизменяема (UPDATE запрещён триггером).
+
+    Повторный расчёт — новая оценка с номером на единицу больше; текущая —
+    последняя. В записи — всё, чтобы показать «как посчитано» без справочника:
+    исходные данные, трассировка расчёта, ревизия Методики, снимок и сведения БДУ.
+    """
+
+    __tablename__ = "object_vuln_assessments"
+    __table_args__ = (Index("ux_object_vuln_assessments", "vuln_id", "number", unique=True),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    vuln_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("object_vulns.id", ondelete="CASCADE"))
+    object_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("objects.id", ondelete="CASCADE"))
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    number: Mapped[int] = mapped_column(Integer)
+    # choices | manual | snapshot | bdu | recalc — что вызвало расчёт.
+    trigger: Mapped[str] = mapped_column(String(16))
+    reasons: Mapped[list] = mapped_column(JsonType, default=list)
+    hosts: Mapped[list] = mapped_column(JsonType, default=list)
+    inputs: Mapped[dict] = mapped_column(JsonType)
+    outcome: Mapped[dict] = mapped_column(JsonType)
+    # Откуда взяты значения: cvss, exploitation, infra, notes.
+    details: Mapped[dict] = mapped_column(JsonType, default=dict)
+    v: Mapped[str] = mapped_column(String(16))
+    level: Mapped[str] = mapped_column(String(16))
+    level_title: Mapped[str] = mapped_column(String(100))
+    deadline_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # Номер оценки, от которой отсчитан срок (тот же уровень — срок не продлевается).
+    deadline_from: Mapped[int] = mapped_column(Integer)
+    methodology_id: Mapped[str] = mapped_column(String(32))
+    methodology_version: Mapped[str] = mapped_column(String(64))
+    methodology_revision: Mapped[int] = mapped_column(Integer)
+    methodology_hash: Mapped[str] = mapped_column(String(64))
+    snapshot_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    snapshot_number: Mapped[int | None] = mapped_column(Integer)
+    bdu_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    assessed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    assessed_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    assessed_by_name: Mapped[str | None] = mapped_column(String(200))

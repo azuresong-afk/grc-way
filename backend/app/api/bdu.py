@@ -15,6 +15,7 @@ from starlette.datastructures import UploadFile
 
 from app import audit
 from app.api.deps import CurrentUser, DbSession, client_ip, require
+from app.api.object_vulns import refresh_for_bdu
 from app.core.config import get_settings
 from app.core.rbac import Perm
 from app.db.models import BduImport, BduThreat, BduVuln, User, utcnow
@@ -395,10 +396,25 @@ def _apply(
             409, detail="Данные БДУ изменились после сравнения. Загрузите выгрузку заново"
         )
     res = bdu_import.apply(session, parsed, row, version=row.export_version)
+    applied = res.as_dict()
+    register_assessed = None
+    if kind == "vulns":
+        # Реестры уязвимостей объектов: новые сведения БДУ — пересчёт оценок (п. 16, 19).
+        touched = set(
+            session.scalars(
+                select(BduVuln.bdu_id).where(
+                    or_(
+                        BduVuln.criticality_changed_import_id == row.id,
+                        BduVuln.first_import_id == row.id,
+                    )
+                )
+            )
+        )
+        register_assessed = refresh_for_bdu(session, touched, user)
     row.status = "applied"
     row.applied_at = utcnow()
     row.applied_by, row.applied_by_name = user.id, user.display_name
-    row.applied = res.as_dict()
+    row.applied = applied
     audit.record(
         session,
         action="bdu.import.apply",
@@ -410,7 +426,8 @@ def _apply(
             "kind": kind,
             "version": row.export_version.isoformat() if row.export_version else None,
             "ack_warnings": [w["code"] for w in row.warnings],
-            **res.as_dict(),
+            **applied,
+            "register_assessed": register_assessed,
         },
     )
     session.commit()

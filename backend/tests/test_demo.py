@@ -197,3 +197,17 @@ def test_demo_inventory(client, demo_env):
         json={"addresses": ["10.10.2.5", "10.10.3.101"]},
     ).json()
     assert out["complete"] and out["inputs"]["P"] == ["P1"]
+
+
+def test_demo_vuln_register(client, demo_env):
+    r, h = demo_env
+    reg = client.get(f"/objects/{r.object_id}/vulns", headers=h["demo-viewer"]).json()
+    by = {x["bdu_id"]: x for x in reg["items"]}
+    assert by["BDU:2024-04835"]["state"] == "current"
+    log4j = by["BDU:2021-06061"]
+    assert log4j["state"] == "current" and log4j["current"]["level"] == "critical"
+    assert by["BDU:2026-00042"]["state"] == "incomplete"
+    manual = by[None]
+    assert manual["origin"] == "manual" and manual["current"]["level"] == "high"
+    out = client.get(f"/objects/{r.object_id}/vulns/remediation", headers=h["demo-viewer"])
+    assert len(out.json()["items"]) == 3

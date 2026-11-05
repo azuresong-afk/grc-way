@@ -49,11 +49,12 @@ import { ClassificationTab } from "./ClassificationTab";
 import { MeasuresTab } from "./MeasuresTab";
 import { SziTab } from "./SziTab";
 import { ThreatModelTab } from "./ThreatModelTab";
+import { VulnsTab } from "./VulnsTab";
 import { RegimeField } from "./ObjectsPage";
 import { BulkTypeDialog, InfrDialog, InventoryCard, TypeChips, TypePicker, useComponentTypes } from "./InventoryParts";
 
-type Tab = "description" | "classification" | "measures" | "threats" | "szi" | "composition";
-const TABS: Tab[] = ["description", "classification", "measures", "threats", "szi", "composition"];
+type Tab = "description" | "classification" | "measures" | "threats" | "vulns" | "szi" | "composition";
+const TABS: Tab[] = ["description", "classification", "measures", "threats", "vulns", "szi", "composition"];
 
 export function ObjectPage() {
   const { id = "" } = useParams();
@@ -197,6 +198,15 @@ export function ObjectPage() {
         >
           Модель угроз
         </button>
+        <button
+          type="button"
+          role="tab"
+          className="tab"
+          aria-selected={tab === "vulns"}
+          onClick={() => setTab("vulns")}
+        >
+          Уязвимости
+        </button>
         <button type="button" role="tab" className="tab" aria-selected={tab === "szi"} onClick={() => setTab("szi")}>
           СЗИ
         </button>
@@ -220,6 +230,7 @@ export function ObjectPage() {
         <MeasuresTab obj={obj} editable={known && obj.status === "active"} onChanged={reloadObject} />
       )}
       {tab === "threats" && <ThreatModelTab obj={obj} editable={known && obj.status === "active"} />}
+      {tab === "vulns" && <VulnsTab obj={obj} editable={known && obj.status === "active"} />}
       {tab === "szi" && <SziTab obj={obj} editable={known && obj.status === "active"} />}
       {tab === "composition" && (
         <CompositionTab

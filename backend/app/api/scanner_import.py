@@ -34,6 +34,7 @@ from sqlalchemy.orm import Session
 from app import audit
 from app.api.deps import DbSession, client_ip, require
 from app.api.measures import _latest_adaptation, _measures
+from app.api.object_vulns import refresh_object
 from app.api.objects import _editable, _engagement, get_object_for
 from app.api.snapshots import SnapshotBrief, _brief, _latest_snapshot
 from app.core.rbac import Perm
@@ -411,6 +412,8 @@ def import_run(
                 m.status_at = now
                 m.status_by_name = run_by
             m.status_source = "auto"
+    # Реестр уязвимостей: находки снимка → записи, устаревшие оценки — пересчёт.
+    refresh_object(session, obj, user, trigger="snapshot", ip=ip)
     audit.record(
         session,
         action="scanner.import",
