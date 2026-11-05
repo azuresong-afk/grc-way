@@ -1,10 +1,11 @@
-import { AlertTriangle, Download, FileText, RefreshCw, Stamp } from "lucide-react";
+import { AlertTriangle, Download, FileText, RefreshCw, Stamp, Upload } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Drawer } from "../components/Drawer";
 import { EmptyState } from "../components/EmptyState";
+import { Modal } from "../components/Modal";
 import { ErrorAlert, Loading } from "../components/Status";
-import { ApiError, apiGet, apiSend } from "../lib/api";
+import { ApiError, apiFetch, apiGet, apiSend } from "../lib/api";
 import { formatSize } from "../lib/evidence";
 import { formatDateTime, formatNumber } from "../lib/format";
 import type { ObjectFull } from "../lib/objects";
@@ -12,13 +13,17 @@ import {
   STATE_PILL,
   TAB_TITLES,
   downloadDocument,
+  downloadFile,
   fieldLink,
   isGap,
   type DocBrief,
   type DocField,
   type DocFull,
+  type DocType,
   type DocTypeDetail,
   type DocumentsList,
+  type FontCode,
+  type TemplateRow,
   type Unverified,
 } from "../lib/objectDocs";
 
@@ -198,7 +203,12 @@ function VersionDrawer({ id, obj, onClose }: { id: string; obj: ObjectFull; onCl
                 {doc.pdf_error && <div className="cell-sub">{doc.pdf_error}</div>}
               </dd>
               <dt>Шаблон</dt>
-              <dd className="mono">{doc.template_name}</dd>
+              <dd>
+                {doc.template_custom ? "Свой: " : "Встроенный: "}
+                <span className="mono">{doc.template_name}</span>
+              </dd>
+              <dt>Шрифт</dt>
+              <dd>{doc.font_title ?? "из своего шаблона"}</dd>
             </dl>
             <UnverifiedAlert items={doc.unverified} />
           </section>
@@ -212,11 +222,146 @@ function VersionDrawer({ id, obj, onClose }: { id: string; obj: ObjectFull; onCl
   );
 }
 
+function TemplateModal({
+  t,
+  onClose,
+  onChanged,
+}: {
+  t: DocTypeDetail;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [comment, setComment] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const ref = t.template_ref;
+
+  async function run(action: () => Promise<unknown>, fallback: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+      onChanged();
+      onClose();
+    } catch (e) {
+      setError(message(e, fallback));
+      setBusy(false);
+    }
+  }
+
+  const upload = () =>
+    run(async () => {
+      if (!file) return;
+      const form = new FormData();
+      form.set("file", file);
+      if (comment.trim()) form.set("comment", comment.trim());
+      const res = await apiFetch(`/document-templates/${t.code}`, { method: "POST", body: form });
+      return (await res.json()) as TemplateRow;
+    }, "Не удалось загрузить шаблон");
+
+  return (
+    <Modal
+      title={`Шаблон: ${t.title}`}
+      onClose={onClose}
+      footer={
+        <>
+          {ref.custom && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={busy}
+              onClick={() =>
+                void run(() => apiSend("POST", `/document-templates/${t.code}/reset`), "Не удалось вернуть шаблон")
+              }
+            >
+              Вернуть встроенный
+            </button>
+          )}
+          <span className="spacer" />
+          <button type="button" className="btn" onClick={onClose}>
+            Отмена
+          </button>
+          <button type="button" className="btn btn-primary" disabled={!file || busy} onClick={() => void upload()}>
+            <Upload size={14} /> {busy ? "Проверяем…" : "Загрузить"}
+          </button>
+        </>
+      }
+    >
+      <p className="muted">
+        Свой (фирменный) шаблон — DOCX с полями вида <span className="mono">{"{{ object.name }}"}</span>. Он
+        действует для этого документа во всех проектах; шрифты и оформление берутся из шаблона. Возьмите за
+        основу встроенный шаблон — в нём поля уже расставлены.
+      </p>
+      <div className="btn-row">
+        <button
+          type="button"
+          className="btn btn-sm"
+          onClick={() =>
+            void downloadFile(`/document-templates/${t.code}/builtin`, `Шаблон — ${t.title}.docx`).catch((e) =>
+              setError(message(e, "Не удалось скачать шаблон")),
+            )
+          }
+        >
+          <Download size={14} /> Встроенный шаблон
+        </button>
+        {ref.custom && ref.id && (
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() =>
+              void downloadFile(`/document-templates/files/${ref.id}`, ref.name).catch((e) =>
+                setError(message(e, "Не удалось скачать шаблон")),
+              )
+            }
+          >
+            <Download size={14} /> Текущий свой
+          </button>
+        )}
+      </div>
+      <dl className="props">
+        <dt>Сейчас действует</dt>
+        <dd>
+          {ref.custom ? (
+            <>
+              свой: <span className="mono">{ref.name}</span>
+              <div className="cell-sub">
+                {ref.uploaded_at ? formatDateTime(ref.uploaded_at) : ""} · {ref.uploaded_by_name ?? "—"}
+                {ref.comment ? ` · ${ref.comment}` : ""}
+              </div>
+            </>
+          ) : (
+            <>
+              встроенный: <span className="mono">{ref.name}</span>
+            </>
+          )}
+        </dd>
+      </dl>
+      <label className="field">
+        <span>Файл DOCX</span>
+        <input
+          className="input"
+          type="file"
+          accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        />
+        <small>До 10 МБ, без макросов. Неизвестные поля и ошибки в полях покажем сразу.</small>
+      </label>
+      <label className="field">
+        <span>Комментарий</span>
+        <input className="input" value={comment} maxLength={1000} onChange={(e) => setComment(e.target.value)} />
+      </label>
+      {error && <ErrorAlert message={error} />}
+    </Modal>
+  );
+}
+
 function TypeCard({
   t,
   obj,
   canEdit,
   pdfAvailable,
+  fontTitle,
   onGenerated,
   onOpen,
 }: {
@@ -224,9 +369,11 @@ function TypeCard({
   obj: ObjectFull;
   canEdit: boolean;
   pdfAvailable: boolean;
-  onGenerated: (d: DocFull & { created: boolean }) => void;
+  fontTitle: string | null;
+  onGenerated: () => void;
   onOpen: (id: string) => void;
 }) {
+  const [templateOpen, setTemplateOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -245,7 +392,7 @@ function TypeCard({
           ? `Сформирована версия ${d.version}${d.pdf_size === null ? " (только DOCX)" : ""}`
           : `Данные не менялись — актуальна версия ${d.version}`,
       );
-      onGenerated(d);
+      onGenerated();
     } catch (e) {
       setError(message(e, "Не удалось сформировать документ"));
     } finally {
@@ -315,6 +462,25 @@ function TypeCard({
                 </>
               ) : (
                 <span className="muted">нет</span>
+              )}
+            </span>
+          </div>
+          <div>
+            <span className="kpi-label">Шаблон</span>
+            <span className="doc-stat">
+              <span className={`pill ${t.template_ref.custom ? "pill-info" : "pill-muted"}`}>
+                {t.template_ref.custom ? "Свой" : "Встроенный"}
+              </span>
+            </span>
+            <span className="cell-sub">
+              {t.template_ref.custom ? t.template_ref.name : `шрифт ${fontTitle ?? "—"}`}
+              {canEdit && (
+                <>
+                  {" · "}
+                  <button type="button" className="link-btn" onClick={() => setTemplateOpen(true)}>
+                    {t.template_ref.custom ? "заменить" : "загрузить свой"}
+                  </button>
+                </>
               )}
             </span>
           </div>
@@ -392,32 +558,158 @@ function TypeCard({
           </table>
         </div>
       )}
+      {templateOpen && <TemplateModal t={t} onClose={() => setTemplateOpen(false)} onChanged={onGenerated} />}
     </section>
   );
 }
 
+function versionPill(t: DocType) {
+  if (!t.latest) return <span className="muted">нет</span>;
+  return (
+    <>
+      <span className="mono">v{t.latest.version}</span>{" "}
+      {t.changed ? (
+        <span className="pill pill-warn">Данные изменились</span>
+      ) : (
+        <span className="pill pill-ok">Актуальна</span>
+      )}
+    </>
+  );
+}
+
+/** Комплект: девять документов с готовностью, версией и шаблоном. */
+function KitTable({ types, selected, onSelect }: { types: DocType[]; selected: string; onSelect: (c: string) => void }) {
+  return (
+    <div className="table-wrap">
+      <table className="table doc-kit">
+        <thead>
+          <tr>
+            <th>Документ</th>
+            <th>Заполнено полей</th>
+            <th>Последняя версия</th>
+            <th>Шаблон</th>
+          </tr>
+        </thead>
+        <tbody>
+          {types.map((t, i) => {
+            const filled = t.counts.total - t.counts.empty;
+            return (
+              <tr
+                key={t.code}
+                className={`clickable${t.code === selected ? " selected" : ""}`}
+                aria-selected={t.code === selected}
+                onClick={() => onSelect(t.code)}
+              >
+                <td>
+                  <span className="doc-kit-doc">
+                    <span className="doc-kit-num">{i + 1}</span>
+                    <button type="button" className="link-btn cell-title" onClick={() => onSelect(t.code)}>
+                      {t.title}
+                    </button>
+                  </span>
+                </td>
+                <td>
+                  {formatNumber(filled)} <span className="muted">из {formatNumber(t.counts.total)}</span>
+                  {t.counts.required_empty > 0 && (
+                    <div className="cell-sub text-warn">
+                      обязательных пустых: {formatNumber(t.counts.required_empty)}
+                    </div>
+                  )}
+                </td>
+                <td>{versionPill(t)}</td>
+                <td>
+                  <span className={`pill ${t.template_ref.custom ? "pill-info" : "pill-muted"}`}>
+                    {t.template_ref.custom ? "Свой" : "Встроенный"}
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function ObjectDocsTab({ obj, editable }: { obj: ObjectFull; editable: boolean }) {
+  const [params, setParams] = useSearchParams();
   const [list, setList] = useState<DocumentsList | null>(null);
-  const [details, setDetails] = useState<DocTypeDetail[] | null>(null);
+  const [detail, setDetail] = useState<DocTypeDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  const selected = list?.types.find((t) => t.code === params.get("doc"))?.code ?? list?.types[0]?.code ?? null;
 
   const load = useCallback(() => {
     setError(null);
     apiGet<DocumentsList>(`/objects/${obj.id}/documents`)
-      .then(async (l) => {
-        const d = await Promise.all(
-          l.types.map((t) => apiGet<DocTypeDetail>(`/objects/${obj.id}/documents/types/${t.code}`)),
-        );
-        setList(l);
-        setDetails(d);
-      })
+      .then(setList)
       .catch((e: Error) => setError(e.message));
   }, [obj.id]);
   useEffect(load, [load]);
 
+  useEffect(() => {
+    if (!selected || !list) return;
+    let alive = true;
+    apiGet<DocTypeDetail>(`/objects/${obj.id}/documents/types/${selected}`)
+      .then((d) => alive && setDetail(d))
+      .catch((e: Error) => alive && setError(e.message));
+    return () => {
+      alive = false;
+    };
+  }, [obj.id, selected, list]);
+
+  function select(code: string) {
+    const next = new URLSearchParams(params);
+    next.set("doc", code);
+    setParams(next, { replace: true });
+  }
+
+  async function setFont(font: FontCode) {
+    if (!list || font === list.font) return;
+    setBusy("font");
+    setNote(null);
+    try {
+      await apiSend("PUT", `/objects/${obj.id}/documents/settings`, { font });
+      load();
+    } catch (e) {
+      setError(message(e, "Не удалось сменить шрифт"));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function generateChanged() {
+    if (!list) return;
+    const todo = list.types.filter((t) => t.changed && t.template_found);
+    setBusy("all");
+    setNote(null);
+    setError(null);
+    let made = 0;
+    try {
+      for (const t of todo) {
+        const d = await apiSend<DocFull & { created: boolean }>("POST", `/objects/${obj.id}/documents`, {
+          type: t.code,
+        });
+        if (d.created) made += 1;
+      }
+      setNote(`Сформировано новых версий: ${formatNumber(made)}`);
+    } catch (e) {
+      setError(message(e, "Не удалось сформировать документы"));
+    } finally {
+      setBusy(null);
+      load();
+    }
+  }
+
   if (error && !list) return <ErrorAlert message={error} onRetry={load} />;
-  if (!list || !details) return <Loading />;
+  if (!list) return <Loading />;
+
+  const canEdit = editable && list.can_edit;
+  const changed = list.types.filter((t) => t.changed && t.template_found).length;
+  const fontTitle = list.fonts.find((f) => f.code === list.font)?.title ?? null;
 
   return (
     <>
@@ -428,24 +720,89 @@ export function ObjectDocsTab({ obj, editable }: { obj: ObjectFull; editable: bo
           </span>
         </div>
       )}
-      {details.length === 0 ? (
+      {list.types.length === 0 ? (
         <EmptyState
           icon={<FileText size={21} />}
           title="Документов для объекта нет"
           text="Каталог документов не содержит документов для нормативного режима этого объекта."
         />
       ) : (
-        details.map((t) => (
-          <TypeCard
-            key={t.code}
-            t={t}
-            obj={obj}
-            canEdit={editable && list.can_edit}
-            pdfAvailable={list.pdf_available}
-            onGenerated={() => load()}
-            onOpen={setOpen}
-          />
-        ))
+        <>
+          <section className="card doc-kit-card">
+            <div className="card-head">
+              <div>
+                <h2>Комплект документов</h2>
+                <div className="cell-sub">
+                  {formatNumber(list.types.length)} документов · сформировано{" "}
+                  {formatNumber(list.types.filter((t) => t.latest).length)} · требуют новой версии{" "}
+                  {formatNumber(changed)}
+                </div>
+              </div>
+              <div className="doc-kit-tools">
+                <div className="doc-font">
+                  <span className="kpi-label" id="doc-font-label">
+                    Шрифт
+                  </span>
+                  <div className="seg" role="radiogroup" aria-labelledby="doc-font-label">
+                    {list.fonts.map((f) => (
+                      <button
+                        key={f.code}
+                        type="button"
+                        role="radio"
+                        className="seg-btn"
+                        aria-checked={f.code === list.font}
+                        disabled={!canEdit || busy !== null}
+                        onClick={() => void setFont(f.code)}
+                      >
+                        {f.title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {canEdit && (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={busy !== null || changed === 0}
+                    onClick={() => void generateChanged()}
+                  >
+                    <RefreshCw size={14} className={busy === "all" ? "spin" : undefined} />
+                    {busy === "all" ? "Формируются…" : `Сформировать изменившиеся · ${formatNumber(changed)}`}
+                  </button>
+                )}
+              </div>
+            </div>
+            {(error || note) && (
+              <div className="card-pad">
+                {error && <ErrorAlert message={error} />}
+                {note && (
+                  <div className="alert alert-ok" role="status">
+                    <span className="alert-text">{note}</span>
+                  </div>
+                )}
+              </div>
+            )}
+            <KitTable types={list.types} selected={selected ?? ""} onSelect={select} />
+            <div className="card-pad cell-sub">
+              Шрифт применяется к встроенным шаблонам; свой шаблон оформляется своими шрифтами. После смены шрифта
+              документы нужно сформировать заново.
+            </div>
+          </section>
+          {detail && detail.code === selected ? (
+            <TypeCard
+              key={detail.code}
+              t={detail}
+              obj={obj}
+              canEdit={canEdit}
+              pdfAvailable={list.pdf_available}
+              fontTitle={fontTitle}
+              onGenerated={load}
+              onOpen={setOpen}
+            />
+          ) : (
+            <Loading />
+          )}
+        </>
       )}
       {open && <VersionDrawer id={open} obj={obj} onClose={() => setOpen(null)} />}
     </>

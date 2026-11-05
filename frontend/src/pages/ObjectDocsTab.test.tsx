@@ -92,6 +92,10 @@ const V1: DocBrief = {
   pdf_error: "PDF не сформирован: LibreOffice (soffice) не установлен или выключен",
   created_at: "2026-11-05T10:00:00Z",
   created_by_name: "Иванова А. А.",
+  template_name: "tech-passport.docx",
+  template_custom: false,
+  font: "astra",
+  font_title: "PT Astra Serif",
 };
 
 const TYPE: DocTypeDetail = {
@@ -100,6 +104,15 @@ const TYPE: DocTypeDetail = {
   description: "Состав объекта, хосты и СЗИ.",
   template: "tech-passport.docx",
   template_found: true,
+  template_ref: {
+    custom: false,
+    name: "tech-passport.docx",
+    id: null,
+    uploaded_at: null,
+    uploaded_by_name: null,
+    comment: null,
+  },
+  font: "astra",
   counts: { total: 3, empty: 2, required_empty: 2 },
   watermark_reasons: ["Документ не утверждён"],
   changed: true,
@@ -109,7 +122,29 @@ const TYPE: DocTypeDetail = {
   unverified: [{ title: "Таблица классификации (Приказ ФСТЭК России №117)", note: "версия 117-stub-1" }],
 };
 
-const LIST: DocumentsList = { types: [TYPE], pdf_available: false, can_edit: true, sees_drafts: true };
+const PLAN: DocTypeDetail = {
+  ...TYPE,
+  code: "remediation-plan",
+  title: "План мероприятий по устранению несоответствий",
+  template: "remediation-plan.docx",
+  changed: false,
+  latest: { ...V1, id: "p1v1", doc_type: "remediation-plan", title: "План" },
+  versions: [],
+};
+
+const FONTS = [
+  { code: "astra" as const, title: "PT Astra Serif" },
+  { code: "inter" as const, title: "Inter" },
+];
+
+const LIST: DocumentsList = {
+  types: [TYPE, PLAN],
+  pdf_available: false,
+  can_edit: true,
+  sees_drafts: true,
+  font: "astra",
+  fonts: FONTS,
+};
 
 function renderAt(path: string) {
   render(
@@ -137,7 +172,10 @@ it("вкладка «Документы»: карта полей, несвере
   expect(await screen.findByRole("heading", { name: /Технический паспорт объекта/ })).toBeInTheDocument();
   expect(screen.getByText(/не сверенные методистом: Таблица классификации/)).toBeInTheDocument();
   expect(screen.getByText(/на сервере нет LibreOffice/)).toBeInTheDocument();
-  expect(screen.getByText("Данные изменились")).toBeInTheDocument();
+  // Комплект: оба документа в таблице, у паспорта данные изменились.
+  expect(screen.getByRole("button", { name: "План мероприятий по устранению несоответствий" })).toBeInTheDocument();
+  expect(screen.getAllByText("Данные изменились").length).toBeGreaterThan(0);
+  expect(screen.getByRole("radio", { name: "PT Astra Serif" })).toHaveAttribute("aria-checked", "true");
 
   const gap = screen.getByText("Границы объекта").closest("tr")!;
   expect(within(gap).getByText("Пусто")).toHaveClass("pill-danger");
@@ -154,7 +192,10 @@ it("вкладка «Документы»: карта полей, несвере
   expect(screen.queryByText("Наименование объекта")).not.toBeInTheDocument();
 
   // PDF у версии нет — кнопка неактивна, причина в подсказке.
-  const ver = screen.getByText("v1").closest("tr")!;
+  const ver = screen
+    .getAllByText("v1")
+    .map((el) => el.closest("tr")!)
+    .find((tr) => within(tr).queryByRole("button", { name: /PDF/ }))!;
   expect(within(ver).getByRole("button", { name: /PDF/ })).toBeDisabled();
   expect(within(ver).getByRole("button", { name: /PDF/ })).toHaveAttribute("title", V1.pdf_error);
 
@@ -162,6 +203,42 @@ it("вкладка «Документы»: карта полей, несвере
   expect(await screen.findByText("Сформирована версия 2 (только DOCX)")).toBeInTheDocument();
   await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
   expect(calls.find((c) => c.method === "POST")?.body).toEqual({ type: "tech-passport" });
+});
+
+it("шрифт комплекта, выбор документа и свой шаблон", async () => {
+  sessionStorage.setItem(TOKEN_KEY, "tok");
+  let font = "astra";
+  const calls = fakeApi({
+    "GET /me": () => json(METH),
+    "GET /projects": () => json([PROJECT]),
+    "GET /objects/o1": () => json(OBJ),
+    "GET /objects/o1/hosts": () => json([]),
+    "GET /objects/o1/documents": () => json({ ...LIST, font }),
+    "GET /objects/o1/documents/types/tech-passport": () => json(TYPE),
+    "GET /objects/o1/documents/types/remediation-plan": () => json(PLAN),
+    "PUT /objects/o1/documents/settings": (init) => {
+      font = (JSON.parse(String(init?.body)) as { font: string }).font;
+      return json({ font });
+    },
+    "POST /document-templates/remediation-plan": () =>
+      json({ id: "t1", doc_type: "remediation-plan", name: "Бланк.docx", active: true }, 201),
+  });
+  renderAt("/objects/o1?tab=documents");
+  await screen.findByRole("heading", { name: /Технический паспорт объекта/ });
+
+  fireEvent.click(screen.getByRole("radio", { name: "Inter" }));
+  await waitFor(() => expect(screen.getByRole("radio", { name: "Inter" })).toHaveAttribute("aria-checked", "true"));
+  expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ font: "inter" });
+
+  fireEvent.click(screen.getByRole("button", { name: "План мероприятий по устранению несоответствий" }));
+  expect(await screen.findByRole("heading", { name: /План мероприятий/ })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "загрузить свой" }));
+  const dialog = await screen.findByRole("dialog");
+  const input = dialog.querySelector('input[type="file"]') as HTMLInputElement;
+  fireEvent.change(input, { target: { files: [new File(["PK"], "Бланк.docx")] } });
+  fireEvent.click(within(dialog).getByRole("button", { name: /Загрузить/ }));
+  await waitFor(() => expect(calls.some((c) => c.path === "/document-templates/remediation-plan")).toBe(true));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 });
 
 it("наблюдатель видит пояснение вместо проектов и не формирует документ", async () => {

@@ -2921,7 +2921,7 @@ fieldset.field {
 
 .doc-stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--s2);
 }
 
@@ -3005,6 +3005,66 @@ fieldset.field {
   white-space: nowrap;
 }
 
+/* ---------- Комплект документов (3.2) ---------- */
+
+.doc-kit-card {
+  margin-bottom: var(--s3);
+}
+
+.doc-kit-card .card-head {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.doc-kit-tools {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.doc-font {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.doc-kit-doc {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s1);
+}
+
+.doc-kit-num {
+  min-width: 18px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.doc-kit .link-btn.cell-title {
+  text-align: left;
+  color: var(--text);
+}
+
+.doc-stats .link-btn {
+  color: var(--accent-text);
+}
+
+.doc-kit tr.selected td:first-child {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.modal-foot .spacer {
+  flex: 1;
+}
+
+@media (max-width: 1200px) {
+  .doc-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 960px) {
   .doc-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3026,6 +3086,55 @@ fieldset.field {
 
   .doc-stat {
     font-size: 17px;
+  }
+
+  .doc-kit-tools {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  /* Комплект на телефоне — карточки: документ, ниже заполненность, версия, шаблон. */
+  .doc-kit thead {
+    display: none;
+  }
+
+  .doc-kit,
+  .doc-kit tbody {
+    display: block;
+  }
+
+  .doc-kit tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px var(--s2);
+    padding: var(--s2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .doc-kit tr td {
+    padding: 0;
+    border: 0;
+  }
+
+  .doc-kit td:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .doc-kit tr.selected {
+    background: var(--accent-soft);
+    box-shadow: inset 2px 0 0 var(--accent);
+  }
+
+  .doc-kit tr.selected td,
+  .doc-kit tr.selected td:first-child {
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .doc-kit td:nth-child(4) {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
   }
 
   /* Карта полей на телефоне — карточки: поле и состояние, ниже значение и источник. */

@@ -215,12 +215,26 @@ def test_demo_vuln_register(client, demo_env):
     assert len(out.json()["items"]) == 3
 
 
-def test_demo_tech_passport(client, demo_env):
+def _xml(docx: bytes) -> str:
+    import io
+    import zipfile
+
+    with zipfile.ZipFile(io.BytesIO(docx)) as z:
+        return "".join(
+            z.read(n).decode() for n in z.namelist() if n.startswith("word/") and n.endswith(".xml")
+        )
+
+
+def test_demo_document_kit(client, demo_env):
     r, h = demo_env
     body = client.get(f"/objects/{r.object_id}/documents", headers=h["demo-meth"]).json()
-    (t,) = body["types"]
-    assert t["code"] == "tech-passport" and t["latest"]["version"] == 1 and not t["changed"]
-    assert t["latest"]["watermark"] and t["counts"]["required_empty"] > 0
+    types = {t["code"]: t for t in body["types"]}
+    assert len(types) == 9
+    for t in types.values():
+        assert t["latest"]["version"] == 1 and not t["changed"], t["code"]
+        assert t["latest"]["watermark"]
+    t = types["tech-passport"]
+    assert t["counts"]["required_empty"] > 0
     d = client.get(f"/documents/{t['latest']['id']}", headers=h["demo-exp"]).json()
     f = {x["key"]: x for x in d["fields"]}
     assert f["classification.result_label"]["state"] == "filled"
@@ -228,3 +242,29 @@ def test_demo_tech_passport(client, demo_env):
     assert d["unverified"]  # таблица классификации №117 — заглушка, не сверена
     # Наблюдатель проектов не видит.
     assert client.get(f"/documents/{d['id']}", headers=h["demo-viewer"]).status_code == 404
+
+    def xml(code: str) -> str:
+        doc_id = types[code]["latest"]["id"]
+        return _xml(client.get(f"/documents/{doc_id}/file", headers=h["demo-meth"]).content)
+
+    # Модель угроз — черновик: шаги мастера и актуальные угрозы; утверждения нет.
+    tm = xml("threat-model")
+    assert "УБИ.006" in tm and "НВ4" in tm and "Черновик" in tm
+    assert "[не заполнено: Утверждение модели угроз]" in tm
+    # Протоколы: группы мер с доказательствами «Сканера» и анализ уязвимостей по Методике 2025.
+    pr = xml("test-protocols")
+    assert "УПД.8" in pr and "Протокол анализа уязвимостей" in pr
+    assert "BDU:2021-06061" in pr and "11,00" in pr and "Критический" in pr
+    assert "Методика оценки уровня критичности уязвимостей" in pr
+    # «Порядок управления уязвимостями» — ссылка на Методику 2025, уровни и сроки п. 21.
+    org = xml("org-docs")
+    assert "ПОРЯДОК УПРАВЛЕНИЯ УЯЗВИМОСТЯМИ" in org and "до 24 часов" in org
+    assert "BDU:2024-04835" in org and "Типовые формулировки ОРД" in org
+    # План: меры с нарушениями и уязвимости со сроком; сроков у мер нет.
+    plan = xml("remediation-plan")
+    assert "УПД.8" in plan and "BDU:2021-06061" in plan and "UTC" in plan
+    # Заключение: несоответствия есть — вывод «после устранения».
+    assert "после устранения несоответствий" in xml("conclusion")
+    # Акт: шаги расчёта по таблице.
+    act = xml("classification-act")
+    assert "Уровень значимости информации" in act and "К2" in act

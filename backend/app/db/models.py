@@ -311,6 +311,8 @@ class AssessedObject(Base):
     updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     # Когда состав последний раз сверялся с активами «Сканера».
     scanner_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Шрифт документов комплекта (встроенные шаблоны): astra | inter; None — astra.
+    doc_font: Mapped[str | None] = mapped_column(String(16))
 
     segments: Mapped[list[ObjectSegment]] = relationship(
         cascade="all, delete-orphan", lazy="selectin", order_by="ObjectSegment.position"
@@ -1215,6 +1217,48 @@ class GeneratedDocument(Base):
     pdf_size: Mapped[int | None] = mapped_column(BigInteger)
     # Почему нет PDF (LibreOffice не установлен, не уложился во время…).
     pdf_error: Mapped[str | None] = mapped_column(String(1000))
+    # Шрифт встроенного шаблона (astra | inter); None — свой шаблон, шрифты его.
+    font: Mapped[str | None] = mapped_column(String(16))
+    # Свой шаблон (document_templates); None — встроенный.
+    template_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     created_by_name: Mapped[str | None] = mapped_column(String(200))
+
+
+class DocumentTemplate(Base):
+    """Свой (фирменный) шаблон документа комплекта, загруженный пользователем (задача 3.2).
+
+    Общий для всех проектов: шаблон — оформление компании-исполнителя. Действующий —
+    не более одного на код документа; загрузка нового делает прежний недействующим,
+    «вернуть встроенный» — снимает действующий. Записи не удаляются: по template_id
+    версии документа видно, по какому шаблону она собрана. Файл — в томе
+    GRC_DOCUMENTS_DIR/templates под именем sha256.
+    """
+
+    __tablename__ = "document_templates"
+    __table_args__ = (
+        Index("ix_document_templates_type", "doc_type", "uploaded_at"),
+        Index(
+            "ux_document_templates_active",
+            "doc_type",
+            unique=True,
+            postgresql_where=text("active"),
+            sqlite_where=text("active"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    doc_type: Mapped[str] = mapped_column(String(64))
+    name: Mapped[str] = mapped_column(String(255))
+    sha256: Mapped[str] = mapped_column(String(64))
+    size: Mapped[int] = mapped_column(BigInteger)
+    # Имена верхнего уровня, которые использует шаблон (проверены при загрузке).
+    variables: Mapped[list] = mapped_column(JsonType, default=list)
+    active: Mapped[bool] = mapped_column(Boolean, default=False)
+    comment: Mapped[str | None] = mapped_column(String(1000))
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    uploaded_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    uploaded_by_name: Mapped[str | None] = mapped_column(String(200))
+    deactivated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deactivated_by_name: Mapped[str | None] = mapped_column(String(200))

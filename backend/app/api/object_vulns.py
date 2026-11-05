@@ -725,7 +725,11 @@ def _detail(session: Session, obj: AssessedObject, v: ObjectVuln) -> VulnDetail:
 @router.get("/objects/{object_id}/vulns", response_model=RegisterOut)
 def list_register(object_id: uuid.UUID, user: Viewer, session: DbSession) -> RegisterOut:
     obj = get_object_for(session, object_id, user)
-    m = _require_methodology(session)
+    return register(session, obj, _require_methodology(session))
+
+
+def register(session: Session, obj: AssessedObject, m: RefVulnMethodology) -> RegisterOut:
+    """Реестр объекта с текущими оценками (экран «Уязвимости» и документы комплекта)."""
     ctx = _Ctx(session, obj, m)
     vulns = list(session.scalars(select(ObjectVuln).where(ObjectVuln.object_id == obj.id)))
     ctx.load_bdu(vulns)

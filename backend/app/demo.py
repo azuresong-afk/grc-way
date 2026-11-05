@@ -28,8 +28,9 @@
 10. реестр уязвимостей ГИС по Методике 2025: находки прогона №7 с БДУ, две из них
    оценены экспертом (у Log4Shell в БДУ нет CVSS 3.1 — версия выбрана вручную),
    одна внесена по результатам пентеста, у одной не выбраны последствия (H);
-11. технический паспорт ГИС (задача 3.1) — версия 1: проект с водяным знаком,
-   в карте полей видно, чего не хватает (границы, ответственные, роли хостов).
+11. комплект документов ГИС (задачи 3.1–3.2) — версия 1 всех девяти документов:
+   проекты с водяным знаком, в карте полей видно, чего не хватает (границы,
+   ответственные, роли хостов, утверждение модели угроз).
 
 «Сканер» всегда берётся из фикстур (`GET /runs/{id}/compliance`, `/coverage`
 и `/findings` прогонов №6–8), даже если GRC_SCANNER_MODE=live: демо не ходит в сеть.
@@ -353,10 +354,12 @@ def run(app: FastAPI, session: Session, password: str | None = None) -> Result:
     if result.object_id:
         _szi(TestClient(app), meth, result.object_id)
         result.notes.append("СЗИ ГИС: пять средств, одно истекает, у одного срок истёк")
-        # Технический паспорт ГИС — версия 1 (проект с водяным знаком «Проект»).
+        # Комплект документов ГИС — версия 1 (проекты с водяным знаком «Проект»).
         url = f"/objects/{result.object_id}/documents"
-        _check(TestClient(app).post(url, headers=meth, json={"type": "tech-passport"}), 201)
-        result.notes.append("технический паспорт ГИС: версия 1 (проект)")
+        types = _check(TestClient(app).get(url, headers=meth))["types"]
+        for t in types:
+            _check(TestClient(app).post(url, headers=meth, json={"type": t["code"]}), 201)
+        result.notes.append(f"комплект документов ГИС: {len(types)} документов, версия 1 (проект)")
     return result
 
 
