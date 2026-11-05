@@ -24,7 +24,10 @@
    что находка Log4j устранена;
 9. реестр сертифицированных СЗИ — образец (app/integrations/szi/sample.py, не данные
    ФСТЭК): первая версия применена, вторая ждёт применения; на ГИС пять СЗИ с
-   привязкой к мерам — действующие, истекающий, истёкший и с оконченной поддержкой.
+   привязкой к мерам — действующие, истекающий, истёкший и с оконченной поддержкой;
+10. реестр уязвимостей ГИС по Методике 2025: находки прогона №7 с БДУ, две из них
+   оценены экспертом (у Log4Shell в БДУ нет CVSS 3.1 — версия выбрана вручную),
+   одна внесена по результатам пентеста, у одной не выбраны последствия (H).
 
 «Сканер» всегда берётся из фикстур (`GET /runs/{id}/compliance`, `/coverage`
 и `/findings` прогонов №6–8), даже если GRC_SCANNER_MODE=live: демо не ходит в сеть.
@@ -337,12 +340,60 @@ def run(app: FastAPI, session: Session, password: str | None = None) -> Result:
     if known == set(THREAT_DECISIONS) and result.object_id:
         _threat_model(TestClient(app), meth, result)
         result.notes.append("модель угроз ГИС: черновик заполнен, ждёт утверждения")
+    if result.object_id:
+        tok = _check(
+            TestClient(app).post("/auth/token", json={"username": "demo-exp", "password": password})
+        )
+        n = _vulns(TestClient(app), {"Authorization": f"Bearer {tok['access_token']}"}, result)
+        result.notes.append(f"реестр уязвимостей ГИС: оценено {n}, по одной не хватает данных")
     if _load_szi_samples(session):
         result.notes.append("реестр СЗИ: загружен образец, вторая версия ждёт применения")
     if result.object_id:
         _szi(TestClient(app), meth, result.object_id)
         result.notes.append("СЗИ ГИС: пять средств, одно истекает, у одного срок истёк")
     return result
+
+
+# Реестр уязвимостей ГИС (задача 2.8): выбор специалиста по находкам прогона №7.
+DEMO_VULN_CHOICES: dict[str, dict[str, Any]] = {
+    "BDU:2024-04835": {"h": ["H1"], "comment": "Удалённое выполнение кода на SSH-сервере"},
+    # В БДУ у Log4Shell только CVSS 2.0 и 3.0: версию выбирает специалист (п. 13).
+    "BDU:2021-06061": {
+        "cvss": {"version": "3.0", "score": 10.0, "source": "bdu", "note": "CVSS 3.1 в БДУ нет"},
+        "h": ["H1", "H4"],
+    },
+}
+DEMO_MANUAL_VULN = {
+    "title": "Подбор пароля учётной записи администратора портала",
+    "description": "При тестировании на проникновение пароль подобран по словарю за 12 минут.",
+    "manual_source": "pentest",
+    "manual_hosts": ["10.10.1.10"],
+    "cvss": {
+        "version": "3.1",
+        "score": 9.8,
+        "source": "manual",
+        "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    },
+    "e": ["E2"],
+    "h": ["H2"],
+}
+
+
+def _vulns(c: Any, exp: dict[str, str], result: Result) -> int:
+    """Оценки критичности по Методике 2025: две по находкам «Сканера», одна — по пентесту.
+
+    Уязвимость BDU:2026-00042 оставлена без выбора последствий (H) — видно, чего не
+    хватает для расчёта."""
+    oid = result.object_id
+    reg = _check(c.get(f"/objects/{oid}/vulns", headers=exp))
+    by = {x["bdu_id"]: x for x in reg["items"]}
+    n = 0
+    for bid, body in DEMO_VULN_CHOICES.items():
+        if bid in by:
+            d = _check(c.patch(f"/object-vulns/{by[bid]['id']}", headers=exp, json=body))
+            n += int(d["assessments"] > 0)
+    d = _check(c.post(f"/objects/{oid}/vulns", headers=exp, json=DEMO_MANUAL_VULN), 201)
+    return n + int(d["assessments"] > 0)
 
 
 # Наименование, вид, номер сертификата (образец), меры, размещение.

@@ -312,12 +312,12 @@ def test_loader_updates_changed_file_and_rejects_broken(session, ref_dir):
     path = ref_dir / "vuln-criticality" / "fstec-2025.yaml"
     text = path.read_text(encoding="utf-8")
     path.write_text(
-        text.replace('version: "2025-06-30-2"', 'version: "2025-06-30-3"'), encoding="utf-8"
+        text.replace('version: "2025-06-30-3"', 'version: "2025-06-30-4"'), encoding="utf-8"
     )
     r = load_reference(session, ref_dir)
     assert r.vuln_updated == 1
     m = session.get(RefVulnMethodology, "fstec-2025")
-    assert (m.version, m.revision) == ("2025-06-30-3", 2)
+    assert (m.version, m.revision) == ("2025-06-30-4", 2)
     # Файл, в котором примеры не воспроизводятся, не загружается.
     path.write_text(
         text.replace(

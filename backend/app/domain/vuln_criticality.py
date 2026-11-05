@@ -152,6 +152,29 @@ def _check_inventory(indicators: list[dict[str, Any]]) -> None:
                 )
 
 
+# Какой вывод из сведений БДУ соответствует значению показателя E (задача 2.8):
+# app.domain.bdu.e_level возвращает одно из них.
+BDU_EXPLOITATION = ("in_wild", "exploit", "none")
+
+
+def _check_bdu(indicators: list[dict[str, Any]]) -> None:
+    marked = [i for i in indicators if i.get("bdu") is not None]
+    for ind in marked:
+        if ind["bdu"] != "exploitation":
+            raise MethodologyError(f"показатель {ind['code']}: неизвестное поле БДУ «{ind['bdu']}»")
+    if len(marked) > 1:
+        raise MethodologyError(
+            "сведения БДУ об эксплуатации задают значение только одного показателя"
+        )
+    for ind in marked:
+        got = sorted(str(v.get("bdu")) for v in ind["values"])
+        if got != sorted(BDU_EXPLOITATION):
+            raise MethodologyError(
+                f"показатель {ind['code']}: у значений нужны соответствия БДУ "
+                + ", ".join(BDU_EXPLOITATION)
+            )
+
+
 def validate(definition: dict[str, Any]) -> None:
     """Проверяет справочник целиком; при ошибке — MethodologyError с понятным текстом."""
     groups = {g.get("code") for g in definition.get("groups") or []}
@@ -188,6 +211,7 @@ def validate(definition: dict[str, Any]) -> None:
             if _dec(v.get("score"), f"значение {vc}") < 0:
                 raise MethodologyError(f"значение {vc}: оценка не может быть меньше нуля")
     _check_inventory(indicators)
+    _check_bdu(indicators)
     for g in GROUPS:
         if not any(i.get("group") == g for i in indicators):
             raise MethodologyError(f"в группе {g} нет показателей")
