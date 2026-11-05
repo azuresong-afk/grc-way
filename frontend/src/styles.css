@@ -1911,7 +1911,6 @@ fieldset.field {
   .toolbar-end {
     margin-left: 0;
   }
-
 }
 
 /* ---------- Результаты «Сканера» (задача 1.9) ---------- */
@@ -3178,5 +3177,258 @@ fieldset.field {
 
   .doc-map tr.doc-gap {
     box-shadow: inset 2px 0 0 var(--danger);
+  }
+}
+
+/* ---------- Согласование и сравнение версий (3.3) ---------- */
+
+.drawer.drawer-wide {
+  width: min(960px, 100%);
+}
+
+.doc-section-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s1);
+}
+
+.doc-section-row h3 {
+  margin: 0;
+  font: inherit;
+}
+
+.doc-drawer-foot {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s1);
+}
+
+.doc-drawer-foot .btn-row {
+  flex-wrap: wrap;
+}
+
+.review-log {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  width: 100%;
+}
+
+.review-log li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: var(--s1);
+  padding-bottom: var(--s2);
+}
+
+.review-log li:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 0;
+  left: 4px;
+  width: 1px;
+  background: var(--border-strong);
+}
+
+.review-dot {
+  width: 9px;
+  height: 9px;
+  margin-top: 5px;
+  border-radius: var(--radius-xs);
+  background: var(--text-3);
+}
+
+.review-submit .review-dot {
+  background: var(--accent);
+}
+
+.review-return .review-dot {
+  background: var(--warn);
+}
+
+.review-approve .review-dot {
+  background: var(--ok);
+}
+
+.review-comment {
+  margin-top: 4px;
+  padding: 6px var(--s1);
+  border-left: 2px solid var(--border-strong);
+  background: var(--surface-2);
+  border-radius: var(--radius-xs);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.compare-pick {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s2);
+  width: 100%;
+}
+
+.compare-pick .field {
+  margin: 0;
+}
+
+.compare-sum {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1);
+}
+
+.compare-counts {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: var(--s1);
+  font-size: 13px;
+}
+
+.compare-counts .diff-ins,
+.diff-del-count {
+  padding: 0 4px;
+  border-radius: var(--radius-xs);
+  font-family: var(--mono);
+}
+
+.diff-del-count {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.compare-meta {
+  width: 100%;
+}
+
+.compare-fields td {
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.compare-fields td:first-child {
+  width: 30%;
+}
+
+.compare-text-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s1);
+  width: 100%;
+}
+
+.compare-text-head h3 {
+  margin: 0;
+}
+
+.compare-only {
+  padding: 0;
+  font-size: 13px;
+}
+
+.text-diff {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  font-size: 13px;
+}
+
+.text-diff-at {
+  padding: 4px var(--s1);
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-size: 11px;
+  border-bottom: 1px solid var(--border);
+}
+
+.text-diff-line {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  padding: 3px var(--s1) 3px 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.text-diff-sign {
+  text-align: center;
+  font-family: var(--mono);
+  color: var(--text-3);
+}
+
+.text-diff-line.add {
+  background: var(--ok-soft);
+  box-shadow: inset 2px 0 0 var(--ok);
+}
+
+.text-diff-line.add .text-diff-sign {
+  color: var(--ok);
+}
+
+.text-diff-line.del {
+  background: var(--danger-soft);
+  box-shadow: inset 2px 0 0 var(--danger);
+  color: var(--text-2);
+}
+
+.text-diff-line.del .text-diff-sign {
+  color: var(--danger);
+}
+
+.text-diff-line.same {
+  color: var(--text-3);
+}
+
+@media (max-width: 640px) {
+  .compare-pick {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .compare-fields thead {
+    display: none;
+  }
+
+  .compare-fields,
+  .compare-fields tbody,
+  .compare-fields tr,
+  .compare-fields td {
+    display: block;
+    width: 100%;
+  }
+
+  .compare-fields tr {
+    padding: var(--s1) 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .table.compare-fields td,
+  .table.compare-fields td:first-child {
+    width: 100%;
+    padding: 2px 0;
+    border: 0;
+  }
+
+  .compare-counts {
+    margin-left: 0;
+  }
+
+  .compare-fields td[data-label]::before {
+    content: attr(data-label) ": ";
+    color: var(--text-3);
+    font-size: 12px;
+  }
+
+  .doc-drawer-foot {
+    flex-direction: column;
   }
 }

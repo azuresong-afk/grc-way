@@ -1,5 +1,5 @@
-// Документы комплекта объекта (задачи 3.1–3.2): карта данных, версии, скачивание,
-// шрифт комплекта и свой шаблон документа.
+// Документы комплекта объекта (задачи 3.1–3.3): карта данных, версии, скачивание,
+// шрифт комплекта, свой шаблон документа, согласование и сравнение версий.
 import { apiFetch } from "./api";
 
 export type FieldState = "filled" | "empty" | "partial" | "na";
@@ -13,6 +13,7 @@ export type FieldTab =
   | "threats"
   | "vulns";
 export type FontCode = "astra" | "inter";
+export type DocStatus = "draft" | "review" | "approved" | "superseded";
 
 export interface DocField {
   key: string;
@@ -44,7 +45,7 @@ export interface DocBrief {
   doc_type: string;
   title: string;
   version: number;
-  status: "draft" | "review" | "approved";
+  status: DocStatus;
   status_title: string;
   watermark: boolean;
   watermark_reasons: string[];
@@ -58,12 +59,68 @@ export interface DocBrief {
   template_custom: boolean;
   font: FontCode | null;
   font_title: string | null;
+  submitted_at: string | null;
+  submitted_by_name: string | null;
+  approved_at: string | null;
+  approved_by_name: string | null;
+  approval_comment: string | null;
+  unverified_acknowledged: boolean;
+  superseded_at: string | null;
+}
+
+export type ReviewAction = "submit" | "return" | "approve" | "supersede";
+
+export interface DocReview {
+  action: ReviewAction;
+  from_status: DocStatus;
+  to_status: DocStatus;
+  comment: string | null;
+  actor_name: string | null;
+  at: string;
+}
+
+export interface DocActions {
+  submit: boolean;
+  send_back: boolean;
+  approve: boolean;
+  approve_blocker: string | null;
 }
 
 export interface DocFull extends DocBrief {
   context_hash: string;
   fields: DocField[];
   unverified: Unverified[];
+  reviews: DocReview[];
+  actions: DocActions;
+  siblings: DocBrief[];
+}
+
+export interface FieldChange {
+  key: string;
+  title: string;
+  tab: FieldTab | null;
+  before: string | null;
+  after: string | null;
+  state_before: FieldState | null;
+  state_after: FieldState | null;
+}
+
+export interface DiffHunk {
+  old_start: number;
+  new_start: number;
+  lines: { op: "same" | "add" | "del"; text: string }[];
+}
+
+export interface DocCompare {
+  old: DocBrief;
+  new: DocBrief;
+  meta: { title: string; before: string | null; after: string | null }[];
+  fields: FieldChange[];
+  hunks: DiffHunk[];
+  added: number;
+  removed: number;
+  truncated: boolean;
+  text_error: string | null;
 }
 
 export interface TemplateRef {
@@ -87,6 +144,7 @@ export interface DocType {
   watermark_reasons: string[];
   changed: boolean;
   latest: DocBrief | null;
+  approved: DocBrief | null;
   versions: DocBrief[];
 }
 
@@ -99,6 +157,7 @@ export interface DocumentsList {
   types: DocType[];
   pdf_available: boolean;
   can_edit: boolean;
+  can_approve: boolean;
   sees_drafts: boolean;
   font: FontCode;
   fonts: { code: FontCode; title: string }[];
@@ -148,6 +207,20 @@ export const STATE_PILL: Record<FieldState, [string, string]> = {
   partial: ["pill-warn", "Частично"],
   empty: ["pill-danger", "Пусто"],
   na: ["pill-muted", "Нет данных"],
+};
+
+export const STATUS_PILL: Record<DocStatus, string> = {
+  draft: "pill-muted",
+  review: "pill-info",
+  approved: "pill-ok",
+  superseded: "pill-muted",
+};
+
+export const REVIEW_TITLES: Record<ReviewAction, string> = {
+  submit: "Отправлен на согласование",
+  return: "Возвращён в проект",
+  approve: "Утверждён",
+  supersede: "Заменён новой версией",
 };
 
 /** Пустое или частично пустое поле — его нужно заполнить. */

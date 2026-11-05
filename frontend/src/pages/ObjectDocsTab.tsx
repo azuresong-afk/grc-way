@@ -1,4 +1,4 @@
-import { AlertTriangle, Download, FileText, RefreshCw, Stamp, Upload } from "lucide-react";
+import { AlertTriangle, Download, FileText, GitCompare, RefreshCw, Stamp, Upload } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Drawer } from "../components/Drawer";
@@ -26,6 +26,28 @@ import {
   type TemplateRow,
   type Unverified,
 } from "../lib/objectDocs";
+import {
+  CompareDrawer,
+  ReviewButtons,
+  ReviewHistory,
+  ReviewModal,
+  StatusPill,
+  statusNote,
+  type ReviewKind,
+} from "./DocApproval";
+
+/** Что сравнить: версии документа и пара (было, стало). */
+interface CompareTarget {
+  versions: DocBrief[];
+  pair: [string, string];
+}
+
+/** Пара для сравнения по умолчанию: выбранная версия и предыдущая перед ней. */
+function defaultPair(versions: DocBrief[], id: string): [string, string] {
+  const i = versions.findIndex((v) => v.id === id);
+  const prev = versions[i + 1] ?? versions[i - 1];
+  return prev ? [prev.id, id] : [id, id];
+}
 
 function message(e: unknown, fallback: string): string {
   return e instanceof ApiError || e instanceof Error ? e.message : fallback;
@@ -132,8 +154,8 @@ function UnverifiedAlert({ items }: { items: Unverified[] }) {
     <div className="alert alert-warn" role="status">
       <AlertTriangle size={15} />
       <span className="alert-text">
-        В документе есть записи справочников, не сверенные методистом: {items.map((u) => u.title).join("; ")}.
-        Такой документ выходит с водяным знаком «Проект» и приложением со списком этих записей.
+        В документе есть записи справочников, не сверенные методистом: {items.map((u) => u.title).join("; ")}. Такой
+        документ выходит с водяным знаком «Проект» и приложением со списком этих записей.
       </span>
     </div>
   );
@@ -169,10 +191,24 @@ function DownloadButtons({ d, onError }: { d: DocBrief; onError: (m: string) => 
   );
 }
 
-function VersionDrawer({ id, obj, onClose }: { id: string; obj: ObjectFull; onClose: () => void }) {
+function VersionDrawer({
+  id,
+  obj,
+  onClose,
+  onChanged,
+  onCompare,
+}: {
+  id: string;
+  obj: ObjectFull;
+  onClose: () => void;
+  onChanged: () => void;
+  onCompare: (c: CompareTarget) => void;
+}) {
   const [doc, setDoc] = useState<DocFull | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState<ReviewKind | null>(null);
   useEffect(() => {
+    setDoc(null);
     apiGet<DocFull>(`/documents/${id}`)
       .then(setDoc)
       .catch((e: Error) => setError(e.message));
@@ -182,7 +218,32 @@ function VersionDrawer({ id, obj, onClose }: { id: string; obj: ObjectFull; onCl
       title={doc ? `${doc.title} · версия ${doc.version}` : "Версия документа"}
       subtitle={doc ? `${formatDateTime(doc.created_at)} · ${doc.created_by_name ?? "—"}` : undefined}
       onClose={onClose}
-      footer={doc && <DownloadButtons d={doc} onError={setError} />}
+      footer={
+        doc && (
+          <div className="doc-drawer-foot">
+            <div className="btn-row">
+              {doc.siblings.length > 1 && (
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() =>
+                    onCompare({
+                      versions: doc.siblings,
+                      pair: defaultPair(doc.siblings, doc.id),
+                    })
+                  }
+                >
+                  <GitCompare size={14} /> Сравнить
+                </button>
+              )}
+              <DownloadButtons d={doc} onError={setError} />
+            </div>
+            <div className="btn-row">
+              <ReviewButtons doc={doc} onPick={setStep} />
+            </div>
+          </div>
+        )
+      }
     >
       {error && <ErrorAlert message={error} />}
       {!doc && !error && <Loading />}
@@ -192,8 +253,19 @@ function VersionDrawer({ id, obj, onClose }: { id: string; obj: ObjectFull; onCl
             <dl className="props">
               <dt>Статус</dt>
               <dd>
-                <span className="pill pill-muted">{doc.status_title}</span>
+                <StatusPill d={doc} />
+                {statusNote(doc) && <div className="cell-sub">{statusNote(doc)}</div>}
+                {doc.approval_comment && <div className="cell-sub">«{doc.approval_comment}»</div>}
+                {doc.unverified_acknowledged && (
+                  <div className="cell-sub text-warn">утверждён с несверенными записями справочников</div>
+                )}
               </dd>
+              {doc.actions.approve_blocker && (
+                <>
+                  <dt>Утверждение</dt>
+                  <dd className="text-warn">{doc.actions.approve_blocker}</dd>
+                </>
+              )}
               <dt>Водяной знак</dt>
               <dd>{doc.watermark ? `«Проект»: ${doc.watermark_reasons.join("; ").toLowerCase()}` : "нет"}</dd>
               <dt>Файлы</dt>
@@ -213,24 +285,32 @@ function VersionDrawer({ id, obj, onClose }: { id: string; obj: ObjectFull; onCl
             <UnverifiedAlert items={doc.unverified} />
           </section>
           <section className="drawer-section">
+            <h3>История согласования</h3>
+            <ReviewHistory items={doc.reviews} />
+          </section>
+          <section className="drawer-section">
             <h3>Из каких данных собрана версия</h3>
             <FieldMap fields={doc.fields} objectId={obj.id} projectId={obj.project_id} links={false} />
           </section>
         </>
       )}
+      {doc && step && (
+        <ReviewModal
+          doc={doc}
+          kind={step}
+          onClose={() => setStep(null)}
+          onDone={(d) => {
+            setStep(null);
+            setDoc(d);
+            onChanged();
+          }}
+        />
+      )}
     </Drawer>
   );
 }
 
-function TemplateModal({
-  t,
-  onClose,
-  onChanged,
-}: {
-  t: DocTypeDetail;
-  onClose: () => void;
-  onChanged: () => void;
-}) {
+function TemplateModal({ t, onClose, onChanged }: { t: DocTypeDetail; onClose: () => void; onChanged: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
@@ -256,7 +336,10 @@ function TemplateModal({
       const form = new FormData();
       form.set("file", file);
       if (comment.trim()) form.set("comment", comment.trim());
-      const res = await apiFetch(`/document-templates/${t.code}`, { method: "POST", body: form });
+      const res = await apiFetch(`/document-templates/${t.code}`, {
+        method: "POST",
+        body: form,
+      });
       return (await res.json()) as TemplateRow;
     }, "Не удалось загрузить шаблон");
 
@@ -289,9 +372,9 @@ function TemplateModal({
       }
     >
       <p className="muted">
-        Свой (фирменный) шаблон — DOCX с полями вида <span className="mono">{"{{ object.name }}"}</span>. Он
-        действует для этого документа во всех проектах; шрифты и оформление берутся из шаблона. Возьмите за
-        основу встроенный шаблон — в нём поля уже расставлены.
+        Свой (фирменный) шаблон — DOCX с полями вида <span className="mono">{"{{ object.name }}"}</span>. Он действует
+        для этого документа во всех проектах; шрифты и оформление берутся из шаблона. Возьмите за основу встроенный
+        шаблон — в нём поля уже расставлены.
       </p>
       <div className="btn-row">
         <button
@@ -364,6 +447,7 @@ function TypeCard({
   fontTitle,
   onGenerated,
   onOpen,
+  onCompare,
 }: {
   t: DocTypeDetail;
   obj: ObjectFull;
@@ -372,6 +456,7 @@ function TypeCard({
   fontTitle: string | null;
   onGenerated: () => void;
   onOpen: (id: string) => void;
+  onCompare: (c: CompareTarget) => void;
 }) {
   const [templateOpen, setTemplateOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -485,15 +570,24 @@ function TypeCard({
             </span>
           </div>
           <div>
+            <span className="kpi-label">Согласование</span>
+            <span className="doc-stat">
+              {t.latest ? <StatusPill d={t.latest} /> : <span className="muted">нет версий</span>}
+            </span>
+            <span className="cell-sub">
+              {t.approved
+                ? `действует v${t.approved.version}${t.approved.approved_at ? ` от ${formatDateTime(t.approved.approved_at)}` : ""}`
+                : "утверждённой версии нет"}
+            </span>
+          </div>
+          <div>
             <span className="kpi-label">Водяной знак</span>
             <span className="doc-stat">
               <span className="pill pill-muted">
                 <Stamp size={12} /> Проект
               </span>
             </span>
-            <span className="cell-sub">
-              {t.watermark_reasons.map((r, i) => (i ? r.toLowerCase() : r)).join("; ")}
-            </span>
+            <span className="cell-sub">{t.watermark_reasons.map((r, i) => (i ? r.toLowerCase() : r)).join("; ")}</span>
           </div>
         </div>
         {!pdfAvailable && (
@@ -511,7 +605,23 @@ function TypeCard({
         <FieldMap fields={t.fields} objectId={obj.id} projectId={obj.project_id} />
       </div>
 
-      <h3 className="doc-section">Версии</h3>
+      <div className="doc-section doc-section-row">
+        <h3>Версии</h3>
+        {t.versions.length > 1 && (
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() =>
+              onCompare({
+                versions: t.versions,
+                pair: [t.versions[1]!.id, t.versions[0]!.id],
+              })
+            }
+          >
+            <GitCompare size={14} /> Сравнить версии
+          </button>
+        )}
+      </div>
       {t.versions.length === 0 ? (
         <div className="card-pad muted">Документ ещё не формировался.</div>
       ) : (
@@ -535,15 +645,15 @@ function TypeCard({
                     <div className="cell-sub">{v.created_by_name ?? "—"}</div>
                   </td>
                   <td>
-                    <span className="pill pill-muted">{v.status_title}</span>
-                    {v.watermark && <div className="cell-sub">водяной знак</div>}
+                    <StatusPill d={v} />
+                    {statusNote(v) && <div className="cell-sub">{statusNote(v)}</div>}
+                    {v.watermark && <div className="cell-sub">водяной знак «Проект»</div>}
                   </td>
                   <td>
                     {v.counts.empty ? (
                       <span className={v.counts.required_empty ? "text-warn" : undefined}>
                         {formatNumber(v.counts.empty)}
-                        {v.counts.required_empty > 0 &&
-                          ` (обязательных ${formatNumber(v.counts.required_empty)})`}
+                        {v.counts.required_empty > 0 && ` (обязательных ${formatNumber(v.counts.required_empty)})`}
                       </span>
                     ) : (
                       <span className="muted">нет</span>
@@ -567,18 +677,22 @@ function versionPill(t: DocType) {
   if (!t.latest) return <span className="muted">нет</span>;
   return (
     <>
-      <span className="mono">v{t.latest.version}</span>{" "}
-      {t.changed ? (
-        <span className="pill pill-warn">Данные изменились</span>
-      ) : (
-        <span className="pill pill-ok">Актуальна</span>
-      )}
+      <span className="mono">v{t.latest.version}</span> <StatusPill d={t.latest} />
+      {t.changed && <div className="cell-sub text-warn">данные изменились</div>}
     </>
   );
 }
 
 /** Комплект: девять документов с готовностью, версией и шаблоном. */
-function KitTable({ types, selected, onSelect }: { types: DocType[]; selected: string; onSelect: (c: string) => void }) {
+function KitTable({
+  types,
+  selected,
+  onSelect,
+}: {
+  types: DocType[];
+  selected: string;
+  onSelect: (c: string) => void;
+}) {
   return (
     <div className="table-wrap">
       <table className="table doc-kit">
@@ -587,6 +701,7 @@ function KitTable({ types, selected, onSelect }: { types: DocType[]; selected: s
             <th>Документ</th>
             <th>Заполнено полей</th>
             <th>Последняя версия</th>
+            <th>Утверждена</th>
             <th>Шаблон</th>
           </tr>
         </thead>
@@ -618,6 +733,18 @@ function KitTable({ types, selected, onSelect }: { types: DocType[]; selected: s
                 </td>
                 <td>{versionPill(t)}</td>
                 <td>
+                  {t.approved ? (
+                    <>
+                      <span className="mono">v{t.approved.version}</span>
+                      {t.approved.approved_at && (
+                        <div className="cell-sub">{formatDateTime(t.approved.approved_at)}</div>
+                      )}
+                    </>
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </td>
+                <td>
                   <span className={`pill ${t.template_ref.custom ? "pill-info" : "pill-muted"}`}>
                     {t.template_ref.custom ? "Свой" : "Встроенный"}
                   </span>
@@ -637,6 +764,7 @@ export function ObjectDocsTab({ obj, editable }: { obj: ObjectFull; editable: bo
   const [detail, setDetail] = useState<DocTypeDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [compare, setCompare] = useState<CompareTarget | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
@@ -716,7 +844,8 @@ export function ObjectDocsTab({ obj, editable }: { obj: ObjectFull; editable: bo
       {!list.sees_drafts && (
         <div className="alert alert-info">
           <span className="alert-text">
-            Здесь появятся утверждённые документы. Проекты документов видят методист, эксперт и утверждающий.
+            Здесь — утверждённые документы и их прежние версии. Проекты и документы на согласовании видят методист,
+            эксперт и утверждающий.
           </span>
         </div>
       )}
@@ -733,9 +862,16 @@ export function ObjectDocsTab({ obj, editable }: { obj: ObjectFull; editable: bo
               <div>
                 <h2>Комплект документов</h2>
                 <div className="cell-sub">
-                  {formatNumber(list.types.length)} документов · сформировано{" "}
-                  {formatNumber(list.types.filter((t) => t.latest).length)} · требуют новой версии{" "}
-                  {formatNumber(changed)}
+                  {formatNumber(list.types.length)} документов · утверждено{" "}
+                  {formatNumber(list.types.filter((t) => t.approved).length)}
+                  {list.sees_drafts && (
+                    <>
+                      {" "}
+                      · сформировано {formatNumber(list.types.filter((t) => t.latest).length)} · на согласовании{" "}
+                      {formatNumber(list.types.filter((t) => t.latest?.status === "review").length)} · требуют новой
+                      версии {formatNumber(changed)}
+                    </>
+                  )}
                 </div>
               </div>
               <div className="doc-kit-tools">
@@ -798,13 +934,17 @@ export function ObjectDocsTab({ obj, editable }: { obj: ObjectFull; editable: bo
               fontTitle={fontTitle}
               onGenerated={load}
               onOpen={setOpen}
+              onCompare={setCompare}
             />
           ) : (
             <Loading />
           )}
         </>
       )}
-      {open && <VersionDrawer id={open} obj={obj} onClose={() => setOpen(null)} />}
+      {open && !compare && (
+        <VersionDrawer id={open} obj={obj} onClose={() => setOpen(null)} onChanged={load} onCompare={setCompare} />
+      )}
+      {compare && <CompareDrawer versions={compare.versions} initial={compare.pair} onClose={() => setCompare(null)} />}
     </>
   );
 }

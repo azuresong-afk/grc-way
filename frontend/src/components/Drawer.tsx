@@ -7,10 +7,12 @@ interface Props {
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  /** Широкая шторка (сравнение версий). */
+  wide?: boolean;
 }
 
 /** Боковая шторка для карточки записи без ухода со страницы. Esc закрывает. */
-export function Drawer({ title, subtitle, onClose, children, footer }: Props) {
+export function Drawer({ title, subtitle, onClose, children, footer, wide }: Props) {
   const titleId = useId();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -22,7 +24,12 @@ export function Drawer({ title, subtitle, onClose, children, footer }: Props) {
 
   return (
     <div className="drawer-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <aside className="drawer" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <aside
+        className={wide ? "drawer drawer-wide" : "drawer"}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
         <div className="drawer-head">
           <div>
             <h2 id={titleId}>{title}</h2>
