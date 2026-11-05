@@ -664,8 +664,6 @@ def cert_state(
             )
         trust = entry.trust_level or manual_trust
         support_ended = bool(entry.support_until and entry.support_until < today)
-        if support_ended:
-            notes.append(f"Техническая поддержка окончена {entry.support_until:%d.%m.%Y}")
     else:
         registry = "not_found" if registry_loaded else "not_loaded"
         valid_to, source = manual_valid_to, ("manual" if manual_valid_to else None)

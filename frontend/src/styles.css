@@ -2666,6 +2666,11 @@ fieldset.field {
   min-width: 220px;
 }
 
+.szi-list {
+  margin: 0;
+  padding: 0;
+}
+
 .szi-list li {
   display: flex;
   align-items: flex-start;

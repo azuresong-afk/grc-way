@@ -56,7 +56,11 @@ export function StatePill({ s }: { s: ObjectSzi }) {
   return (
     <div className="pill-stack">
       <span className={`pill ${LEVEL_PILL[s.level]}`}>{s.state_title}</span>
-      {s.support_ended && <span className="pill pill-warn">Поддержка окончена</span>}
+      {s.support_ended && (
+        <span className="pill pill-warn" title={`по реестру — ${formatDate(s.registry?.support_until ?? null)}`}>
+          Поддержка окончена
+        </span>
+      )}
     </div>
   );
 }

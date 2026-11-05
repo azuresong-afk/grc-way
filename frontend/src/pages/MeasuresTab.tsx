@@ -1406,11 +1406,11 @@ function MeasureDrawer({
         )}
       </div>
 
+      <MeasureSziSection objectId={objectId} measureId={m.measure_id} />
+
       {m.method !== "manual" && (
         <MeasureEvidence m={m} canAssess={canAssess} onChanged={onChanged} />
       )}
-
-      <MeasureSziSection objectId={objectId} measureId={m.measure_id} />
 
       <ManualEvidenceSection
         m={m}
