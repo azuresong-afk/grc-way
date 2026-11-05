@@ -183,3 +183,17 @@ def test_demo_threat_model_waits_for_approval(client, demo_env):
         json={"acknowledge_unverified": True},
     )
     assert r2.status_code == 200, r2.text
+
+
+def test_demo_inventory(client, demo_env):
+    r, h = demo_env
+    inv = client.get(f"/objects/{r.object_id}/inventory", headers=h["demo-viewer"]).json()
+    assert inv["ready"] and inv["hosts_total"] == 10
+    by = {t["code"]: t["total"] for t in inv["types"]}
+    assert (by["K1"], by["K5"], by["K6"]) == (3, 5, 4)
+    out = client.post(
+        f"/objects/{r.object_id}/inventory/infr",
+        headers=h["demo-viewer"],
+        json={"addresses": ["10.10.2.5", "10.10.3.101"]},
+    ).json()
+    assert out["complete"] and out["inputs"]["P"] == ["P1"]

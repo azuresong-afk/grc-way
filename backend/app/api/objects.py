@@ -28,9 +28,12 @@ from app.db.models import (
     ObjectHost,
     ObjectSegment,
     Project,
+    RefVulnMethodology,
     User,
     utcnow,
 )
+from app.domain.vuln_criticality import InputError, MethodologyError
+from app.domain.vuln_inventory import normalize_types
 from app.integrations.scanner.client import ScannerClient, ScannerError, get_scanner_client
 from app.integrations.scanner.schemas import ScannerAsset
 
@@ -158,6 +161,10 @@ class HostIn(BaseModel):
     hostname: str | None = Field(default=None, max_length=255)
     role: str | None = Field(default=None, max_length=300)
     segment_id: uuid.UUID | None = None
+    # Инвентаризация для I_infr (задача 2.7). Поле не передано — значение хоста не
+    # меняется; null — «не указано».
+    component_types: list[str] | None = Field(default=None, max_length=20)
+    internet_exposed: bool | None = None
 
     @field_validator("address")
     @classmethod
@@ -185,6 +192,8 @@ class HostOut(BaseModel):
     last_seen_at: datetime | None
     scanner_missing: bool
     synced_at: datetime | None
+    component_types: list[str] | None
+    internet_exposed: bool | None
 
 
 class AssetOut(BaseModel):
@@ -353,6 +362,8 @@ def _host_out(h: ObjectHost) -> HostOut:
         last_seen_at=h.last_seen_at,
         scanner_missing=h.scanner_missing,
         synced_at=h.synced_at,
+        component_types=list(h.component_types) if h.component_types else None,
+        internet_exposed=h.internet_exposed,
     )
 
 
@@ -363,6 +374,19 @@ def _sort_key(address: str) -> tuple[int, int]:
 
 def _hosts_out(obj: AssessedObject) -> list[HostOut]:
     return [_host_out(h) for h in sorted(obj.hosts, key=lambda h: _sort_key(h.address))]
+
+
+# Методика, по которой у хостов задаётся тип компонента (значения её показателя K).
+INVENTORY_METHODOLOGY = "fstec-2025"
+
+
+def inventory_definition(session: Session) -> dict:
+    m = session.get(RefVulnMethodology, INVENTORY_METHODOLOGY)
+    if m is None:
+        raise HTTPException(
+            409, detail="Справочник Методики оценки критичности уязвимостей не загружен"
+        )
+    return m.definition
 
 
 def _sample(addresses: list[str]) -> dict[str, object]:
@@ -587,9 +611,19 @@ def put_hosts(
     object_id: uuid.UUID, body: HostsIn, request: Request, user: Editor, session: DbSession
 ) -> list[HostOut]:
     """Заменяет состав хостов. Для уже известных адресов данные «Сканера» сохраняются;
-    новые адреса добавляются как ручные."""
+    новые адреса добавляются как ручные. Тип компонента и доступность из
+    «Интернета» меняются, только если переданы."""
     obj = get_object_for(session, object_id, user)
     _editable(session, obj)
+    definition = None
+    if any(h.component_types for h in body.items):
+        definition = inventory_definition(session)
+    for item in body.items:
+        if "component_types" in item.model_fields_set and item.component_types:
+            try:
+                item.component_types = normalize_types(definition or {}, item.component_types)
+            except (InputError, MethodologyError) as e:
+                raise HTTPException(422, detail=f"{item.address}: {e}") from e
     addresses = [h.address for h in body.items]
     if dupes := sorted({a for a in addresses if addresses.count(a) > 1}, key=_sort_key):
         raise HTTPException(422, detail=f"Адрес указан дважды: {', '.join(dupes[:5])}")
@@ -612,15 +646,29 @@ def put_hosts(
                 scanner_missing=False,
             )
             added.append(item.address)
-        elif (host.hostname, host.role, host.segment_id) != (
-            item.hostname or None,
-            item.role or None,
-            item.segment_id,
-        ):
+        types = (
+            (item.component_types or None)
+            if "component_types" in item.model_fields_set
+            else host.component_types or None
+        )
+        exposed = (
+            item.internet_exposed
+            if "internet_exposed" in item.model_fields_set
+            else host.internet_exposed
+        )
+        if host.id is not None and (
+            host.hostname,
+            host.role,
+            host.segment_id,
+            host.component_types or None,
+            host.internet_exposed,
+        ) != (item.hostname or None, item.role or None, item.segment_id, types, exposed):
             changed.append(item.address)
         host.hostname = (item.hostname or "").strip() or None
         host.role = (item.role or "").strip() or None
         host.segment_id = item.segment_id
+        host.component_types = types
+        host.internet_exposed = exposed
         hosts.append(host)
     removed = sorted(set(by_address) - set(addresses), key=_sort_key)
     if not (added or changed or removed):
