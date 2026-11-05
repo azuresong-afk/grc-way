@@ -48,7 +48,15 @@ const OBJ: ObjectFull = {
   created_at: "2026-11-04T10:00:00Z",
   scanner_synced_at: null,
   scanner_engagement_id: 7,
-  segments: [{ id: "s1", name: "ЛВС", description: null, scanner_group: null, host_count: 1 }],
+  segments: [
+    {
+      id: "s1",
+      name: "ЛВС",
+      description: null,
+      scanner_group: null,
+      host_count: 1,
+    },
+  ],
 };
 
 const HOST: Host = {
@@ -67,6 +75,8 @@ const HOST: Host = {
   last_seen_at: null,
   scanner_missing: false,
   synced_at: null,
+  component_types: null,
+  internet_exposed: null,
 };
 
 const asset = (address: string, group: string, extra: Partial<AssetsResponse["assets"][0]> = {}) => ({
@@ -139,7 +149,10 @@ it("карточка объекта: описание, состав и доба�
   const dialog = await screen.findByRole("dialog");
   expect(await within(dialog).findByText(/также в: ИСПДн «Кадры»/)).toBeInTheDocument();
   // Хост уже в составе — отмечен и недоступен.
-  const inObject = within(dialog).getByText(/уже в составе/).closest("label")!.querySelector("input")!;
+  const inObject = within(dialog)
+    .getByText(/уже в составе/)
+    .closest("label")!
+    .querySelector("input")!;
   expect(inObject).toBeChecked();
   expect(inObject).toBeDisabled();
 
@@ -173,24 +186,152 @@ it("ручное добавление хоста отправляет весь �
   expect(await within(dialog).findByText(/Укажите IP-адрес/)).toBeInTheDocument();
 
   fireEvent.change(ip, { target: { value: "10.0.0.6" } });
-  fireEvent.change(within(dialog).getByPlaceholderText(/Сервер СУБД/), { target: { value: "СУБД" } });
+  fireEvent.change(within(dialog).getByPlaceholderText(/Сервер СУБД/), {
+    target: { value: "СУБД" },
+  });
   fireEvent.click(within(dialog).getByRole("button", { name: "Добавить" }));
 
   await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
   const put = calls.find((c) => c.method === "PUT")!;
   expect(put.body).toEqual({
     items: [
-      { address: "10.0.0.5", hostname: "arm-5", role: "АРМ оператора", segment_id: "s1" },
-      { address: "10.0.0.6", hostname: null, role: "СУБД", segment_id: null },
+      {
+        address: "10.0.0.5",
+        hostname: "arm-5",
+        role: "АРМ оператора",
+        segment_id: "s1",
+        component_types: null,
+        internet_exposed: null,
+      },
+      {
+        address: "10.0.0.6",
+        hostname: null,
+        role: "СУБД",
+        segment_id: null,
+        component_types: null,
+        internet_exposed: null,
+      },
     ],
   });
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 });
 
+const TYPES = [
+  {
+    code: "K1",
+    short: "Важные процессы",
+    title: "Компоненты, обеспечивающие важные процессы",
+    score: 1.1,
+  },
+  {
+    code: "K2",
+    short: "Межсетевой экран",
+    title: "Межсетевые экраны",
+    score: 0.9,
+  },
+  { code: "K5", short: "Сервер", title: "Серверы", score: 0.7 },
+  {
+    code: "K6",
+    short: "АРМ",
+    title: "Пользовательские устройства",
+    score: 0.5,
+  },
+];
+
+const INVENTORY = {
+  methodology: {
+    id: "fstec-2025",
+    version: "2025-06-30-2",
+    revision: 1,
+    verified: false,
+  },
+  hosts_total: 2,
+  ready: false,
+  missing_type: ["10.0.0.5"],
+  missing_internet: ["10.0.0.5"],
+  internet_conflict: [],
+  types: TYPES.map((t) => ({
+    ...t,
+    total: t.code === "K5" ? 1 : 0,
+    internet: 0,
+  })),
+};
+
+it("тип компонента и доступность из «Интернета»: группой и проверка I_infr", async () => {
+  const srv: Host = {
+    ...HOST,
+    id: "h2",
+    address: "10.0.0.7",
+    component_types: ["K5"],
+    internet_exposed: false,
+  };
+  const calls = fakeApi({
+    "GET /me": () => json(METH),
+    "GET /projects": () => json([PROJECT]),
+    "GET /objects/o1": () => json(OBJ),
+    "GET /objects/o1/hosts": () => json([HOST, srv]),
+    "GET /refs/component-types": () => json(TYPES),
+    "GET /objects/o1/inventory": () => json(INVENTORY),
+    "PUT /objects/o1/hosts": () => json([{ ...HOST, component_types: ["K1", "K5"] }, srv]),
+    "POST /objects/o1/inventory/infr": () =>
+      json({
+        methodology: INVENTORY.methodology,
+        complete: false,
+        inputs: { K: ["K5"] },
+        missing: [
+          {
+            indicator: "P",
+            text: "не указано, доступны ли уязвимые хосты",
+            addresses: ["10.0.0.5"],
+          },
+        ],
+        by_type: [],
+        exposed: [],
+        i_infr: null,
+        trace: [],
+      }),
+  });
+  renderAt("/objects/o1?tab=composition");
+
+  expect(await screen.findByText(/Заполнено у 1 из 2 хостов/)).toBeInTheDocument();
+  expect(await screen.findByText("Сервер", { selector: ".type-chip" })).toBeInTheDocument();
+
+  // Фильтр «не хватает данных» оставляет только 10.0.0.5.
+  fireEvent.click(screen.getByRole("button", { name: "Показать" }));
+  expect(screen.queryByText("10.0.0.7")).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("checkbox", { name: "Выбрать 10.0.0.5" }));
+  fireEvent.click(screen.getByRole("button", { name: /Тип компонента…/ }));
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.click(within(dialog).getByText("Сервер"));
+  fireEvent.click(within(dialog).getByText("Важные процессы"));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Задать" }));
+  await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
+  const put = calls.find((c) => c.method === "PUT")!.body as {
+    items: { component_types: string[] | null }[];
+  };
+  // Порядок — как в таблице 1, второй хост не тронут.
+  expect(put.items.map((i) => i.component_types)).toEqual([["K1", "K5"], ["K5"]]);
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+  fireEvent.click(screen.getByRole("button", { name: /Проверить I_infr/ }));
+  const infr = await screen.findByRole("dialog");
+  expect(await within(infr).findByText(/Не хватает данных инвентаризации/)).toBeInTheDocument();
+  expect(within(infr).getByText(/не указано, доступны ли уязвимые хосты/)).toBeInTheDocument();
+  expect(calls.find((c) => c.method === "POST")?.body).toEqual({
+    addresses: ["10.0.0.5"],
+  });
+});
+
 it("наблюдатель видит состав без кнопок изменения", async () => {
   fakeApi({
     "GET /me": () =>
-      json({ ...METH, roles: ["viewer"], permissions: ["view"], display_name: "Наблюдатель" }),
+      json({
+        ...METH,
+        roles: ["viewer"],
+        permissions: ["view"],
+        display_name: "Наблюдатель",
+      }),
     "GET /projects": () => json([PROJECT]),
     "GET /objects/o1": () => json(OBJ),
     "GET /objects/o1/hosts": () => json([HOST]),

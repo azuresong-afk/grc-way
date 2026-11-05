@@ -2744,3 +2744,91 @@ fieldset.field {
 .row-muted td {
   color: var(--text-2);
 }
+
+/* ---------- Инвентаризация для I_infr (задача 2.7) ---------- */
+
+.table .cell-check {
+  width: 36px;
+}
+
+.cell-check input,
+.toolbar .check-inline input {
+  accent-color: var(--accent);
+}
+
+.toolbar .check-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.select-warn {
+  border-color: var(--warn);
+}
+
+.type-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.type-chip {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.type-grid {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.inv-summary {
+  display: grid;
+  gap: 4px;
+}
+
+.inv-state {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.inv-ok svg {
+  color: var(--ok);
+}
+
+.inv-warn svg {
+  color: var(--warn);
+}
+
+.inv-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s1) var(--s2);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.inv-result-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.inv-result-value {
+  font-size: 22px;
+  font-weight: 600;
+}
