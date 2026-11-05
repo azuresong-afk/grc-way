@@ -3027,4 +3027,47 @@ fieldset.field {
   .doc-stat {
     font-size: 17px;
   }
+
+  /* Карта полей на телефоне — карточки: поле и состояние, ниже значение и источник. */
+  .doc-map thead {
+    display: none;
+  }
+
+  .doc-map,
+  .doc-map tbody {
+    display: block;
+  }
+
+  .doc-map tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px var(--s2);
+    padding: var(--s2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .doc-map tr td,
+  .doc-map tr td:first-child {
+    display: block;
+    padding: 0;
+    border: 0;
+  }
+
+  .doc-map td:nth-child(4) {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .doc-map td:nth-child(2),
+  .doc-map td:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+
+  .doc-map tr.doc-gap td:first-child {
+    box-shadow: none;
+  }
+
+  .doc-map tr.doc-gap {
+    box-shadow: inset 2px 0 0 var(--danger);
+  }
 }

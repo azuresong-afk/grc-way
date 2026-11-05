@@ -20,6 +20,8 @@ def demo_env(client, session, tmp_path, login, monkeypatch):
 
     monkeypatch.setenv("GRC_BDU_DIR", str(tmp_path / "bdu"))
     monkeypatch.setenv("GRC_SZI_DIR", str(tmp_path / "szi"))
+    monkeypatch.setenv("GRC_DOCUMENTS_DIR", str(tmp_path / "documents"))
+    monkeypatch.setenv("GRC_PDF_CONVERTER", "none")
     get_settings.cache_clear()
     shutil.copytree(REFERENCE, tmp_path / "reference")
     load_reference(session, tmp_path / "reference")
@@ -211,3 +213,18 @@ def test_demo_vuln_register(client, demo_env):
     assert manual["origin"] == "manual" and manual["current"]["level"] == "high"
     out = client.get(f"/objects/{r.object_id}/vulns/remediation", headers=h["demo-viewer"])
     assert len(out.json()["items"]) == 3
+
+
+def test_demo_tech_passport(client, demo_env):
+    r, h = demo_env
+    body = client.get(f"/objects/{r.object_id}/documents", headers=h["demo-meth"]).json()
+    (t,) = body["types"]
+    assert t["code"] == "tech-passport" and t["latest"]["version"] == 1 and not t["changed"]
+    assert t["latest"]["watermark"] and t["counts"]["required_empty"] > 0
+    d = client.get(f"/documents/{t['latest']['id']}", headers=h["demo-exp"]).json()
+    f = {x["key"]: x for x in d["fields"]}
+    assert f["classification.result_label"]["state"] == "filled"
+    assert f["hosts"]["value"] == "10 шт." and f["szi"]["value"] == "5 шт."
+    assert d["unverified"]  # таблица классификации №117 — заглушка, не сверена
+    # Наблюдатель проектов не видит.
+    assert client.get(f"/documents/{d['id']}", headers=h["demo-viewer"]).status_code == 404

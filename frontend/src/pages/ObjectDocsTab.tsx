@@ -128,7 +128,7 @@ function UnverifiedAlert({ items }: { items: Unverified[] }) {
       <AlertTriangle size={15} />
       <span className="alert-text">
         В документе есть записи справочников, не сверенные методистом: {items.map((u) => u.title).join("; ")}.
-        Документ получит водяной знак «Проект» и приложение со списком таких записей.
+        Такой документ выходит с водяным знаком «Проект» и приложением со списком этих записей.
       </span>
     </div>
   );
@@ -325,7 +325,9 @@ function TypeCard({
                 <Stamp size={12} /> Проект
               </span>
             </span>
-            <span className="cell-sub">{t.watermark_reasons.join("; ")}</span>
+            <span className="cell-sub">
+              {t.watermark_reasons.map((r, i) => (i ? r.toLowerCase() : r)).join("; ")}
+            </span>
           </div>
         </div>
         {!pdfAvailable && (
