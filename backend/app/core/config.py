@@ -64,6 +64,12 @@ class Settings(BaseSettings):
     # Предел размера выгрузки, МБ (vullist.xlsx — около 100 МБ).
     bdu_max_mb: int = Field(default=400, ge=1, le=2048)
 
+    # Реестр сертифицированных СЗИ (CSV/XLSX): том, имя — sha256. В Docker — /data/szi.
+    szi_dir: Path = Path("./data/szi")
+    szi_max_mb: int = Field(default=50, ge=1, le=1024)
+    # За сколько дней до окончания срока сертификат СЗИ считается истекающим.
+    szi_expiry_days: int = Field(default=90, ge=1, le=730)
+
     # Пути, под которыми продукт виден в платформе (для манифеста).
     base_path: str = "/grc/"
     api_base: str = "/api/grc/"

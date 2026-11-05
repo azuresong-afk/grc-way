@@ -30,6 +30,8 @@ class SnapshotBrief(BaseModel):
     summary: dict[str, int]
     hosts: int
     coverage_gaps: int
+    # Находок с БДУ на хостах объекта; None — снимок сделан до импорта находок.
+    bdu_findings: int | None
     source: str
     imported_at: datetime
     imported_by_name: str | None
@@ -65,6 +67,7 @@ def _brief(s: ScannerSnapshot, current_id: uuid.UUID | None) -> SnapshotBrief:
         summary={k: int(v) for k, v in (s.summary or {}).items()},
         hosts=len(s.object_hosts or []),
         coverage_gaps=int(summary.get("gaps") or 0),
+        bdu_findings=None if s.findings is None else len(s.findings),
         source=s.source,
         imported_at=s.imported_at,
         imported_by_name=s.imported_by_name,

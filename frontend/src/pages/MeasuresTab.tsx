@@ -49,6 +49,7 @@ import type { ObjectFull } from "../lib/objects";
 import { useProject } from "../lib/project";
 import { ConfirmSection, ManualEvidenceSection } from "./ManualEvidence";
 import { MeasureEvidence, ScannerCard } from "./ScannerResults";
+import { MeasureSziSection } from "./SziTab";
 
 type Filter =
   | "all"
@@ -461,6 +462,7 @@ export function MeasuresTab({
           m={opener}
           all={items}
           projectId={obj.project_id}
+          objectId={obj.id}
           canAdapt={canAdapt}
           canAssess={canAssess}
           canUpload={canUpload}
@@ -1121,6 +1123,7 @@ function MeasureDrawer({
   m,
   all,
   projectId,
+  objectId,
   canAdapt,
   canAssess,
   canUpload,
@@ -1131,6 +1134,7 @@ function MeasureDrawer({
   m: ObjectMeasure;
   all: ObjectMeasure[];
   projectId: string;
+  objectId: string;
   canAdapt: boolean;
   canAssess: boolean;
   canUpload: boolean;
@@ -1401,6 +1405,8 @@ function MeasureDrawer({
           </p>
         )}
       </div>
+
+      <MeasureSziSection objectId={objectId} measureId={m.measure_id} />
 
       {m.method !== "manual" && (
         <MeasureEvidence m={m} canAssess={canAssess} onChanged={onChanged} />

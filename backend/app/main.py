@@ -16,12 +16,16 @@ from app.api import (
     measures,
     objects,
     projects,
+    ref_documents,
     refs,
     refs_sync,
     scanner_import,
     summary,
+    szi,
+    threat_models,
     threat_refs,
     users,
+    vuln_criticality,
 )
 from app.core.config import get_settings
 from app.core.security import LoginThrottle, TokenSigner
@@ -57,7 +61,11 @@ def create_app() -> FastAPI:
         measures,
         refs,
         threat_refs,
+        vuln_criticality,
+        ref_documents,
         bdu,
+        szi,
+        threat_models,
         refs_sync,
         scanner_import,
         evidence,

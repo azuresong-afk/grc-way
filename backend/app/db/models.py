@@ -589,6 +589,9 @@ class ScannerSnapshot(Base):
     coverage: Mapped[dict] = mapped_column(JsonType)
     # Состав объекта на момент импорта (адреса) и итог по мерам объекта.
     object_hosts: Mapped[list] = mapped_column(JsonType, default=list)
+    # Находки прогона с идентификаторами БДУ на хостах объекта (задача 2.4), без
+    # ложных срабатываний; None — снимок сделан до того, как находки импортировались.
+    findings: Mapped[list | None] = mapped_column(JsonType)
     # {measures, implemented, partial, not_implemented, unassessed, applied, kept_manual}
     summary: Mapped[dict] = mapped_column(JsonType, default=dict)
     # sha256 ответов и состава — повторный импорт без изменений не создаёт дубль.
@@ -801,3 +804,260 @@ class BduVuln(_BduRecord, Base):
     criticality_changed_import_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     # {поле: [было, стало]} последнего такого изменения.
     criticality_changes: Mapped[dict | None] = mapped_column(JsonType)
+
+
+# ---------- Модель угроз ----------
+
+
+class ThreatModel(Base):
+    """Версия модели угроз объекта по Методике 2021: черновик → утверждена → заменена.
+
+    Шаги мастера (последствия, объекты воздействия, нарушители, способы, сценарии)
+    хранятся в steps; угрозы БДУ с решением об актуальности — в ThreatModelThreat.
+    Утверждённая версия не меняется: правка начинается с новой версии-черновика,
+    скопированной с неё. При утверждении в snapshot фиксируются записи справочника
+    и угрозы БДУ в том виде, в каком их видел утверждающий.
+    """
+
+    __tablename__ = "threat_models"
+    __table_args__ = (Index("ux_threat_models_version", "object_id", "version", unique=True),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    object_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("objects.id", ondelete="CASCADE"))
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    version: Mapped[int] = mapped_column(Integer)
+    # draft | approved | superseded
+    status: Mapped[str] = mapped_column(String(16), default="draft")
+    # {consequences: {...}, objects: {...}, intruders: {...}, methods: {...}, scenarios: {...}}
+    steps: Mapped[dict] = mapped_column(JsonType, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    created_by_name: Mapped[str | None] = mapped_column(String(200))
+    # Версия, с которой скопирован черновик.
+    based_on: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # Кто менял эту версию (id строками): им утверждать нельзя.
+    editors: Mapped[list] = mapped_column(JsonType, default=list)
+    edits: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    approved_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    approved_by_name: Mapped[str | None] = mapped_column(String(200))
+    approval_comment: Mapped[str | None] = mapped_column(String(2000))
+    # Утверждающий подтвердил, что записи справочника Методики не сверены.
+    unverified_acknowledged: Mapped[bool] = mapped_column(Boolean, default=False)
+    # {refs: {code: {kind, title, revision, verified}}, bdu: {code: {title, version}}}
+    snapshot: Mapped[dict | None] = mapped_column(JsonType)
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    threats: Mapped[list[ThreatModelThreat]] = relationship(
+        cascade="all, delete-orphan", lazy="selectin", order_by="ThreatModelThreat.threat_code"
+    )
+
+
+class ThreatModelThreat(Base):
+    """Угроза БДУ, рассмотренная в модели: актуальна или нет, почему, через что.
+
+    Ссылки на шаги модели: intruders — коды актуальных нарушителей (НВ…),
+    objects — ключи объектов воздействия, consequences — коды последствий,
+    methods — коды способов (СР…), tactics — коды тактик и техник.
+    linked_findings — находки «Сканера» с bdu_ids (задача 2.4).
+    """
+
+    __tablename__ = "threat_model_threats"
+    __table_args__ = (
+        Index("ux_threat_model_threats_code", "model_id", "threat_code", unique=True),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    model_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("threat_models.id", ondelete="CASCADE"))
+    threat_code: Mapped[str] = mapped_column(String(16))  # УБИ.006
+    # None — решение ещё не принято.
+    relevant: Mapped[bool | None] = mapped_column(Boolean)
+    justification: Mapped[str | None] = mapped_column(String(4000))
+    intruders: Mapped[list] = mapped_column(JsonType, default=list)
+    objects: Mapped[list] = mapped_column(JsonType, default=list)
+    consequences: Mapped[list] = mapped_column(JsonType, default=list)
+    methods: Mapped[list] = mapped_column(JsonType, default=list)
+    tactics: Mapped[list] = mapped_column(JsonType, default=list)
+    linked_findings: Mapped[list] = mapped_column(JsonType, default=list)
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_by_name: Mapped[str | None] = mapped_column(String(200))
+
+
+# ---------- СЗИ ----------
+
+
+class SziImport(Base):
+    """Загрузка реестра сертифицированных СЗИ (CSV/XLSX): сравнение → применение.
+
+    Как у БДУ: файл хранится в томе под sha256, при применении разбирается заново,
+    и если сравнение изменилось, применение отклоняется.
+    """
+
+    __tablename__ = "szi_imports"
+    __table_args__ = (Index("ix_szi_imports_created", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    file_name: Mapped[str] = mapped_column(String(255))
+    file_sha256: Mapped[str] = mapped_column(String(64))
+    file_size: Mapped[int] = mapped_column(BigInteger)
+    file_ext: Mapped[str] = mapped_column(String(8))  # csv | xlsx
+    export_version: Mapped[date | None] = mapped_column(Date)
+    version_source: Mapped[str] = mapped_column(String(16))  # user | title | file | none
+    status: Mapped[str] = mapped_column(String(16))  # pending | applied | superseded
+    summary: Mapped[dict] = mapped_column(JsonType)
+    items: Mapped[list] = mapped_column(JsonType)
+    warnings: Mapped[list] = mapped_column(JsonType)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    created_by_name: Mapped[str | None] = mapped_column(String(200))
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    applied_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    applied_by_name: Mapped[str | None] = mapped_column(String(200))
+    applied: Mapped[dict | None] = mapped_column(JsonType)
+
+
+class SziCert(Base):
+    """Запись реестра сертифицированных СЗИ: один сертификат ФСТЭК России.
+
+    Ключ — номер сертификата. Пропавшая из реестра запись не удаляется, а
+    помечается исключённой: на неё ссылаются СЗИ объектов.
+    """
+
+    __tablename__ = "szi_registry"
+    __table_args__ = (Index("ix_szi_registry_valid_to", "valid_to"),)
+
+    cert_number: Mapped[str] = mapped_column(String(32), primary_key=True)
+    name: Mapped[str] = mapped_column(String(2000))
+    registered_on: Mapped[date | None] = mapped_column(Date)
+    valid_to: Mapped[date | None] = mapped_column(Date)
+    # Текст ячейки «Срок действия», если в нём не только дата.
+    valid_to_raw: Mapped[str | None] = mapped_column(String(500))
+    requirements: Mapped[str | None] = mapped_column(Text)
+    scheme: Mapped[str | None] = mapped_column(Text)
+    lab: Mapped[str | None] = mapped_column(Text)
+    cert_body: Mapped[str | None] = mapped_column(Text)
+    applicant: Mapped[str | None] = mapped_column(Text)
+    applicant_details: Mapped[str | None] = mapped_column(Text)
+    support_until: Mapped[date | None] = mapped_column(Date)
+    support_raw: Mapped[str | None] = mapped_column(String(1000))
+    note: Mapped[str | None] = mapped_column(Text)
+    # active | suspended | terminated — по тексту примечания (эвристика, требует сверки).
+    cert_status: Mapped[str] = mapped_column(String(16), default="active")
+    # Уровень доверия и профили защиты, найденные в «Наименованиях документов»
+    # (эвристика: в реестре это свободный текст).
+    trust_level: Mapped[int | None] = mapped_column(Integer)
+    profiles: Mapped[list] = mapped_column(JsonType, default=list)
+    row_hash: Mapped[str] = mapped_column(String(64))
+    first_version: Mapped[date | None] = mapped_column(Date)
+    changed_version: Mapped[date | None] = mapped_column(Date)
+    first_import_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    changed_import_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    withdrawn_import_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ObjectSzi(Base):
+    """Средство защиты информации на объекте.
+
+    Номер сертификата сопоставляется с реестром (SziCert): срок действия, уровень
+    доверия и состояние сертификата берутся оттуда, если запись есть; иначе —
+    введённые вручную. measure_ids — коды мер набора объекта, которые закрывает СЗИ.
+    """
+
+    __tablename__ = "object_szi"
+    __table_args__ = (
+        Index("ix_object_szi_object", "object_id"),
+        Index("ix_object_szi_cert", "cert_number"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    object_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("objects.id", ondelete="CASCADE"))
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(300))
+    # Вид средства (код из app/domain/szi.py: fw, av, nsd, …).
+    kind: Mapped[str] = mapped_column(String(16))
+    vendor: Mapped[str | None] = mapped_column(String(300))
+    version: Mapped[str | None] = mapped_column(String(100))
+    cert_number: Mapped[str | None] = mapped_column(String(32))
+    # Введено вручную; при наличии записи в реестре действуют её значения.
+    cert_valid_to: Mapped[date | None] = mapped_column(Date)
+    trust_level: Mapped[int | None] = mapped_column(Integer)
+    protection_class: Mapped[str | None] = mapped_column(String(200))
+    # Где установлено: хосты, сегменты, количество лицензий.
+    placement: Mapped[str | None] = mapped_column(String(2000))
+    measure_ids: Mapped[list] = mapped_column(JsonType, default=list)
+    comment: Mapped[str | None] = mapped_column(String(2000))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    created_by_name: Mapped[str | None] = mapped_column(String(200))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    updated_by_name: Mapped[str | None] = mapped_column(String(200))
+
+
+class RefVulnMethodology(Base):
+    """Методика оценки уровня критичности уязвимостей (ФСТЭК России, 30.06.2025).
+
+    Определение — данные (см. app/domain/vuln_criticality.py): показатели таблицы 1,
+    уровни таблицы 2 со сроками п. 21, компенсирующие меры п. 25, контрольные
+    примеры приложения. Хранится и сверяется целиком, как таблица классификации:
+    каждая правка — новая ревизия, прежнее определение — в ref_revisions.
+    """
+
+    __tablename__ = "ref_vuln_methodologies"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    title: Mapped[str] = mapped_column(String(500))
+    version: Mapped[str] = mapped_column(String(64))
+    definition: Mapped[dict] = mapped_column(JsonType)
+    definition_hash: Mapped[str] = mapped_column(String(64))
+    # {document, clause, appendix, url, note}
+    source: Mapped[dict] = mapped_column(JsonType, default=dict)
+    origin: Mapped[str] = mapped_column(String(16))  # stub | official | local
+    verified_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    verified_by_name: Mapped[str | None] = mapped_column(String(200))
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    # Хэш YAML-файла последней загрузки: неизменённый файл при старте не трогается.
+    source_hash: Mapped[str] = mapped_column(String(64))
+    imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+
+
+class RefDocument(Base):
+    """Нормативный документ: реквизиты и статус (применяется / не применяется).
+
+    Документ, который заменён, остаётся в справочнике со ссылкой на заменивший
+    его (replaced_by) и основанием в source — например, Методика критичности
+    уязвимостей 2022 г. «не применяется» по п. 6 Методики 2025 г.
+    """
+
+    __tablename__ = "ref_documents"
+
+    code: Mapped[str] = mapped_column(String(64), primary_key=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    short: Mapped[str] = mapped_column(String(200))
+    title: Mapped[str] = mapped_column(String(1000))
+    issuer: Mapped[str | None] = mapped_column(String(200))
+    issued: Mapped[date | None] = mapped_column(Date)
+    number: Mapped[str | None] = mapped_column(String(32))
+    url: Mapped[str | None] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(16))  # active | not_applicable
+    replaced_by: Mapped[str | None] = mapped_column(String(64))
+    # Основание реквизитов и статуса: {document, clause, appendix, url, note}
+    source: Mapped[dict] = mapped_column(JsonType, default=dict)
+    origin: Mapped[str] = mapped_column(String(16))  # stub | official | local
+    verified_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    verified_by_name: Mapped[str | None] = mapped_column(String(200))
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    # Хэш записи в файле при последней загрузке (как у RefThreatItem); NULL —
+    # документ добавлен в интерфейсе.
+    file_hash: Mapped[str | None] = mapped_column(String(64))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)

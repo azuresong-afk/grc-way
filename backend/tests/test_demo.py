@@ -19,6 +19,7 @@ def demo_env(client, session, tmp_path, login, monkeypatch):
     from app.core.config import get_settings
 
     monkeypatch.setenv("GRC_BDU_DIR", str(tmp_path / "bdu"))
+    monkeypatch.setenv("GRC_SZI_DIR", str(tmp_path / "szi"))
     get_settings.cache_clear()
     shutil.copytree(REFERENCE, tmp_path / "reference")
     load_reference(session, tmp_path / "reference")
@@ -149,3 +150,36 @@ def test_demo_bdu_samples(client, demo_env):
     assert st["threats"]["active"] == 6 and st["vulns"]["active"] == 6
     pending = client.get(f"/bdu/imports/{st['vulns']['pending_id']}", headers=h["demo-viewer"])
     assert pending.json()["summary"]["criticality"] == 1
+
+
+def test_demo_szi(client, demo_env):
+    r, h = demo_env
+    st = client.get("/szi-registry/status", headers=h["demo-viewer"]).json()
+    assert st["active"] == 6 and st["pending_id"]
+    out = client.get(f"/objects/{r.object_id}/szi", headers=h["demo-viewer"]).json()
+    states = {i["name"]: i["state"] for i in out["items"]}
+    assert states["Пример-АВЗ"] == "expiring" and states["Пример-НСД"] == "expired"
+    assert all(i["measures"] for i in out["items"] if i["name"] != "Пример-ОС")
+    assert all(m["state"] == "in_set" for i in out["items"] for m in i["measures"])
+    sm = client.get(f"/projects/{r.project_id}/summary", headers=h["demo-viewer"]).json()
+    assert (sm["kpi"]["szi"]["bad"], sm["kpi"]["szi"]["expiring"]) == (1, 1)
+
+
+def test_demo_threat_model_waits_for_approval(client, demo_env):
+    r, h = demo_env
+    models = client.get(f"/objects/{r.object_id}/threat-models", headers=h["demo-viewer"]).json()
+    assert [(m["version"], m["status"]) for m in models] == [(1, "draft")]
+    m = client.get(f"/threat-models/{models[0]['id']}", headers=h["demo-viewer"]).json()
+    assert m["progress"]["ready"], m["progress"]
+    assert (m["considered"], m["relevant"]) == (6, 5)
+    # Находки прогона №7 с БДУ: три подтверждают УБИ.006, одна не привязана.
+    assert m["findings"]["snapshot_number"] == 2
+    assert (m["findings"]["total"], m["findings"]["unlinked"]) == (4, 1)
+    t = next(x for x in m["threats"] if x["code"] == "УБИ.006")
+    assert t["confirmed"] == 3
+    r2 = client.post(
+        f"/threat-models/{m['id']}/approve",
+        headers=h["demo-boss"],
+        json={"acknowledge_unverified": True},
+    )
+    assert r2.status_code == 200, r2.text

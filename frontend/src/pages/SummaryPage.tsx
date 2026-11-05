@@ -169,6 +169,17 @@ function SummaryBody({ data }: { data: ProjectSummary }) {
           <span className={`kpi-value${k.to_confirm ? "" : " muted"}`}>{formatNumber(k.to_confirm)}</span>
           <span className="kpi-delta">подтверждено {formatNumber(k.confirmed)}</span>
         </div>
+        <div className="card kpi">
+          <span className="kpi-label">Сертификаты СЗИ</span>
+          <span className={`kpi-value${k.szi.bad ? " danger" : k.szi.expiring ? " warn" : " muted"}`}>
+            {formatNumber(k.szi.bad + k.szi.expiring)}
+          </span>
+          <span className="kpi-delta">
+            {k.szi.total === 0
+              ? "СЗИ не заведены"
+              : `недействительны ${formatNumber(k.szi.bad)} · истекают за ${k.szi_expiry_days} дн. ${formatNumber(k.szi.expiring)}`}
+          </span>
+        </div>
       </div>
 
       <section className="card">
@@ -207,6 +218,21 @@ function PercentCell({ bucket }: { bucket: StatsBucket | undefined }) {
   );
 }
 
+function SziCell({ o }: { o: ObjectSummary }) {
+  const s = o.szi;
+  if (s.total === 0) return <span className="muted">—</span>;
+  return (
+    <Link to={`/objects/${o.id}?tab=szi`} onClick={(e) => e.stopPropagation()} className="pill-stack">
+      {s.bad > 0 && <span className="pill pill-danger">недействительны: {formatNumber(s.bad)}</span>}
+      {s.expiring > 0 && <span className="pill pill-warn">истекают: {formatNumber(s.expiring)}</span>}
+      {s.check > 0 && <span className="pill pill-muted">проверить: {formatNumber(s.check)}</span>}
+      {s.bad + s.expiring + s.check === 0 && (
+        <span className="pill pill-ok">действуют: {formatNumber(s.total - s.uncertified)}</span>
+      )}
+    </Link>
+  );
+}
+
 function ObjectsTable({ rows }: { rows: ObjectSummary[] }) {
   const navigate = useNavigate();
   return (
@@ -221,6 +247,7 @@ function ObjectsTable({ rows }: { rows: ObjectSummary[] }) {
             <th>Всего</th>
             <th className="num">Несоотв.</th>
             <th>Ждут</th>
+            <th>СЗИ</th>
             <th>Снимок «Сканера»</th>
           </tr>
         </thead>
@@ -279,6 +306,9 @@ function ObjectsTable({ rows }: { rows: ObjectSummary[] }) {
                     {STATE_NOTES[o.state]}
                   </td>
                 )}
+                <td className="summary-szi">
+                  <SziCell o={o} />
+                </td>
                 <td>
                   {o.snapshot ? (
                     <>

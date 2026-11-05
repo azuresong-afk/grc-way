@@ -7,7 +7,9 @@ export type ThreatKind =
   | "capability"
   | "intruder"
   | "tactic"
-  | "technique";
+  | "technique"
+  | "impact"
+  | "method";
 
 export interface ThreatItem {
   code: string;
@@ -56,6 +58,8 @@ export const KIND_TITLES: Record<ThreatKind, string> = {
   intruder: "Вид нарушителя",
   tactic: "Тактика",
   technique: "Техника",
+  impact: "Вид воздействия",
+  method: "Способ реализации угроз",
 };
 
 /** Вкладки экрана: какие виды записей на них показаны. */
@@ -71,6 +75,7 @@ export const SECTIONS = [
     title: "Тактики и техники",
     kinds: ["tactic", "technique"],
   },
+  { key: "methods", title: "Воздействия и способы", kinds: ["impact", "method"] },
 ] as const satisfies readonly {
   key: string;
   title: string;

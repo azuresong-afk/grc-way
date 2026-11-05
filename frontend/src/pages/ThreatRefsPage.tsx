@@ -312,6 +312,47 @@ export function ThreatRefsPage() {
         </>
       )}
 
+      {data && data.total > 0 && tab === "methods" && (
+        <>
+          <section className="card">
+            <div className="card-head">
+              <h2>Виды воздействия на объекты</h2>
+              <span className="count">{byKind("impact").length}</span>
+            </div>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Код</th>
+                    <th>Вид воздействия</th>
+                    <th>Сверка</th>
+                  </tr>
+                </thead>
+                <tbody>{byKind("impact").map((i) => row(i))}</tbody>
+              </table>
+            </div>
+          </section>
+          <section className="card">
+            <div className="card-head">
+              <h2>Способы реализации угроз</h2>
+              <span className="count">{byKind("method").length}</span>
+            </div>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Код</th>
+                    <th>Способ</th>
+                    <th>Сверка</th>
+                  </tr>
+                </thead>
+                <tbody>{byKind("method").map((i) => row(i))}</tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
+
       {data && data.total > 0 && tab === "tactics" && (
         <>
           {data.kinds.technique.total === 0 && (

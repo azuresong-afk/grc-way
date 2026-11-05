@@ -1,5 +1,6 @@
 import type { Kind, ObjectBrief } from "./objects";
 import type { Stats } from "./measures";
+import type { SziCounts } from "./szi";
 
 export interface ObjectSummary {
   id: string;
@@ -29,6 +30,7 @@ export interface ObjectSummary {
   to_confirm: number;
   confirmed: number;
   unverified: number;
+  szi: SziCounts;
 }
 
 export interface ProjectSummary {
@@ -47,6 +49,8 @@ export interface ProjectSummary {
     confirmed: number;
     unverified: number;
     unverified_tables: string[];
+    szi: SziCounts;
+    szi_expiry_days: number;
   };
   objects: ObjectSummary[];
 }

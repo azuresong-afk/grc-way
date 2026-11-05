@@ -1,0 +1,162 @@
+[
+ {
+  "id": 801,
+  "dedup_key": "8a69886e2d934e8d3dcd82c7e959bcd5f367c4aba5dc601f524aa8d7bc4a3086",
+  "module": "vuln",
+  "host": "10.10.2.5",
+  "port": 22,
+  "vuln_id": "CVE-2024-6387",
+  "evidence": null,
+  "priority": null,
+  "finding_type": "vuln",
+  "title": "OpenSSH: состояние гонки в обработчике сигналов (regreSSHion)",
+  "severity": "high",
+  "cve_ids": [
+   "CVE-2024-6387"
+  ],
+  "bdu_ids": [
+   "BDU:2024-04835"
+  ],
+  "cvss": 8.1,
+  "status": "open",
+  "detected_at": "2026-11-03T03:10:00Z",
+  "false_positive": null,
+  "software": "OpenSSH",
+  "software_version": "9.2p1",
+  "software_source": "service",
+  "confidence": "high",
+  "source": "authenticated_package"
+ },
+ {
+  "id": 802,
+  "dedup_key": "29f075de42d0da537508df1facad90b0bcf32126b611b4e5c43e40e86c6830bb",
+  "module": "vuln",
+  "host": "10.10.2.6",
+  "port": 22,
+  "vuln_id": "CVE-2024-6387",
+  "evidence": null,
+  "priority": null,
+  "finding_type": "vuln",
+  "title": "OpenSSH: состояние гонки в обработчике сигналов (regreSSHion)",
+  "severity": "high",
+  "cve_ids": [
+   "CVE-2024-6387"
+  ],
+  "bdu_ids": [
+   "BDU:2024-04835"
+  ],
+  "cvss": 8.1,
+  "status": "open",
+  "detected_at": "2026-11-03T03:11:00Z",
+  "false_positive": null,
+  "software": "OpenSSH",
+  "software_version": "9.2p1",
+  "software_source": "service",
+  "confidence": "high",
+  "source": "authenticated_package"
+ },
+ {
+  "id": 803,
+  "dedup_key": "1e2d61f1fdba33fde1593621c20f75ef66be0100f535a9f5651713542d0f7734",
+  "module": "vuln",
+  "host": "10.10.1.10",
+  "port": 8443,
+  "vuln_id": "BDU:2026-00042",
+  "evidence": null,
+  "priority": null,
+  "finding_type": "vuln",
+  "title": "Средство удалённого администрирования: обход аутентификации",
+  "severity": "critical",
+  "cve_ids": [],
+  "bdu_ids": [
+   "BDU:2026-00042"
+  ],
+  "cvss": 9.1,
+  "status": "open",
+  "detected_at": "2026-11-03T03:20:00Z",
+  "false_positive": null,
+  "software": "Средство администрирования",
+  "software_version": "3.1",
+  "software_source": "service",
+  "confidence": "high",
+  "source": "authenticated_package"
+ },
+ {
+  "id": 804,
+  "dedup_key": "f9a2fdd5c33af9e2c42535a9ac331929a26e3fac4583fd88c5988179e7519241",
+  "module": "vuln",
+  "host": "10.10.1.12",
+  "port": 5432,
+  "vuln_id": "CVE-2026-0001",
+  "evidence": null,
+  "priority": null,
+  "finding_type": "vuln",
+  "title": "СУБД: повышение привилегий аутентифицированного пользователя",
+  "severity": "high",
+  "cve_ids": [],
+  "bdu_ids": [
+   "BDU:2026-01377"
+  ],
+  "cvss": 8.8,
+  "status": "new",
+  "detected_at": "2026-11-03T03:23:00Z",
+  "false_positive": null,
+  "software": "СУБД",
+  "software_version": "16.2",
+  "software_source": "service",
+  "confidence": "high",
+  "source": "authenticated_package"
+ },
+ {
+  "id": 805,
+  "dedup_key": "9c7745fe90b656c1c8a8be87b63f4bbc27d1780cd912a222ecc45da5c0e40e5e",
+  "module": "vuln",
+  "host": "10.20.0.15",
+  "port": 22,
+  "vuln_id": "CVE-2024-6387",
+  "evidence": null,
+  "priority": null,
+  "finding_type": "vuln",
+  "title": "OpenSSH: состояние гонки в обработчике сигналов (regreSSHion)",
+  "severity": "high",
+  "cve_ids": [
+   "CVE-2024-6387"
+  ],
+  "bdu_ids": [
+   "BDU:2024-04835"
+  ],
+  "cvss": 8.1,
+  "status": "open",
+  "detected_at": "2026-11-03T03:40:00Z",
+  "false_positive": null,
+  "software": "OpenSSH",
+  "software_version": "9.2p1",
+  "software_source": "service",
+  "confidence": "high",
+  "source": "authenticated_package"
+ },
+ {
+  "id": 806,
+  "dedup_key": "c67347af428cda8696df9cb13602207827c3e4d762e88cbec452b15663c00aee",
+  "module": "config_audit",
+  "host": "10.10.3.101",
+  "port": null,
+  "vuln_id": "cfg:password-policy",
+  "evidence": null,
+  "priority": null,
+  "finding_type": "config",
+  "title": "Минимальная длина пароля меньше 8 символов",
+  "severity": "medium",
+  "cve_ids": [],
+  "bdu_ids": [],
+  "cvss": null,
+  "status": "open",
+  "detected_at": "2026-11-03T03:10:00Z",
+  "false_positive": null,
+  "software": null,
+  "software_version": null,
+  "software_source": null,
+  "confidence": "high",
+  "source": "config"
+ }
+]

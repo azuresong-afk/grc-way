@@ -12,6 +12,8 @@
   не ставили вручную и не подтверждал испытатель, принимает предложение;
   поставленный вручную или подтверждённый не трогается — расхождение видно
   в карточке меры.
+- Вместе со снимком сохраняются находки прогона с идентификаторами БДУ на хостах
+  объекта (без ложных срабатываний) — для привязки к угрозам модели (задача 2.4).
 - Импорт выполняется в запросе: это несколько GET к «Сканеру»; таблица jobs
   появится вместе с долгими задачами (генерация документов).
 """
@@ -46,6 +48,7 @@ from app.db.models import (
     utcnow,
 )
 from app.domain.assessment import AutoResult, auto_status, check_modules, coverage_map
+from app.domain.threat_findings import object_findings
 from app.integrations.scanner.client import ScannerClient, ScannerError, get_scanner_client
 from app.integrations.scanner.schemas import ScannerRun
 
@@ -111,6 +114,8 @@ class SnapshotOut(SnapshotBrief):
     coverage_hosts: list[CoverageHostOut]
     # Хосты объекта, которых нет в покрытии прогона.
     missing_hosts: list[str]
+    # Находки с БДУ на хостах объекта; None — снимок сделан до импорта находок.
+    findings: list[dict[str, Any]] | None
 
 
 class ImportOut(BaseModel):
@@ -275,6 +280,7 @@ def import_run(
         run = _pick_run(scanner, engagement_id, body.run_id)
         compliance = scanner.run_compliance(run.id, a.profile_id, a.level)
         coverage = scanner.run_coverage(run.id)
+        findings = scanner.run_findings(run.id)
     except ScannerError as e:
         audit.record_now(
             session,
@@ -292,7 +298,8 @@ def import_run(
     compliance_raw = compliance.model_dump(mode="json")
     coverage_raw = coverage.model_dump(mode="json")
     object_hosts = sorted(h.address for h in obj.hosts)
-    digest = _hash(compliance_raw, coverage_raw, object_hosts, a.profile_id, a.level)
+    bdu_findings = object_findings([f.model_dump(mode="json") for f in findings], object_hosts)
+    digest = _hash(compliance_raw, coverage_raw, object_hosts, a.profile_id, a.level, bdu_findings)
     prev = _latest_snapshot(session, obj)
     if prev is not None and prev.run_id == run.id and prev.content_hash == digest:
         raise HTTPException(
@@ -345,6 +352,7 @@ def import_run(
         compliance=compliance_raw,
         coverage=coverage_raw,
         object_hosts=object_hosts,
+        findings=bdu_findings,
         summary={},
         content_hash=digest,
         source=scanner.source if scanner.mode == "live" else "фикстура «Сканера»",
@@ -421,6 +429,7 @@ def import_run(
             "level": snapshot.level,
             "percent": compliance.percent,
             "summary": summary,
+            "bdu_findings": len(bdu_findings),
             "changed": changed[:50],
             "source": snapshot.source,
         },
@@ -488,4 +497,5 @@ def get_snapshot(snapshot_id: uuid.UUID, user: Viewer, session: DbSession) -> Sn
         manual=(s.compliance or {}).get("manual") or [],
         coverage_hosts=cov_hosts,
         missing_hosts=[h for h in s.object_hosts or [] if h not in seen],
+        findings=s.findings,
     )

@@ -2193,7 +2193,7 @@ fieldset.field {
 }
 
 .summary-kpis {
-  grid-template-columns: minmax(0, 1.618fr) repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1.618fr) repeat(5, minmax(0, 1fr));
 }
 
 .summary-kpi-main {
@@ -2455,4 +2455,292 @@ fieldset.field {
 .drawer .props dd {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+/* ---------- Модель угроз (2.3) ---------- */
+
+.tm-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.tm-kpis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4);
+}
+
+.tm-help {
+  margin: 0;
+  max-width: 72ch;
+}
+
+.tm-group {
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--border);
+}
+
+.tm-group .field-legend {
+  margin-bottom: var(--s1);
+}
+
+.tm-check-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 4px;
+}
+
+.tm-check-row > .input {
+  margin-left: 26px;
+  width: calc(100% - 26px);
+}
+
+.tm-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.tm-block-off {
+  opacity: 0.72;
+}
+
+.tm-block.tm-block-off {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.tm-block-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.tm-block-head .input {
+  flex: 1;
+  font-weight: 500;
+}
+
+.tm-threats-head {
+  justify-content: space-between;
+}
+
+.tm-problems {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.tm-problems li + li {
+  margin-top: 2px;
+}
+
+.tm-details summary {
+  cursor: pointer;
+  color: var(--text-2);
+}
+
+.stepper .count {
+  margin-left: 2px;
+}
+
+.chip:disabled {
+  cursor: default;
+}
+
+@media (max-width: 600px) {
+  .tm-check-row > .input {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+.drawer-form .textarea {
+  width: 100%;
+}
+
+/* ---------- Находки «Сканера» в модели угроз (2.4) ---------- */
+
+.tm-findings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding-top: var(--s2);
+  border-top: 1px solid var(--border);
+}
+
+.tm-findings h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.tm-findings .chips {
+  gap: 4px;
+}
+
+.tm-findings .table .chips {
+  flex-wrap: wrap;
+}
+
+.chip.chip-suggest {
+  height: 24px;
+  padding: 0 6px;
+  border-style: dashed;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.tm-findings .actions .select {
+  max-width: 360px;
+  min-width: 0;
+  flex: 1 1 200px;
+}
+
+.tm-links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tm-links li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--s2);
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.pill .lucide,
+.pill svg {
+  vertical-align: -2px;
+}
+
+/* ---------- СЗИ (задача 2.5) ---------- */
+
+.kpi-value.danger {
+  color: var(--danger);
+}
+
+.text-warn {
+  color: var(--warn);
+}
+
+.tag.tag-muted {
+  background: var(--surface-3);
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 260px;
+}
+
+.input-row {
+  display: flex;
+  gap: var(--s1);
+}
+
+.input-row .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.szi-table td:first-child {
+  min-width: 220px;
+}
+
+.szi-list {
+  margin: 0;
+  padding: 0;
+}
+
+.szi-list li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.szi-list li:last-child {
+  border-bottom: 0;
+}
+
+/* ---------- Критичность уязвимостей (задача 2.6) ---------- */
+
+.pill-sev-critical {
+  background: color-mix(in srgb, var(--sev-critical) 16%, transparent);
+  color: var(--sev-critical-text);
+}
+
+.pill-sev-high {
+  background: color-mix(in srgb, var(--sev-high) 16%, transparent);
+  color: var(--sev-high-text);
+}
+
+.pill-sev-medium {
+  background: color-mix(in srgb, var(--sev-medium) 18%, transparent);
+  color: var(--sev-medium-text);
+}
+
+.pill-sev-low {
+  background: color-mix(in srgb, var(--sev-low) 16%, transparent);
+  color: var(--sev-low-text);
+}
+
+.vc-table .vc-group td {
+  background: var(--surface-2, var(--muted-soft));
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.vc-table .vc-ind {
+  min-width: 220px;
+  max-width: 320px;
+  vertical-align: top;
+}
+
+.vc-table td.num {
+  vertical-align: top;
+}
+
+.vc-cvss {
+  max-width: 320px;
+}
+
+.vc-formula {
+  margin: var(--s2) 0;
+  font-size: 14px;
+}
+
+.vc-outcome {
+  border-top: 1px solid var(--border);
+}
+
+.vc-list {
+  display: grid;
+  gap: 6px;
+  padding-left: 20px;
+}
+
+.row-muted td {
+  color: var(--text-2);
 }

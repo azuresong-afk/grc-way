@@ -1,4 +1,16 @@
-import { BookOpen, Bug, CheckCheck, ExternalLink, GitCompareArrows, Pencil, ShieldAlert, Table2 } from "lucide-react";
+import {
+  BookOpen,
+  Bug,
+  CheckCheck,
+  ExternalLink,
+  FileText,
+  Gauge,
+  GitCompareArrows,
+  Pencil,
+  ShieldAlert,
+  ShieldCheck,
+  Table2,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Drawer } from "../components/Drawer";
@@ -161,6 +173,15 @@ export function RefsPage() {
           </Link>
           <Link to="/refs/bdu" className="btn">
             <Bug size={15} /> БДУ ФСТЭК
+          </Link>
+          <Link to="/refs/szi" className="btn">
+            <ShieldCheck size={15} /> Реестр СЗИ
+          </Link>
+          <Link to="/refs/vuln-criticality" className="btn">
+            <Gauge size={15} /> Критичность уязвимостей
+          </Link>
+          <Link to="/refs/documents" className="btn">
+            <FileText size={15} /> Нормативные документы
           </Link>
           <Link to="/refs/scanner" className="btn">
             <GitCompareArrows size={15} /> Обновление из «Сканера»

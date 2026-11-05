@@ -4,6 +4,10 @@
 
 - `engagement_runs.json` — `GET /engagements/{id}/runs` (RunOut);
 - `run_<id>_coverage.json` — `GET /runs/{id}/coverage` (CoverageOut);
+- `run_<id>_findings.json` — `GET /runs/{id}/findings` (FindingOut, задача 2.4):
+  уязвимости с идентификаторами БДУ, одна находка без БДУ и одно ложное
+  срабатывание — их «Аттестация» отбрасывает; `dedup_key` считается как в
+  «Сканере»: sha256(host|port|vuln_id|module);
 - `run_<id>_compliance_<profile>.json` — `GET /runs/{id}/compliance` (сводка
   `scanner.compliance.engine.summarize`) **по всем мерам профиля**: у каждой
   меры дополнительно `levels`, по которым FixtureScannerClient отбирает меры
@@ -17,6 +21,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import json
 from pathlib import Path
@@ -357,6 +362,142 @@ def run_out(r: dict) -> dict:
     }
 
 
+# ---------- Находки (задача 2.4) ----------
+
+# (vuln_id, название, опасность, CVE, БДУ, CVSS, ПО, версия). БДУ — из образца выгрузки
+# app/integrations/bdu/sample.py; BDU:2026-01377 есть только во второй выгрузке образца.
+_SSH = (
+    "CVE-2024-6387",
+    "OpenSSH: состояние гонки в обработчике сигналов (regreSSHion)",
+    "high",
+    ["CVE-2024-6387"],
+    ["BDU:2024-04835"],
+    8.1,
+    "OpenSSH",
+    "9.2p1",
+)
+_LOG4J = (
+    "CVE-2021-44228",
+    "Apache Log4j: выполнение кода через подстановку JNDI (Log4Shell)",
+    "critical",
+    ["CVE-2021-44228"],
+    ["BDU:2021-06061"],
+    10.0,
+    "Apache Log4j",
+    "2.14.1",
+)
+_ADMIN = (
+    "BDU:2026-00042",
+    "Средство удалённого администрирования: обход аутентификации",
+    "critical",
+    [],
+    ["BDU:2026-00042"],
+    9.1,
+    "Средство администрирования",
+    "3.1",
+)
+_WEB = (
+    "BDU:2015-07745",
+    "Веб-сервер: чтение журналов событий без аутентификации",
+    "medium",
+    [],
+    ["BDU:2015-07745"],
+    5.0,
+    "Веб-сервер",
+    "1.0",
+)
+_DB = ("CVE-2026-0001", "СУБД: повышение привилегий аутентифицированного пользователя", "high", [],
+       ["BDU:2026-01377"], 8.8, "СУБД", "16.2")  # fmt: skip
+_FP = {"reason": "Версия СУБД с исправлением от производителя", "marked_by": "auditor",
+       "marked_at": "2026-10-28T09:00:00Z"}  # fmt: skip
+
+# Прогон → (id, хост, порт, уязвимость, статус, время, ложное срабатывание).
+# №6: всё новое, веб-сервер на 10.10.2.6 потом устранён. №7: OpenSSH и на втором хосте
+# портала, хост «Бухгалтерии» и ложное срабатывание (отбрасываются). №8: Log4j устранён,
+# на 10.10.1.12 новая уязвимость СУБД.
+_FINDINGS = {
+    6: [(601, "10.10.2.5", 22, _SSH, "new", "2026-10-20T03:10:00Z", None),
+        (602, "10.10.2.5", 8080, _LOG4J, "new", "2026-10-20T03:12:00Z", None),
+        (603, "10.10.1.10", 8443, _ADMIN, "new", "2026-10-20T03:20:00Z", None),
+        (604, "10.10.2.6", 80, _WEB, "new", "2026-10-20T03:15:00Z", None)],
+    7: [(701, "10.10.2.5", 22, _SSH, "open", "2026-10-27T03:10:00Z", None),
+        (702, "10.10.2.6", 22, _SSH, "new", "2026-10-27T03:11:00Z", None),
+        (703, "10.10.2.5", 8080, _LOG4J, "open", "2026-10-27T03:12:00Z", None),
+        (704, "10.10.1.10", 8443, _ADMIN, "open", "2026-10-27T03:20:00Z", None),
+        (705, "10.20.0.15", 22, _SSH, "new", "2026-10-27T03:40:00Z", None),
+        (706, "10.10.1.11", 5432, _DB, "new", "2026-10-27T03:22:00Z", _FP)],
+    8: [(801, "10.10.2.5", 22, _SSH, "open", "2026-11-03T03:10:00Z", None),
+        (802, "10.10.2.6", 22, _SSH, "open", "2026-11-03T03:11:00Z", None),
+        (803, "10.10.1.10", 8443, _ADMIN, "open", "2026-11-03T03:20:00Z", None),
+        (804, "10.10.1.12", 5432, _DB, "new", "2026-11-03T03:23:00Z", None),
+        (805, "10.20.0.15", 22, _SSH, "open", "2026-11-03T03:40:00Z", None)],
+}  # fmt: skip
+_CONFIG_FINDING_ID = {6: 605, 7: 707, 8: 806}
+
+
+def _finding(
+    fid: int, host: str, port: int | None, module: str, vuln_id: str, **rest: object
+) -> dict:
+    key = hashlib.sha256(f"{host}|{port}|{vuln_id}|{module}".encode()).hexdigest()
+    return {"id": fid, "dedup_key": key, "module": module, "host": host, "port": port,
+            "vuln_id": vuln_id, "evidence": None, "priority": None, **rest}  # fmt: skip
+
+
+def findings(run_id: int) -> list[dict]:
+    out = []
+    for fid, host, port, v, status, at, fp in _FINDINGS.get(run_id, []):
+        vid, title, sev, cves, bdus, cvss, sw, ver = v
+        out.append(
+            _finding(
+                fid,
+                host,
+                port,
+                "vuln",
+                vid,
+                finding_type="vuln",
+                title=title,
+                severity=sev,
+                cve_ids=cves,
+                bdu_ids=bdus,
+                cvss=cvss,
+                status=status,
+                detected_at=at,
+                false_positive=fp,
+                software=sw,
+                software_version=ver,
+                software_source="service",
+                confidence="high",
+                source="authenticated_package",
+            )
+        )
+    if run_id in _CONFIG_FINDING_ID:
+        at = out[0]["detected_at"] if out else None
+        out.append(
+            _finding(
+                _CONFIG_FINDING_ID[run_id],
+                "10.10.3.101",
+                None,
+                "config_audit",
+                "cfg:password-policy",
+                finding_type="config",
+                title="Минимальная длина пароля меньше 8 символов",
+                severity="medium",
+                cve_ids=[],
+                bdu_ids=[],
+                cvss=None,
+                status="open",
+                detected_at=at,
+                false_positive=None,
+                software=None,
+                software_version=None,
+                software_source=None,
+                confidence="high",
+                source="config",
+            )
+        )
+    return out
+
+
 def dump(name: str, data: object) -> None:
     (OUT / name).write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
 
@@ -369,6 +510,8 @@ def main() -> None:
             continue
         dump(f"run_{r['id']}_coverage.json", coverage(r["id"]))
         dump(f"run_{r['id']}_compliance_fstec-117.json", compliance(r["id"], "fstec-117"))
+        if r["id"] in _FINDINGS:
+            dump(f"run_{r['id']}_findings.json", findings(r["id"]))
 
 
 if __name__ == "__main__":

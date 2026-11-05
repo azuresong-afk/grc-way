@@ -16,10 +16,18 @@
 6. второй объект — ИСПДн «Бухгалтерия» из 2 хостов, ещё не классифицирован;
 7. образцы выгрузок БДУ (app/integrations/bdu/sample.py — не данные ФСТЭК):
    угрозы и уязвимости применены, вторая выгрузка уязвимостей ждёт применения —
-   видно сравнение и отметку «требует пересчёта». Только если БДУ ещё не загружали.
+   видно сравнение и отметку «требует пересчёта». Только если БДУ ещё не загружали;
+8. модель угроз ГИС по Методике 2021 (если в БДУ есть угрозы образца): все шаги
+   мастера заполнены методистом, перечень актуальных угроз с обоснованием,
+   находки «Сканера» с БДУ привязаны к угрозе УБИ.006 как подтверждение
+   актуальности — черновик ждёт утверждения. Импорт прогона №8 вручную покажет,
+   что находка Log4j устранена;
+9. реестр сертифицированных СЗИ — образец (app/integrations/szi/sample.py, не данные
+   ФСТЭК): первая версия применена, вторая ждёт применения; на ГИС пять СЗИ с
+   привязкой к мерам — действующие, истекающий, истёкший и с оконченной поддержкой.
 
-«Сканер» всегда берётся из фикстур (`GET /runs/{id}/compliance` и `/coverage`
-прогонов №6–8), даже если GRC_SCANNER_MODE=live: демо не ходит в сеть.
+«Сканер» всегда берётся из фикстур (`GET /runs/{id}/compliance`, `/coverage`
+и `/findings` прогонов №6–8), даже если GRC_SCANNER_MODE=live: демо не ходит в сеть.
 
 Запуск: `python -m app.demo` (в Docker — `make demo`). Повторный запуск ничего
 не меняет, если демо-проект уже есть. Пароль демо-пользователей — из
@@ -40,7 +48,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password, password_problem
-from app.db.models import BduImport, Project, RefProfile, User, utcnow
+from app.db.models import BduImport, BduThreat, Project, RefProfile, SziImport, User, utcnow
 from app.db.session import get_engine
 from app.integrations.scanner.client import FixtureScannerClient, get_scanner_client
 
@@ -93,6 +101,155 @@ COMPENSATED = (
     "Число параллельных сеансов ограничить штатно нельзя (прикладное ПО); риск снижается "
     "блокированием сеанса при неактивности",
 )
+
+
+# Модель угроз ГИС: шаги мастера (коды — справочник reference/threats) и решения по
+# угрозам образца БДУ.
+THREAT_STEPS: dict[str, dict[str, Any]] = {
+    "consequences": {
+        "items": [
+            {
+                "code": "У1.9",
+                "justification": "В ГИС обрабатываются ПДн заявителей",
+            },
+            {
+                "code": "У1.8",
+                "justification": "Подмена справок — ущерб гражданам",
+            },
+            {"code": "У3.4", "justification": "Простой ГИС срывает выдачу справок учреждением"},
+            {"code": "У3.28", "justification": "Справки выдаются только через ГИС"},
+        ]
+    },
+    "objects": {
+        "items": [
+            {
+                "key": "portal",
+                "name": "Веб-портал приёма обращений",
+                "description": "Публикуется в сеть «Интернет» через ДМЗ",
+                "hosts": ["10.10.2.5", "10.10.2.6"],
+                "impacts": ["ВВ2", "ВВ3", "ВВ4"],
+                "consequences": ["У3.4", "У3.28"],
+            },
+            {
+                "key": "db",
+                "name": "СУБД с обращениями и справками",
+                "hosts": ["10.10.1.10", "10.10.1.11"],
+                "impacts": ["ВВ1", "ВВ4"],
+                "consequences": ["У1.9", "У1.8"],
+            },
+            {
+                "key": "arm",
+                "name": "АРМ операторов",
+                "hosts": ["10.10.3.101", "10.10.3.102", "10.10.3.103", "10.10.3.104"],
+                "impacts": ["ВВ1", "ВВ2", "ВВ6"],
+                "consequences": ["У1.9", "У3.4"],
+            },
+        ]
+    },
+    "intruders": {
+        "items": [
+            {
+                "code": "НВ4",
+                "relevant": True,
+                "capability": "Н1",
+                "justification": "Портал доступен из сети «Интернет»",
+            },
+            {
+                "code": "НВ3",
+                "relevant": True,
+                "capability": "Н2",
+                "justification": "Персональные данные заявителей представляют интерес для продажи",
+            },
+            {
+                "code": "НВ11",
+                "relevant": True,
+                "capability": "Н1",
+                "justification": "Операторы работают с обращениями ежедневно",
+            },
+            {
+                "code": "НВ1",
+                "relevant": False,
+                "justification": "ГИС регионального масштаба, сведений, составляющих "
+                "государственную тайну, нет",
+            },
+            {
+                "code": "НВ6",
+                "relevant": False,
+                "justification": "Прикладное ПО сопровождается по договору без удалённого доступа",
+            },
+        ]
+    },
+    "methods": {
+        "items": [
+            {
+                "code": "СР1",
+                "interfaces": "Веб-интерфейс портала (HTTPS, 443/tcp); клиент СУБД на АРМ",
+                "objects": ["portal", "db"],
+                "intruders": ["НВ4", "НВ3"],
+            },
+            {
+                "code": "СР2",
+                "interfaces": "Электронная почта и съёмные носители на АРМ",
+                "objects": ["arm"],
+                "intruders": ["НВ3", "НВ11"],
+            },
+            {
+                "code": "СР9",
+                "interfaces": "Консоли администрирования серверов",
+                "objects": ["db", "portal"],
+                "intruders": ["НВ11"],
+            },
+        ]
+    },
+    "scenarios": {
+        "items": [
+            {"tactic": "Т1", "note": "Сканирование портала из сети «Интернет»"},
+            {"tactic": "Т2"},
+            {"tactic": "Т3"},
+            {"tactic": "Т10"},
+        ]
+    },
+}
+# УБИ → (актуальна, обоснование, нарушители, объекты, последствия, способы, тактики)
+_Decision = tuple[bool, str, list[str], list[str], list[str], list[str], list[str]]
+THREAT_DECISIONS: dict[str, _Decision] = {
+    "УБИ.006": (
+        True,
+        "Портал принимает данные из сети «Интернет»; внедрение кода через формы обращений",
+        ["НВ4", "НВ3"], ["portal", "db"], ["У1.9", "У3.4"], ["СР1"], ["Т1", "Т2", "Т10"],
+    ),
+    "УБИ.008": (
+        True,
+        "Вход на портал и в СУБД по паролю; подбор возможен из сети «Интернет»",
+        ["НВ4", "НВ3"], ["portal", "db"], ["У1.9"], ["СР1"], ["Т2", "Т10"],
+    ),
+    "УБИ.067": (
+        True,
+        "Операторы видят обращения других отделов: разграничение по отделам не настроено",
+        ["НВ11"], ["arm", "db"], ["У1.9"], ["СР9"], ["Т10"],
+    ),
+    "УБИ.140": (
+        True,
+        "Портал — единственный канал приёма обращений; отказ останавливает выдачу справок",
+        ["НВ4"], ["portal"], ["У3.4", "У3.28"], ["СР1"], ["Т10"],
+    ),
+    "УБИ.170": (
+        True,
+        "Вредоносное ПО через почту на АРМ может зашифровать файловые ресурсы",
+        ["НВ3", "НВ11"], ["arm"], ["У3.4"], ["СР2"], ["Т3", "Т10"],
+    ),
+    "УБИ.190": (
+        False,
+        "Доступ АРМ в сеть «Интернет» закрыт на межсетевом экране (только портал в ДМЗ)",
+        [], [], [], [], [],
+    ),
+}  # fmt: skip
+# УБИ → уязвимости БДУ, чьи находки «Сканера» привязываются к угрозе. Находка с
+# BDU:2026-00042 (обход аутентификации на 10.10.1.10) оставлена без угрозы — видно
+# предупреждение «не привязаны к угрозам».
+THREAT_FINDINGS: dict[str, set[str]] = {
+    "УБИ.006": {"BDU:2021-06061", "BDU:2024-04835"},
+}
 
 
 class DemoError(RuntimeError):
@@ -156,7 +313,112 @@ def run(app: FastAPI, session: Session, password: str | None = None) -> Result:
         result.notes.append(
             "БДУ: загружены образцы выгрузок, вторая выгрузка уязвимостей ждёт применения"
         )
+    tok = _check(
+        TestClient(app).post("/auth/token", json={"username": "demo-meth", "password": password})
+    )
+    meth = {"Authorization": f"Bearer {tok['access_token']}"}
+    known = set(session.scalars(select(BduThreat.code).where(BduThreat.code.in_(THREAT_DECISIONS))))
+    if known == set(THREAT_DECISIONS) and result.object_id:
+        _threat_model(TestClient(app), meth, result)
+        result.notes.append("модель угроз ГИС: черновик заполнен, ждёт утверждения")
+    if _load_szi_samples(session):
+        result.notes.append("реестр СЗИ: загружен образец, вторая версия ждёт применения")
+    if result.object_id:
+        _szi(TestClient(app), meth, result.object_id)
+        result.notes.append("СЗИ ГИС: пять средств, одно истекает, у одного срок истёк")
     return result
+
+
+# Наименование, вид, номер сертификата (образец), меры, размещение.
+DEMO_SZI = [
+    ("Пример-МЭ 3", "fw", "9901", ["МСЭ.1", "МСЭ.2", "МСЭ.3"], "Периметр и граница ДМЗ, 2 шт."),
+    ("Пример-АВЗ", "av", "9902", ["АВЗ.1", "АВЗ.2", "АВЗ.3"], "Все АРМ и серверы, 10 лицензий"),
+    ("Пример-СОВ", "ids", "9904", ["СОВ.1", "СОВ.2"], "Сенсоры на периметре и в сегменте серверов"),
+    ("Пример-НСД", "nsd", "9903", ["ИАФ.1", "УПД.1"], "АРМ операторов (10.10.3.101–104)"),
+    ("Пример-ОС", "os", "9906", [], "Серверы приложений 10.10.1.10–12"),
+]
+
+
+def _szi(c: Any, meth: dict[str, str], object_id: str) -> None:
+    codes = {m["measure_id"] for m in _check(c.get(f"/objects/{object_id}/measures", headers=meth))}
+    for name, kind, number, measures, placement in DEMO_SZI:
+        body = {
+            "name": name,
+            "kind": kind,
+            "cert_number": number,
+            "measure_ids": [m for m in measures if m in codes],
+            "placement": placement,
+        }
+        _check(c.post(f"/objects/{object_id}/szi", headers=meth, json=body), 201)
+
+
+def _load_szi_samples(session: Session) -> bool:
+    """Образец реестра СЗИ: те же шаги, что в API (загрузка — право администратора)."""
+    from app.core.config import get_settings
+    from app.domain import szi
+    from app.domain.evidence_files import store
+    from app.integrations.szi.sample import registry_csv, registry_xlsx
+
+    if session.scalar(select(SziImport.id).limit(1)) is not None:
+        return False
+    settings = get_settings()
+    limit = settings.szi_max_mb * 1024 * 1024
+    for name, data, ext, apply in (
+        ("reestr-szi.xlsx", registry_xlsx(1), "xlsx", True),
+        ("reestr-szi.csv", registry_csv(2), "csv", False),
+    ):
+        stored = store([data], name, settings.szi_dir, limit)
+        parsed = szi.parse_file(stored.path, ext)
+        diff = szi.compute_diff(session, parsed, file_sha256=stored.sha256)
+        row = SziImport(
+            file_name=name,
+            file_sha256=stored.sha256,
+            file_size=stored.size,
+            file_ext=ext,
+            export_version=parsed.version,
+            version_source=parsed.version_source,
+            status="pending",
+            summary=diff["summary"],
+            items=diff["items"],
+            warnings=diff["warnings"],
+            fingerprint=diff["fingerprint"],
+            created_by_name="Демо-данные",
+        )
+        session.add(row)
+        session.flush()
+        if apply:
+            res = szi.apply(session, parsed, row, version=parsed.version)
+            row.status, row.applied_at = "applied", utcnow()
+            row.applied_by_name, row.applied = "Демо-данные", res.as_dict()
+    session.commit()
+    return True
+
+
+def _threat_model(c: Any, meth: dict[str, str], result: Result) -> None:
+    m = _check(c.post(f"/objects/{result.object_id}/threat-models", headers=meth), 201)
+    url = f"/threat-models/{m['id']}"
+    for step, data in THREAT_STEPS.items():
+        _check(c.put(f"{url}/steps/{step}", headers=meth, json={"data": data}))
+    _check(c.post(f"{url}/threats", headers=meth, json={"codes": list(THREAT_DECISIONS)}))
+    for code, (rel, why, intr, objs, cons, meths, tactics) in THREAT_DECISIONS.items():
+        body = {
+            "relevant": rel,
+            "justification": why,
+            "intruders": intr,
+            "objects": objs,
+            "consequences": cons,
+            "methods": meths,
+            "tactics": tactics,
+        }
+        _check(c.patch(f"{url}/threats/{code}", headers=meth, json=body))
+    # Находки текущего снимка (прогон №7) с БДУ как подтверждение актуальности.
+    found = _check(c.get(f"{url}/findings", headers=meth))["items"]
+    for code, bdu_ids in THREAT_FINDINGS.items():
+        keys = [f["dedup_key"] for f in found if set(f["bdu_ids"]) & bdu_ids]
+        if keys:
+            _check(
+                c.post(f"{url}/threats/{code}/findings", headers=meth, json={"dedup_keys": keys})
+            )
 
 
 def _load_bdu_samples(session: Session) -> bool:
