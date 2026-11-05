@@ -997,3 +997,67 @@ class ObjectSzi(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     updated_by_name: Mapped[str | None] = mapped_column(String(200))
+
+
+class RefVulnMethodology(Base):
+    """Методика оценки уровня критичности уязвимостей (ФСТЭК России, 30.06.2025).
+
+    Определение — данные (см. app/domain/vuln_criticality.py): показатели таблицы 1,
+    уровни таблицы 2 со сроками п. 21, компенсирующие меры п. 25, контрольные
+    примеры приложения. Хранится и сверяется целиком, как таблица классификации:
+    каждая правка — новая ревизия, прежнее определение — в ref_revisions.
+    """
+
+    __tablename__ = "ref_vuln_methodologies"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    title: Mapped[str] = mapped_column(String(500))
+    version: Mapped[str] = mapped_column(String(64))
+    definition: Mapped[dict] = mapped_column(JsonType)
+    definition_hash: Mapped[str] = mapped_column(String(64))
+    # {document, clause, appendix, url, note}
+    source: Mapped[dict] = mapped_column(JsonType, default=dict)
+    origin: Mapped[str] = mapped_column(String(16))  # stub | official | local
+    verified_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    verified_by_name: Mapped[str | None] = mapped_column(String(200))
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    # Хэш YAML-файла последней загрузки: неизменённый файл при старте не трогается.
+    source_hash: Mapped[str] = mapped_column(String(64))
+    imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+
+
+class RefDocument(Base):
+    """Нормативный документ: реквизиты и статус (применяется / не применяется).
+
+    Документ, который заменён, остаётся в справочнике со ссылкой на заменивший
+    его (replaced_by) и основанием в source — например, Методика критичности
+    уязвимостей 2022 г. «не применяется» по п. 6 Методики 2025 г.
+    """
+
+    __tablename__ = "ref_documents"
+
+    code: Mapped[str] = mapped_column(String(64), primary_key=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    short: Mapped[str] = mapped_column(String(200))
+    title: Mapped[str] = mapped_column(String(1000))
+    issuer: Mapped[str | None] = mapped_column(String(200))
+    issued: Mapped[date | None] = mapped_column(Date)
+    number: Mapped[str | None] = mapped_column(String(32))
+    url: Mapped[str | None] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(16))  # active | not_applicable
+    replaced_by: Mapped[str | None] = mapped_column(String(64))
+    # Основание реквизитов и статуса: {document, clause, appendix, url, note}
+    source: Mapped[dict] = mapped_column(JsonType, default=dict)
+    origin: Mapped[str] = mapped_column(String(16))  # stub | official | local
+    verified_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    verified_by_name: Mapped[str | None] = mapped_column(String(200))
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    # Хэш записи в файле при последней загрузке (как у RefThreatItem); NULL —
+    # документ добавлен в интерфейсе.
+    file_hash: Mapped[str | None] = mapped_column(String(64))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)

@@ -24,6 +24,11 @@
 отметки о сверке; запись, не менявшаяся в файле, не трогается. Записи,
 пропавшие из файла, и добавленные в интерфейсе не удаляются.
 
+Методика оценки критичности уязвимостей (reference/vuln-criticality/*.yaml)
+загружается целиком, как таблица классификации; перед загрузкой проверяется,
+что контрольные примеры приложения воспроизводятся. Нормативные документы
+(reference/normative/documents.yaml) — по записям, как Методика угроз.
+
 Запуск вручную: python -m app.refs.loader
 """
 
@@ -44,17 +49,23 @@ from app.core.config import get_settings
 from app.db.models import (
     RefCheck,
     RefClassificationTable,
+    RefDocument,
     RefGroup,
     RefMeasure,
     RefProfile,
     RefRevision,
     RefThreatItem,
+    RefVulnMethodology,
     utcnow,
 )
 from app.db.session import get_engine
 from app.domain.classification import definition_hash, validate
+from app.domain.ref_documents import doc_hash
+from app.domain.ref_documents import parse as parse_documents
 from app.domain.threat_refs import item_hash
 from app.domain.threat_refs import parse as parse_threats
+from app.domain.vuln_criticality import definition_hash as vuln_definition_hash
+from app.domain.vuln_criticality import validate as validate_vuln
 
 CHECKS_FILE = "checks.yaml"
 PROFILE_ORDER = ["fstec-117", "fstec-21", "fstec-239", "cis-controls-v8", "cis-benchmark"]
@@ -76,6 +87,12 @@ class LoadReport:
     threats_added: int = 0
     threats_updated: int = 0
     threats_unchanged: int = 0
+    vuln_added: int = 0
+    vuln_updated: int = 0
+    vuln_unchanged: int = 0
+    docs_added: int = 0
+    docs_updated: int = 0
+    docs_unchanged: int = 0
 
     @property
     def changed(self) -> bool:
@@ -86,6 +103,10 @@ class LoadReport:
             or self.tables_updated
             or self.threats_added
             or self.threats_updated
+            or self.vuln_added
+            or self.vuln_updated
+            or self.docs_added
+            or self.docs_updated
         )
 
     def summary(self) -> str:
@@ -97,6 +118,10 @@ class LoadReport:
             f"{self.tables_updated}, без изменений {self.tables_unchanged}",
             f"Методика угроз: записей добавлено {self.threats_added}, обновлено "
             f"{self.threats_updated}, без изменений {self.threats_unchanged}",
+            f"Методика критичности уязвимостей: добавлено {self.vuln_added}, обновлено "
+            f"{self.vuln_updated}, без изменений {self.vuln_unchanged}",
+            f"нормативных документов добавлено {self.docs_added}, обновлено "
+            f"{self.docs_updated}, без изменений {self.docs_unchanged}",
         ]
         if self.local_conflicts:
             parts.append(f"изменены в интерфейсе, файл не применён: {len(self.local_conflicts)}")
@@ -357,6 +382,153 @@ def _load_threats(session: Session, path: Path, report: LoadReport) -> None:
         report.threats_updated += 1
 
 
+# Поля файла Методики, которые хранятся отдельными колонками, а не в definition.
+_VULN_META = {"id", "title", "version", "origin", "source"}
+
+
+def vuln_snapshot(m: RefVulnMethodology) -> dict[str, Any]:
+    return {
+        "title": m.title,
+        "version": m.version,
+        "definition": m.definition,
+        "source": m.source,
+        "origin": m.origin,
+        "verified_by_name": m.verified_by_name,
+        "verified_at": m.verified_at.isoformat() if m.verified_at else None,
+    }
+
+
+def _load_vuln(session: Session, path: Path, report: LoadReport) -> None:
+    raw = path.read_bytes()
+    data = yaml.safe_load(raw.decode("utf-8"))
+    mid = str(data["id"])
+    definition = {k: v for k, v in data.items() if k not in _VULN_META}
+    validate_vuln(definition)
+    digest = hashlib.sha256(raw).hexdigest()
+    m = session.get(RefVulnMethodology, mid)
+    if m is not None and m.source_hash == digest:
+        report.vuln_unchanged += 1
+        return
+    wanted = {
+        "title": data["title"],
+        "version": str(data["version"]),
+        "definition": definition,
+        "source": data.get("source") or {},
+    }
+    origin = data.get("origin") or "stub"
+    if m is None:
+        session.add(
+            RefVulnMethodology(
+                id=mid,
+                origin=origin,
+                definition_hash=vuln_definition_hash(definition),
+                source_hash=digest,
+                revision=1,
+                **wanted,
+            )
+        )
+        report.vuln_added += 1
+        return
+    m.source_hash = digest
+    if m.origin == "local":
+        report.local_conflicts.append(f"vuln_methodology:{mid}")
+        return
+    if {k: getattr(m, k) for k in wanted} == wanted:
+        report.vuln_unchanged += 1
+        return
+    session.add(
+        RefRevision(
+            entity="vuln_methodology",
+            entity_key=mid,
+            revision=m.revision,
+            data=vuln_snapshot(m),
+            changed_by_name="загрузка справочников",
+            comment="Обновление из файла Методики",
+        )
+    )
+    for k, v in wanted.items():
+        setattr(m, k, v)
+    m.origin = origin
+    m.definition_hash = vuln_definition_hash(definition)
+    m.revision += 1
+    m.imported_at = m.updated_at = utcnow()
+    m.updated_by = None
+    m.verified_by = m.verified_by_name = m.verified_at = None
+    report.vuln_updated += 1
+
+
+_DOC_FIELDS = (
+    "position",
+    "short",
+    "title",
+    "issuer",
+    "issued",
+    "number",
+    "url",
+    "status",
+    "replaced_by",
+    "source",
+)
+
+
+def document_snapshot(d: RefDocument) -> dict[str, Any]:
+    out = {k: getattr(d, k) for k in _DOC_FIELDS}
+    out["issued"] = d.issued.isoformat() if d.issued else None
+    return {
+        **out,
+        "origin": d.origin,
+        "verified_by_name": d.verified_by_name,
+        "verified_at": d.verified_at.isoformat() if d.verified_at else None,
+    }
+
+
+def _load_documents(session: Session, path: Path, report: LoadReport) -> None:
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    for doc in parse_documents(data):
+        digest = doc_hash(doc)
+        row = session.get(RefDocument, doc["code"])
+        if row is None:
+            session.add(
+                RefDocument(
+                    code=doc["code"],
+                    origin=doc["origin"],
+                    **{k: doc[k] for k in _DOC_FIELDS},
+                    revision=1,
+                    file_hash=digest,
+                )
+            )
+            report.docs_added += 1
+            continue
+        if row.file_hash == digest:
+            report.docs_unchanged += 1
+            continue
+        row.file_hash = digest
+        if row.origin == "local":
+            report.local_conflicts.append(f"document:{row.code}")
+            continue
+        if all(getattr(row, k) == doc[k] for k in _DOC_FIELDS):
+            report.docs_unchanged += 1
+            continue
+        session.add(
+            RefRevision(
+                entity="document",
+                entity_key=row.code,
+                revision=row.revision,
+                data=document_snapshot(row),
+                changed_by_name="загрузка справочников",
+                comment="Обновление из файла справочника",
+            )
+        )
+        for k in _DOC_FIELDS:
+            setattr(row, k, doc[k])
+        row.origin = doc["origin"]
+        row.revision += 1
+        row.updated_at = utcnow()
+        row.updated_by = None
+        row.verified_by = row.verified_by_name = row.verified_at = None
+        report.docs_updated += 1
+
+
 def load_reference(session: Session, directory: Path) -> LoadReport:
     report = LoadReport()
     profiles_dir = directory / "profiles"
@@ -370,6 +542,10 @@ def load_reference(session: Session, directory: Path) -> LoadReport:
         _load_table(session, path, report)
     for path in sorted((directory / "threats").glob("*.yaml")):
         _load_threats(session, path, report)
+    for path in sorted((directory / "vuln-criticality").glob("*.yaml")):
+        _load_vuln(session, path, report)
+    for path in sorted((directory / "normative").glob("*.yaml")):
+        _load_documents(session, path, report)
     if report.changed:
         audit.record(
             session, action="refs.load", actor_name="system", details={"summary": report.summary()}
