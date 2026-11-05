@@ -1169,3 +1169,52 @@ class ObjectVulnAssessment(Base):
     assessed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     assessed_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     assessed_by_name: Mapped[str | None] = mapped_column(String(200))
+
+
+# ---------- Документы комплекта ----------
+
+
+class GeneratedDocument(Base):
+    """Сформированный документ комплекта (задача 3.1): версия DOCX и PDF.
+
+    Каждое формирование — новая версия с номером на единицу больше; прежние
+    сохраняются. В записи — контекст, по которому собран документ, карта полей
+    («из каких данных собран / что пусто») и несверенные записи справочников:
+    что попало в версию, видно и после правки данных. Файлы — в томе
+    GRC_DOCUMENTS_DIR под именем sha256. Статусы согласования (на согласовании,
+    утверждён) появятся в задаче 3.3; до утверждения документ — «Проект».
+    """
+
+    __tablename__ = "documents"
+    __table_args__ = (
+        Index("ux_documents_version", "object_id", "doc_type", "version", unique=True),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    object_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("objects.id", ondelete="CASCADE"))
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    # Код документа из каталога reference/documents/catalog.yaml.
+    doc_type: Mapped[str] = mapped_column(String(64))
+    title: Mapped[str] = mapped_column(String(300))
+    version: Mapped[int] = mapped_column(Integer)
+    # draft — проект (задача 3.3 добавит review и approved).
+    status: Mapped[str] = mapped_column(String(16), default="draft")
+    template_name: Mapped[str] = mapped_column(String(200))
+    template_sha256: Mapped[str] = mapped_column(String(64))
+    # Хэш контекста и шаблона: тот же — документ не формируется заново.
+    context_hash: Mapped[str] = mapped_column(String(64))
+    context: Mapped[dict] = mapped_column(JsonType)
+    field_map: Mapped[list] = mapped_column(JsonType)
+    unverified: Mapped[list] = mapped_column(JsonType, default=list)
+    # Водяной знак «Проект» и почему он стоит.
+    watermark: Mapped[bool] = mapped_column(Boolean, default=True)
+    watermark_reasons: Mapped[list] = mapped_column(JsonType, default=list)
+    docx_sha256: Mapped[str] = mapped_column(String(64))
+    docx_size: Mapped[int] = mapped_column(BigInteger)
+    pdf_sha256: Mapped[str | None] = mapped_column(String(64))
+    pdf_size: Mapped[int | None] = mapped_column(BigInteger)
+    # Почему нет PDF (LibreOffice не установлен, не уложился во время…).
+    pdf_error: Mapped[str | None] = mapped_column(String(1000))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    created_by_name: Mapped[str | None] = mapped_column(String(200))

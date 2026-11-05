@@ -1,0 +1,49 @@
+# Каталог документов комплекта (задача 3.1 — движок; остальные документы — задача 3.2).
+#
+# Для каждого документа: шаблон в templates/docx/, для каких режимов он нужен и
+# какие данные в него попадают. Поле fields — карта «из каких данных собран»:
+#   key      — путь в контексте документа (app/docs_gen/context.py);
+#              «список[].поле» — поле у каждого элемента списка;
+#   title    — как поле называется в документе;
+#   source   — откуда берётся (экран и поле), показывается пользователю;
+#   tab      — вкладка карточки объекта, где поле заполняют
+#              (description | classification | composition | szi | project);
+#   required — без поля документ формально неполон: оно подсвечивается в карте,
+#              в документе на его месте — «[не заполнено: …]».
+# Формулировки шаблона — рабочие, не нормативный текст (структура паспорта
+# уточняется в задаче 3.2 по ГОСТ Р 51583-2014 и приказу ФСТЭК №77).
+
+documents:
+  - code: tech-passport
+    title: Технический паспорт объекта
+    description: >-
+      Состав объекта, сегменты и хосты, конфигурация, средства защиты информации
+      и их сертификаты. Собирается из описания объекта, состава из активов «Сканера»
+      и реестра СЗИ.
+    template: tech-passport.docx
+    regimes: ["117", "21", "239", null]
+    fields:
+      - {key: customer.name, title: Заказчик, source: "Проект → заказчик → наименование", tab: project, required: true}
+      - {key: customer.inn, title: ИНН заказчика, source: "Проект → заказчик → ИНН", tab: project}
+      - {key: customer.address, title: Адрес заказчика, source: "Проект → заказчик → адрес", tab: project}
+      - {key: project.contract_ref, title: Договор, source: "Проект → номер договора", tab: project}
+      - {key: object.name, title: Наименование объекта, source: "Объект → Описание → наименование", tab: description, required: true}
+      - {key: object.kind_title, title: Тип объекта, source: "Объект → Описание → тип", tab: description, required: true}
+      - {key: object.regime_title, title: Нормативный режим, source: "Объект → Описание → режим", tab: description}
+      - {key: object.purpose, title: Назначение, source: "Объект → Описание → назначение", tab: description, required: true}
+      - {key: object.boundaries, title: Границы объекта, source: "Объект → Описание → границы", tab: description, required: true}
+      - {key: object.internet_title, title: Подключение к сети «Интернет», source: "Объект → Описание → подключение к «Интернету»", tab: description}
+      - {key: object.responsible, title: Ответственные лица, source: "Объект → Описание → ответственные", tab: description, required: true}
+      - {key: object.interconnections, title: Взаимодействие с другими системами, source: "Объект → Описание → взаимодействие", tab: description}
+      - {key: classification.result_label, title: Класс / уровень / категория, source: "Объект → Классификация → утверждённый расчёт", tab: classification, required: true}
+      - {key: classification.approved, title: Дата утверждения классификации, source: "Объект → Классификация → утверждение", tab: classification}
+      - {key: segments, title: Сегменты, source: "Объект → Состав → сегменты", tab: composition}
+      - {key: hosts, title: Хосты, source: "Объект → Состав → хосты (вручную и из активов «Сканера»)", tab: composition, required: true}
+      - {key: "hosts[].hostname", title: Имя хоста, source: "Объект → Состав → хост → имя", tab: composition}
+      - {key: "hosts[].role", title: Назначение хоста, source: "Объект → Состав → хост → роль", tab: composition, required: true}
+      - {key: "hosts[].os", title: Операционная система, source: "Объект → Состав → хост → ОС (из «Сканера» или вручную)", tab: composition, required: true}
+      - {key: "hosts[].segment", title: Сегмент хоста, source: "Объект → Состав → хост → сегмент", tab: composition}
+      - {key: szi, title: Средства защиты информации, source: "Объект → СЗИ", tab: szi, required: true}
+      - {key: "szi[].cert_number", title: Номер сертификата СЗИ, source: "Объект → СЗИ → сертификат", tab: szi, required: true}
+      - {key: "szi[].valid_to", title: Срок действия сертификата, source: "Объект → СЗИ → срок (из реестра СЗИ или вручную)", tab: szi, required: true}
+      - {key: "szi[].placement", title: Где установлено СЗИ, source: "Объект → СЗИ → размещение", tab: szi}

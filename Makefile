@@ -20,10 +20,10 @@ logs: ## Журналы сервисов
 BACKUP_DIR ?= backup
 STAMP := $(shell date +%Y%m%d-%H%M%S)
 
-backup: ## Резервная копия: дамп БД и файлы доказательств в $(BACKUP_DIR)/
+backup: ## Резервная копия: дамп БД, файлы доказательств и сформированные документы в $(BACKUP_DIR)/
 	@mkdir -p $(BACKUP_DIR)
 	docker compose exec -T db sh -c 'pg_dump -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -Fc' > $(BACKUP_DIR)/grc-$(STAMP).dump
-	docker compose exec -T app tar czf - -C /data evidence > $(BACKUP_DIR)/grc-$(STAMP)-evidence.tgz
+	docker compose exec -T app sh -c 'mkdir -p /data/documents && tar czf - -C /data evidence documents' > $(BACKUP_DIR)/grc-$(STAMP)-evidence.tgz
 	@ls -l $(BACKUP_DIR)/grc-$(STAMP)*
 
 test: ## Тесты бэкенда и фронтенда (локально, без Docker)
