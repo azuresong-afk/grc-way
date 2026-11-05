@@ -70,6 +70,14 @@ class Settings(BaseSettings):
     # За сколько дней до окончания срока сертификат СЗИ считается истекающим.
     szi_expiry_days: int = Field(default=90, ge=1, le=730)
 
+    # Документы комплекта (задача 3.1): шаблоны DOCX и том со сформированными файлами
+    # (имя — sha256). В Docker — /srv/templates и /data/documents.
+    templates_dir: Path = Path(__file__).resolve().parents[3] / "templates" / "docx"
+    documents_dir: Path = Path("./data/documents")
+    # Преобразование DOCX → PDF: путь или имя soffice (LibreOffice); none — без PDF.
+    pdf_converter: str = "soffice"
+    pdf_timeout_seconds: float = Field(default=120, ge=5, le=900)
+
     # Пути, под которыми продукт виден в платформе (для манифеста).
     base_path: str = "/grc/"
     api_base: str = "/api/grc/"

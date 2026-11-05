@@ -10,6 +10,7 @@ from app.api import (
     auth,
     bdu,
     classification,
+    documents,
     evidence,
     health,
     manifest,
@@ -73,6 +74,7 @@ def create_app() -> FastAPI:
         refs_sync,
         scanner_import,
         evidence,
+        documents,
         summary,
     ):
         app.include_router(module.router)
