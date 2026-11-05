@@ -47,14 +47,24 @@ import {
 import { useProject } from "../lib/project";
 import { ClassificationTab } from "./ClassificationTab";
 import { MeasuresTab } from "./MeasuresTab";
+import { ObjectDocsTab } from "./ObjectDocsTab";
 import { SziTab } from "./SziTab";
 import { ThreatModelTab } from "./ThreatModelTab";
 import { VulnsTab } from "./VulnsTab";
 import { RegimeField } from "./ObjectsPage";
 import { BulkTypeDialog, InfrDialog, InventoryCard, TypeChips, TypePicker, useComponentTypes } from "./InventoryParts";
 
-type Tab = "description" | "classification" | "measures" | "threats" | "vulns" | "szi" | "composition";
-const TABS: Tab[] = ["description", "classification", "measures", "threats", "vulns", "szi", "composition"];
+type Tab = "description" | "classification" | "measures" | "threats" | "vulns" | "szi" | "composition" | "documents";
+const TABS: Tab[] = [
+  "description",
+  "classification",
+  "measures",
+  "threats",
+  "vulns",
+  "szi",
+  "composition",
+  "documents",
+];
 
 export function ObjectPage() {
   const { id = "" } = useParams();
@@ -220,6 +230,15 @@ export function ObjectPage() {
           Состав
           <span className="count">{obj.host_count}</span>
         </button>
+        <button
+          type="button"
+          role="tab"
+          className="tab"
+          aria-selected={tab === "documents"}
+          onClick={() => setTab("documents")}
+        >
+          Документы
+        </button>
       </div>
 
       {tab === "description" && <DescriptionTab obj={obj} />}
@@ -232,6 +251,7 @@ export function ObjectPage() {
       {tab === "threats" && <ThreatModelTab obj={obj} editable={known && obj.status === "active"} />}
       {tab === "vulns" && <VulnsTab obj={obj} editable={known && obj.status === "active"} />}
       {tab === "szi" && <SziTab obj={obj} editable={known && obj.status === "active"} />}
+      {tab === "documents" && <ObjectDocsTab obj={obj} editable={known && obj.status === "active"} />}
       {tab === "composition" && (
         <CompositionTab
           obj={obj}
