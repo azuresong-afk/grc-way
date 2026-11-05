@@ -4,18 +4,27 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="GRC_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="GRC_", env_file=".env", extra="ignore", populate_by_name=True
+    )
 
     # Строка подключения SQLAlchemy (GRC_DATABASE_URL). В Docker задаётся в docker-compose.yml.
-    database_url: str = "sqlite+pysqlite:///./grc.db"
+    # В комплекте «Платформы» приходит как DATABASE_URL (контракт v1.1, п. 12).
+    database_url: str = Field(
+        default="sqlite+pysqlite:///./grc.db",
+        validation_alias=AliasChoices("GRC_DATABASE_URL", "DATABASE_URL"),
+    )
 
-    # local — свой вход по паролю; platform — токены «Платформы» (этап 3).
-    auth_mode: Literal["local", "platform"] = "local"
+    # local — свой вход по паролю; platform — токены «Платформы» (задача 3.5).
+    # Комплект платформы передаёт AUTH_MODE без префикса.
+    auth_mode: Literal["local", "platform"] = Field(
+        default="local", validation_alias=AliasChoices("GRC_AUTH_MODE", "AUTH_MODE")
+    )
 
     # Ключ подписи токенов и шифрования секретов. Обязателен вне режима разработки.
     secret_key: str = ""
@@ -64,7 +73,10 @@ class Settings(BaseSettings):
     vm_web_url: str = ""
     # Общий секрет подписи входящих событий (X-Signature: sha256=<HMAC тела>);
     # пусто — приём событий выключен, статусы заявок обновляются опросом.
-    events_secret: str = ""
+    # В комплекте платформы — PLATFORM_EVENTS_SECRET (тот же секрет в обе стороны).
+    events_secret: str = Field(
+        default="", validation_alias=AliasChoices("GRC_EVENTS_SECRET", "PLATFORM_EVENTS_SECRET")
+    )
 
     # Вес меры «Частично» в проценте реализации (0 — считать нереализованной, 1 — реализованной).
     partial_weight: float = Field(default=0.5, ge=0, le=1)
@@ -93,9 +105,56 @@ class Settings(BaseSettings):
     pdf_converter: str = "soffice"
     pdf_timeout_seconds: float = Field(default=120, ge=5, le=900)
 
+    # ---------- «Платформа» (задача 3.5, контракт v1.1) ----------
+    # Переменные комплекта приходят без префикса GRC_ (docs/integration/README.md, п. 1).
+    # Свой id: aud токена, products.<id>, X-Platform-Product, source событий.
+    platform_product_id: str = Field(
+        default="grc",
+        validation_alias=AliasChoices("GRC_PLATFORM_PRODUCT_ID", "PLATFORM_PRODUCT_ID"),
+    )
+    # API платформы внутри сети, без /api/platform: GET /projects/{id}.
+    platform_url: str = Field(
+        default="", validation_alias=AliasChoices("GRC_PLATFORM_URL", "PLATFORM_URL")
+    )
+    # Открытые ключи Ed25519; пусто — {platform_url}/.well-known/jwks.json.
+    platform_jwks_url: str = Field(
+        default="", validation_alias=AliasChoices("GRC_PLATFORM_JWKS_URL", "PLATFORM_JWKS_URL")
+    )
+    # Куда отправлять события outbox; пусто — {platform_url}/events (в режиме platform).
+    platform_events_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("GRC_PLATFORM_EVENTS_URL", "PLATFORM_EVENTS_URL"),
+    )
+    platform_timeout_seconds: float = 10.0
+    # Фоновая доставка outbox в процессе API (0 — выключить, например в тестах).
+    outbox_worker: bool = True
+    # Пауза между проходами доставки, секунды.
+    outbox_poll_seconds: float = Field(default=5.0, ge=0.5, le=300)
+    # grc.assessment.updated — не чаще раза в N секунд на объект (последнее значение).
+    assessment_event_seconds: int = Field(default=60, ge=1, le=3600)
+
     # Пути, под которыми продукт виден в платформе (для манифеста).
     base_path: str = "/grc/"
     api_base: str = "/api/grc/"
+
+    @property
+    def jwks_url(self) -> str:
+        if self.platform_jwks_url:
+            return self.platform_jwks_url
+        return self.platform_url.rstrip("/") + "/.well-known/jwks.json" if self.platform_url else ""
+
+    @property
+    def events_url(self) -> str:
+        """Адрес приёма событий платформы; пусто — outbox не ведётся."""
+        if self.platform_events_url:
+            return self.platform_events_url
+        if self.auth_mode == "platform" and self.platform_url:
+            return self.platform_url.rstrip("/") + "/events"
+        return ""
+
+    @property
+    def outbox_enabled(self) -> bool:
+        return bool(self.events_url and self.events_secret)
 
 
 @lru_cache

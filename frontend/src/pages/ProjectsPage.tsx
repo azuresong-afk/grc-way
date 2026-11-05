@@ -8,6 +8,7 @@ import { ErrorAlert, Loading } from "../components/Status";
 import { apiPage, apiSend, query } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { formatPeriod, useProject, type Project } from "../lib/project";
+import { PLATFORM } from "../lib/platform";
 
 const LIMIT = 50;
 
@@ -49,7 +50,7 @@ export function ProjectsPage() {
           <div className="crumbs">Аттестация</div>
           <h1>Проекты</h1>
         </div>
-        {manage && (
+        {manage && !PLATFORM && (
           <div className="actions">
             <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
               <FolderPlus size={15} />
@@ -58,6 +59,12 @@ export function ProjectsPage() {
           </div>
         )}
       </div>
+
+      {PLATFORM && (
+        <p className="muted">
+          Проекты, договоры и доступ к ним ведутся в «Платформе»: здесь — проекты, открытые вам.
+        </p>
+      )}
 
       <div className="chips" role="group" aria-label="Состояние">
         {STATUS_FILTERS.map(([value, label]) => (

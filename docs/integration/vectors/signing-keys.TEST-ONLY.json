@@ -1,0 +1,13 @@
+{
+  "warning": "Только для тестов. Эти ключи опубликованы — не использовать в установках.",
+  "keys": [
+    {
+      "kid": "20261104-vec00001",
+      "seed_b64url": "K48qxrjz8gODifKPDaUNsdVzB7h1EYge8eTlBqk5g_E"
+    },
+    {
+      "kid": "20261104-vec00002",
+      "seed_b64url": "gSvItUM97NQarLsIDAzJaTd6ye2i0jZGMYM4hpPdDRU"
+    }
+  ]
+}

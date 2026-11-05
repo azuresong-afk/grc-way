@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
-import { apiPage, query } from "./api";
+import { apiGet, apiPage, query } from "./api";
+import { PLATFORM } from "./platform";
 import { useAuth } from "./auth";
 
 export interface Member {
@@ -80,7 +81,31 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     }
   }, [fromUrl]);
 
-  const current = projects.find((p) => p.id === currentId) ?? projects[0] ?? null;
+  // Платформа: проект из ?project= ещё не известен «Аттестации» — GET /projects/{id}
+  // создаёт его «тень» по данным платформы, затем список перечитывается.
+  const [tried, setTried] = useState<string | null>(null);
+  useEffect(() => {
+    if (!PLATFORM || !allowed || !currentId || tried === currentId) return;
+    if (projects.some((p) => p.id === currentId || p.platform_project_id === currentId)) return;
+    setTried(currentId);
+    apiGet<Project>(`/projects/${encodeURIComponent(currentId)}`)
+      .then(() => reload())
+      .catch(() => undefined);
+  }, [allowed, currentId, projects, reload, tried]);
+
+  // Выбор проекта в другой вкладке (контракт v1.1, п. 11).
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === PROJECT_KEY && e.newValue) setCurrentId(e.newValue);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  const current =
+    projects.find((p) => p.id === currentId || p.platform_project_id === currentId) ??
+    projects[0] ??
+    null;
 
   const select = useCallback(
     (id: string) => {
@@ -109,6 +134,11 @@ export function useProject(): ProjectState {
   const ctx = useContext(ProjectContext);
   if (!ctx) throw new Error("useProject вне ProjectProvider");
   return ctx;
+}
+
+/** То же, но вне ProjectProvider — null (компоненты, которые рисуются и в тестах без него). */
+export function useProjectOptional(): ProjectState | null {
+  return useContext(ProjectContext);
 }
 
 export function formatPeriod(p: Pick<Project, "period_from" | "period_to">): string {

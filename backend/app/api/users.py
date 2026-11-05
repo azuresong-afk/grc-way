@@ -11,6 +11,7 @@ from sqlalchemy import func, or_, select
 from app import audit
 from app.api.deps import DbSession, client_ip, require
 from app.api.schemas import UserCreate, UserOut, UserPatch
+from app.core.config import get_settings
 from app.core.rbac import ROLE_TITLES, Perm, Role, roles_problem
 from app.core.security import hash_password, password_problem
 from app.db.models import User
@@ -28,7 +29,18 @@ def _out(u: User) -> UserOut:
         is_active=u.is_active,
         created_at=u.created_at,
         last_login_at=u.last_login_at,
+        platform_sub=u.platform_sub,
+        platform_typ=u.platform_typ,
+        platform_seen_at=u.platform_seen_at,
     )
+
+
+def _local_only() -> None:
+    # В режиме platform пользователи и роли ведутся в «Платформе» (контракт v1.1, п. 2).
+    if get_settings().auth_mode == "platform":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, detail="Пользователи и роли ведутся в «Платформе»"
+        )
 
 
 def _check_roles(roles: list[str]) -> set[str]:
@@ -73,6 +85,7 @@ def list_users(
 
 @router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def create_user(body: UserCreate, request: Request, admin: Admin, session: DbSession) -> UserOut:
+    _local_only()
     username = body.username.lower()
     if session.scalar(select(User.id).where(User.username == username)):
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Такое имя пользователя уже есть")
@@ -103,6 +116,7 @@ def create_user(body: UserCreate, request: Request, admin: Admin, session: DbSes
 def update_user(
     user_id: uuid.UUID, body: UserPatch, request: Request, admin: Admin, session: DbSession
 ) -> UserOut:
+    _local_only()
     user = session.get(User, user_id)
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")

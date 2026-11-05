@@ -11,6 +11,15 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      // Режим платформы при разработке: API оболочки (вход, вкладки, уведомления).
+      ...(process.env.GRC_PLATFORM_DEV_URL
+        ? {
+            "/api/platform": {
+              target: process.env.GRC_PLATFORM_DEV_URL,
+              rewrite: (p: string) => p.replace(/^\/api\/platform/, ""),
+            },
+          }
+        : {}),
       "/api": {
         target: process.env.GRC_API_URL ?? "http://127.0.0.1:18002",
         rewrite: (p) => p.replace(/^\/api/, ""),

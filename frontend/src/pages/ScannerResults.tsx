@@ -11,6 +11,8 @@ import { Modal } from "../components/Modal";
 import { ErrorAlert, Loading } from "../components/Status";
 import { apiGet, apiSend } from "../lib/api";
 import { formatDateTime, formatNumber } from "../lib/format";
+import { productLink } from "../lib/platform";
+import { useProjectOptional } from "../lib/project";
 import {
   STATUS_LABELS,
   STATUS_PILL,
@@ -359,6 +361,10 @@ function SnapshotsDrawer({
   const [list, setList] = useState<SnapshotBrief[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [full, setFull] = useState<SnapshotFull | null>(null);
+  const current = useProjectOptional()?.current ?? null;
+  // В платформе номер прогона — ссылка «Открыть в Сканере» (контракт, п. 7).
+  const runLink = (runId: number) =>
+    productLink("scanner", `runs/${runId}`, current?.platform_project_id ?? current?.id);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -424,7 +430,14 @@ function SnapshotsDrawer({
                       )}
                     </td>
                     <td>
-                      №{s.run_id} <RunPill status={s.run_status} />
+                      {runLink(s.run_id) ? (
+                        <a href={runLink(s.run_id)!} title="Открыть прогон в «Сканере»">
+                          №{s.run_id}
+                        </a>
+                      ) : (
+                        <>№{s.run_id}</>
+                      )}{" "}
+                      <RunPill status={s.run_status} />
                       <div className="cell-sub">
                         {formatDateTime(s.run_finished_at)}
                       </div>

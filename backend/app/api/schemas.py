@@ -26,6 +26,10 @@ class MeOut(BaseModel):
     display_name: str
     roles: list[str]
     permissions: list[str]
+    # local | platform — интерфейс прячет свой вход и управление пользователями.
+    auth_mode: str = "local"
+    # Сервисная учётная запись платформы (typ=service).
+    service: bool = False
 
 
 class UserOut(BaseModel):
@@ -38,6 +42,10 @@ class UserOut(BaseModel):
     is_active: bool
     created_at: datetime
     last_login_at: datetime | None
+    # Теневая запись «Платформы» (задача 3.5): sub, user | service, последний запрос.
+    platform_sub: str | None = None
+    platform_typ: str | None = None
+    platform_seen_at: datetime | None = None
 
 
 class UserCreate(BaseModel):

@@ -1,0 +1,213 @@
+{
+  "envelopes": [
+    {
+      "id": "7c9e6679-7425-40de-944b-e07fc1f90001",
+      "type": "scanner.run.finished",
+      "source": "scanner",
+      "time": "2026-11-04T16:54:52Z",
+      "project_id": "3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61",
+      "subject": "run/123",
+      "data": {
+        "run_id": "123",
+        "name": "Периметр, ноябрь",
+        "status": "done",
+        "started_at": "2026-11-04T15:10:00Z",
+        "finished_at": "2026-11-04T16:54:50Z",
+        "counts": {
+          "critical": 2,
+          "high": 7,
+          "medium": 19,
+          "low": 4,
+          "info": 31
+        },
+        "initiated_by": {
+          "sub": "6f1d2c3b-4a59-4e6f-8a7b-9c0d1e2f3a4b",
+          "name": "Иванов И. И."
+        }
+      }
+    },
+    {
+      "id": "7c9e6679-7425-40de-944b-e07fc1f90002",
+      "type": "scanner.asset.upserted",
+      "source": "scanner",
+      "time": "2026-11-04T16:54:52Z",
+      "project_id": "3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61",
+      "subject": "asset/88",
+      "data": {
+        "asset_id": "88",
+        "address": "10.0.0.5",
+        "hostname": "srv-db01",
+        "os_family": "linux",
+        "os": "Astra Linux 1.7",
+        "owner": "Отдел ИТ",
+        "criticality": "high",
+        "tags": [
+          "бд"
+        ],
+        "groups": [
+          "ЦОД-1"
+        ],
+        "last_seen_at": "2026-11-04T16:50:00Z"
+      }
+    },
+    {
+      "id": "7c9e6679-7425-40de-944b-e07fc1f90003",
+      "type": "scanner.asset.deleted",
+      "source": "scanner",
+      "time": "2026-11-04T16:54:52Z",
+      "project_id": "3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61",
+      "subject": "asset/88",
+      "data": {
+        "asset_id": "88",
+        "address": "10.0.0.5"
+      }
+    },
+    {
+      "id": "7c9e6679-7425-40de-944b-e07fc1f90004",
+      "type": "vm.ticket.created",
+      "source": "vm",
+      "time": "2026-11-04T16:54:52Z",
+      "project_id": "3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61",
+      "subject": "ticket/125",
+      "data": {
+        "ticket_id": "125",
+        "title": "Обновить OpenSSH на srv-db01",
+        "severity": "critical",
+        "assignee_sub": "6f1d2c3b-4a59-4e6f-8a7b-9c0d1e2f3a4b",
+        "due_at": "2026-11-11T00:00:00Z",
+        "finding_keys": [
+          "8b1f59c8ac37d18f7dc8c77f0a84cd3426c0e350064485dda1d1325efb683342"
+        ]
+      },
+      "notify": {
+        "users": [
+          "6f1d2c3b-4a59-4e6f-8a7b-9c0d1e2f3a4b"
+        ],
+        "title": "Вам назначена заявка №125",
+        "link": "/vm/tickets/125?project=3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61"
+      }
+    },
+    {
+      "id": "7c9e6679-7425-40de-944b-e07fc1f90005",
+      "type": "vm.ticket.status_changed",
+      "source": "vm",
+      "time": "2026-11-04T16:54:52Z",
+      "project_id": "3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61",
+      "subject": "ticket/125",
+      "data": {
+        "ticket_id": "125",
+        "from": "open",
+        "to": "in_progress",
+        "assignee_sub": "6f1d2c3b-4a59-4e6f-8a7b-9c0d1e2f3a4b"
+      }
+    },
+    {
+      "id": "7c9e6679-7425-40de-944b-e07fc1f90006",
+      "type": "vm.remediation.verified",
+      "source": "vm",
+      "time": "2026-11-04T16:54:52Z",
+      "project_id": "3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61",
+      "subject": "ticket/125",
+      "data": {
+        "ticket_id": "125",
+        "run_id": "124",
+        "result": "fixed"
+      }
+    },
+    {
+      "id": "7c9e6679-7425-40de-944b-e07fc1f90007",
+      "type": "grc.assessment.updated",
+      "source": "grc",
+      "time": "2026-11-04T16:54:52Z",
+      "project_id": "3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61",
+      "subject": "system/7",
+      "data": {
+        "system_id": "7",
+        "title": "ГИС «Учёт»",
+        "percent": 64,
+        "status": "in_progress"
+      }
+    },
+    {
+      "id": "7c9e6679-7425-40de-944b-e07fc1f90009",
+      "type": "grc.document.approval_requested",
+      "source": "grc",
+      "time": "2026-11-04T16:54:52Z",
+      "project_id": "3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61",
+      "subject": "document/31",
+      "data": {
+        "document_id": "31",
+        "title": "Акт классификации ГИС «Учёт»",
+        "system_id": "7",
+        "author_sub": "6f1d2c3b-4a59-4e6f-8a7b-9c0d1e2f3a4b"
+      },
+      "notify": {
+        "users": [
+          "c1b2a394-8576-4e3d-9c2b-1a0f9e8d7c6b"
+        ],
+        "title": "Документ ждёт утверждения: Акт классификации",
+        "link": "/grc/documents/31?project=3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61"
+      }
+    },
+    {
+      "id": "7c9e6679-7425-40de-944b-e07fc1f9000a",
+      "type": "platform.keys.rotated",
+      "source": "platform",
+      "time": "2026-11-04T16:54:52Z",
+      "project_id": null,
+      "subject": "key/20261104-vec00002",
+      "data": {
+        "kid": "20261104-vec00002",
+        "revoked": [
+          "20261104-vec00001"
+        ]
+      }
+    },
+    {
+      "id": "7c9e6679-7425-40de-944b-e07fc1f9000b",
+      "type": "platform.project.updated",
+      "source": "platform",
+      "time": "2026-11-04T16:54:52Z",
+      "project_id": "3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61",
+      "subject": "project/3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61",
+      "data": {
+        "project_id": "3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61",
+        "name": "Аудит ООО «Ромашка», 2026",
+        "status": "archived"
+      }
+    },
+    {
+      "id": "7c9e6679-7425-40de-944b-e07fc1f9000c",
+      "type": "platform.user.blocked",
+      "source": "platform",
+      "time": "2026-11-04T16:54:52Z",
+      "project_id": null,
+      "subject": "user/6f1d2c3b-4a59-4e6f-8a7b-9c0d1e2f3a4b",
+      "data": {
+        "sub": "6f1d2c3b-4a59-4e6f-8a7b-9c0d1e2f3a4b"
+      }
+    },
+    {
+      "id": "7c9e6679-7425-40de-944b-e07fc1f90008",
+      "type": "audit.recorded",
+      "source": "scanner",
+      "time": "2026-11-04T16:54:52Z",
+      "project_id": "3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61",
+      "subject": "audit/5012",
+      "data": {
+        "time": "2026-11-04T16:54:51Z",
+        "actor": {
+          "sub": "6f1d2c3b-4a59-4e6f-8a7b-9c0d1e2f3a4b",
+          "name": "Иванов И. И."
+        },
+        "action": "run.start",
+        "object": "run/123",
+        "result": "success",
+        "ip": "10.0.0.17",
+        "details": {
+          "targets": 12
+        }
+      }
+    }
+  ]
+}

@@ -28,6 +28,11 @@ export const ACTION_TITLES: Record<string, string> = {
   "user.update": "Изменение пользователя",
   "user.bootstrap": "Создание первого администратора",
   "audit.export": "Выгрузка журнала",
+  "user.shadow_create": "Первый вход из «Платформы»",
+  "project.shadow_create": "Проект из «Платформы»",
+  "project.shadow_sync": "Сверка проекта с «Платформой»",
+  "platform.keys_rotated": "Смена ключей «Платформы»",
+  "platform.outbox_retry": "Повторная отправка события",
 };
 
 const RESULT_PILL: Record<string, [string, string]> = {

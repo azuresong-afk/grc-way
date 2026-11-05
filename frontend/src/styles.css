@@ -3432,3 +3432,101 @@ fieldset.field {
     flex-direction: column;
   }
 }
+
+/* ---------- Платформа: строка вкладок продуктов (VITE_PLATFORM=1, задача 3.5) ---------- */
+
+.product-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  height: 40px;
+  display: flex;
+  align-items: stretch;
+  gap: var(--s1);
+  padding: 0 var(--s2);
+  background: var(--sidebar);
+  border-bottom: 1px solid var(--border);
+}
+
+.product-tabs-list {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.product-tabs-list::-webkit-scrollbar {
+  display: none;
+}
+
+.product-tabs .tab {
+  height: 40px;
+  text-decoration: none;
+}
+
+.product-tabs .tab:hover {
+  color: var(--text);
+}
+
+.product-tabs .tab.active {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+}
+
+.product-tabs .tab svg {
+  color: var(--text-3);
+}
+
+.product-tabs .tab.active svg {
+  color: var(--accent-text);
+}
+
+.product-tabs-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+
+.notif-bell {
+  position: relative;
+  width: 30px;
+  height: 30px;
+}
+
+.notif-count {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: var(--radius-xs);
+  background: var(--accent);
+  color: var(--on-accent, #fff);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
+
+.platform-frame .shell {
+  min-height: calc(100vh - 40px);
+}
+
+@media (min-width: 961px) {
+  .platform-frame .sidebar {
+    top: 40px;
+    height: calc(100vh - 40px);
+  }
+
+  .platform-frame .topbar {
+    top: 40px;
+  }
+}
+
+@media (max-width: 960px) {
+  .product-tabs {
+    position: static;
+  }
+}

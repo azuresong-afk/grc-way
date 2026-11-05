@@ -42,7 +42,7 @@ from sqlalchemy import select, true
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile
 
-from app import audit
+from app import audit, platform_events
 from app.api.deps import DbSession, client_ip, require
 from app.api.objects import _editable, get_object_for
 from app.core.config import get_settings
@@ -607,6 +607,8 @@ def submit_document(
     except svc.DocumentError as e:
         raise _fail(e) from e
     _review_audit(session, request, user, d, "submit", comment=ev.comment)
+    # «Документ ждёт утверждения» — уведомление утверждающим в платформе (задача 3.5).
+    platform_events.document_approval_requested(session, d, user)
     session.commit()
     return _out(d, session, user)
 

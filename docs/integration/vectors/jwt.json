@@ -1,0 +1,412 @@
+{
+  "issuer": "platform",
+  "leeway_seconds": 60,
+  "jwks": "jwks.json",
+  "projects": {
+    "A": "3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61",
+    "B": "9a7c5e3b-1d2f-4b6a-8c0e-4f6a8b0c2d93"
+  },
+  "cases": [
+    {
+      "name": "user_valid",
+      "description": "Пользователь: роли в scanner и vm, один проект. В grc ролей нет — 403, не 401.",
+      "token": "eyJhbGciOiJFZERTQSIsImtpZCI6IjIwMjYxMTA0LXZlYzAwMDAxIiwidHlwIjoiSldUIn0.eyJpc3MiOiJwbGF0Zm9ybSIsInN1YiI6IjZmMWQyYzNiLTRhNTktNGU2Zi04YTdiLTljMGQxZTJmM2E0YiIsInR5cCI6InVzZXIiLCJhdWQiOlsic2Nhbm5lciIsInZtIiwiZ3JjIiwicGxhdGZvcm0iXSwicHJlZmVycmVkX3VzZXJuYW1lIjoiaXZhbm92IiwibmFtZSI6Ilx1MDQxOFx1MDQzMlx1MDQzMFx1MDQzZFx1MDQzZVx1MDQzMiBcdTA0MTguIFx1MDQxOC4iLCJhdXRoX3NvdXJjZSI6ImxvY2FsIiwicHJvZHVjdHMiOnsic2Nhbm5lciI6WyJvcGVyYXRvciIsImNyZWRfYXVkaXQiXSwidm0iOlsiZW5naW5lZXIiXX0sInByb2plY3RzIjpbIjNlMmE4YzFmLTViN2QtNGY5ZS1hMWMzLTZkOGIwZTJmNGE2MSJdLCJwbGF0Zm9ybV9hZG1pbiI6ZmFsc2UsImlhdCI6MTc5MzgwODAwMCwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDEifQ.rUbkHr4XkHT_tjkxxgXWLI4dgcQc15ibrdcd_OpWzJXaoGIZGzY4-Y4JrbrF8pXZvxUzjNMYxsUDqjhCWGC9Aw",
+      "checks": [
+        {
+          "product": "scanner",
+          "status": 200,
+          "roles": [
+            "operator",
+            "cred_audit"
+          ],
+          "typ": "user",
+          "project": "3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61"
+        },
+        {
+          "product": "scanner",
+          "status": 403,
+          "detail": "no_project_access",
+          "project": "9a7c5e3b-1d2f-4b6a-8c0e-4f6a8b0c2d93"
+        },
+        {
+          "product": "vm",
+          "status": 200,
+          "roles": [
+            "engineer"
+          ],
+          "typ": "user",
+          "project": "3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61"
+        },
+        {
+          "product": "grc",
+          "status": 403,
+          "detail": "no_product_roles"
+        }
+      ]
+    },
+    {
+      "name": "user_all_projects",
+      "description": "projects = [\"*\"] — доступ к любому проекту.",
+      "token": "eyJhbGciOiJFZERTQSIsImtpZCI6IjIwMjYxMTA0LXZlYzAwMDAxIiwidHlwIjoiSldUIn0.eyJpc3MiOiJwbGF0Zm9ybSIsInN1YiI6IjZmMWQyYzNiLTRhNTktNGU2Zi04YTdiLTljMGQxZTJmM2E0YiIsInR5cCI6InVzZXIiLCJhdWQiOlsic2Nhbm5lciIsInZtIiwiZ3JjIiwicGxhdGZvcm0iXSwicHJlZmVycmVkX3VzZXJuYW1lIjoiaXZhbm92IiwibmFtZSI6Ilx1MDQxOFx1MDQzMlx1MDQzMFx1MDQzZFx1MDQzZVx1MDQzMiBcdTA0MTguIFx1MDQxOC4iLCJhdXRoX3NvdXJjZSI6ImxvY2FsIiwicHJvZHVjdHMiOnsiZ3JjIjpbIm1ldGhvZG9sb2dpc3QiXX0sInByb2plY3RzIjpbIioiXSwicGxhdGZvcm1fYWRtaW4iOmZhbHNlLCJpYXQiOjE3OTM4MDgwMDAsImV4cCI6NDEwMjQ0NDgwMCwianRpIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAyIn0.u3iS4jJjxNfJROwmnq5c7kAcCKAGMv98hWK8CIJ3-QhUUw_A0hjp_zdy3MwhJS_LsN-aMNn75crIEI35sbr3Dg",
+      "checks": [
+        {
+          "product": "grc",
+          "status": 200,
+          "roles": [
+            "methodologist"
+          ],
+          "typ": "user",
+          "project": "3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61"
+        },
+        {
+          "product": "grc",
+          "status": 200,
+          "roles": [
+            "methodologist"
+          ],
+          "typ": "user",
+          "project": "9a7c5e3b-1d2f-4b6a-8c0e-4f6a8b0c2d93"
+        },
+        {
+          "product": "scanner",
+          "status": 403,
+          "detail": "no_product_roles"
+        },
+        {
+          "product": "vm",
+          "status": 403,
+          "detail": "no_product_roles"
+        }
+      ]
+    },
+    {
+      "name": "user_empty_roles",
+      "description": "Продукт есть в products, но список ролей пуст — то же, что отсутствие ролей.",
+      "token": "eyJhbGciOiJFZERTQSIsImtpZCI6IjIwMjYxMTA0LXZlYzAwMDAxIiwidHlwIjoiSldUIn0.eyJpc3MiOiJwbGF0Zm9ybSIsInN1YiI6IjZmMWQyYzNiLTRhNTktNGU2Zi04YTdiLTljMGQxZTJmM2E0YiIsInR5cCI6InVzZXIiLCJhdWQiOlsic2Nhbm5lciIsInZtIiwiZ3JjIiwicGxhdGZvcm0iXSwicHJlZmVycmVkX3VzZXJuYW1lIjoiaXZhbm92IiwibmFtZSI6Ilx1MDQxOFx1MDQzMlx1MDQzMFx1MDQzZFx1MDQzZVx1MDQzMiBcdTA0MTguIFx1MDQxOC4iLCJhdXRoX3NvdXJjZSI6ImxvY2FsIiwicHJvZHVjdHMiOnsidm0iOltdfSwicHJvamVjdHMiOlsiM2UyYThjMWYtNWI3ZC00ZjllLWExYzMtNmQ4YjBlMmY0YTYxIl0sInBsYXRmb3JtX2FkbWluIjpmYWxzZSwiaWF0IjoxNzkzODA4MDAwLCJleHAiOjQxMDI0NDQ4MDAsImp0aSI6IjAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMyJ9.GUkSNSw5w-PJd34ZdWOyNRzXFqlZj-P5wRPNERWOY75v7eOZl6sFpslFJMp5gz3AgzYuVbZdOXqupypn8NWMCA",
+      "checks": [
+        {
+          "product": "scanner",
+          "status": 403,
+          "detail": "no_product_roles"
+        },
+        {
+          "product": "vm",
+          "status": 403,
+          "detail": "no_product_roles"
+        },
+        {
+          "product": "grc",
+          "status": 403,
+          "detail": "no_product_roles"
+        }
+      ]
+    },
+    {
+      "name": "user_without_typ",
+      "description": "Токен в духе контракта v1: нет typ и auth_source — считать typ = \"user\".",
+      "token": "eyJhbGciOiJFZERTQSIsImtpZCI6IjIwMjYxMTA0LXZlYzAwMDAxIiwidHlwIjoiSldUIn0.eyJpc3MiOiJwbGF0Zm9ybSIsInN1YiI6IjZmMWQyYzNiLTRhNTktNGU2Zi04YTdiLTljMGQxZTJmM2E0YiIsImF1ZCI6WyJzY2FubmVyIiwidm0iLCJncmMiLCJwbGF0Zm9ybSJdLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiJpdmFub3YiLCJuYW1lIjoiXHUwNDE4XHUwNDMyXHUwNDMwXHUwNDNkXHUwNDNlXHUwNDMyIFx1MDQxOC4gXHUwNDE4LiIsInByb2R1Y3RzIjp7InNjYW5uZXIiOlsib3BlcmF0b3IiLCJjcmVkX2F1ZGl0Il0sInZtIjpbImVuZ2luZWVyIl19LCJwcm9qZWN0cyI6WyIzZTJhOGMxZi01YjdkLTRmOWUtYTFjMy02ZDhiMGUyZjRhNjEiXSwicGxhdGZvcm1fYWRtaW4iOmZhbHNlLCJpYXQiOjE3OTM4MDgwMDAsImV4cCI6NDEwMjQ0NDgwMCwianRpIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDA0In0.-hmWFyYkaMlhtONPu3FsoYZA2wIIsWbycbqx8d4XRQZiG5ntwuCPEHD6uTfsitGXDAcqGeEU8gKGYxvcLLElDg",
+      "checks": [
+        {
+          "product": "scanner",
+          "status": 200,
+          "roles": [
+            "operator",
+            "cred_audit"
+          ],
+          "typ": "user",
+          "project": "3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61"
+        },
+        {
+          "product": "vm",
+          "status": 200,
+          "roles": [
+            "engineer"
+          ],
+          "typ": "user"
+        },
+        {
+          "product": "grc",
+          "status": 403,
+          "detail": "no_product_roles"
+        }
+      ]
+    },
+    {
+      "name": "user_next_key",
+      "description": "Подписан ключом next (второй ключ в JWKS) — выбор ключа по kid.",
+      "token": "eyJhbGciOiJFZERTQSIsImtpZCI6IjIwMjYxMTA0LXZlYzAwMDAyIiwidHlwIjoiSldUIn0.eyJpc3MiOiJwbGF0Zm9ybSIsInN1YiI6IjZmMWQyYzNiLTRhNTktNGU2Zi04YTdiLTljMGQxZTJmM2E0YiIsInR5cCI6InVzZXIiLCJhdWQiOlsic2Nhbm5lciIsInZtIiwiZ3JjIiwicGxhdGZvcm0iXSwicHJlZmVycmVkX3VzZXJuYW1lIjoiaXZhbm92IiwibmFtZSI6Ilx1MDQxOFx1MDQzMlx1MDQzMFx1MDQzZFx1MDQzZVx1MDQzMiBcdTA0MTguIFx1MDQxOC4iLCJhdXRoX3NvdXJjZSI6ImxvY2FsIiwicHJvZHVjdHMiOnsic2Nhbm5lciI6WyJvcGVyYXRvciIsImNyZWRfYXVkaXQiXSwidm0iOlsiZW5naW5lZXIiXX0sInByb2plY3RzIjpbIjNlMmE4YzFmLTViN2QtNGY5ZS1hMWMzLTZkOGIwZTJmNGE2MSJdLCJwbGF0Zm9ybV9hZG1pbiI6ZmFsc2UsImlhdCI6MTc5MzgwODAwMCwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDUifQ.Q2MxzwLTunboztp3gZuaOh98mkjFnS_sF4lLa2ksumD8nxu84MII2oMseF5FyvsWZ_DsWEEyLZJqh0fOpF0mDA",
+      "checks": [
+        {
+          "product": "scanner",
+          "status": 200,
+          "roles": [
+            "operator",
+            "cred_audit"
+          ],
+          "typ": "user"
+        },
+        {
+          "product": "vm",
+          "status": 200,
+          "roles": [
+            "engineer"
+          ],
+          "typ": "user",
+          "project": "3e2a8c1f-5b7d-4f9e-a1c3-6d8b0e2f4a61"
+        },
+        {
+          "product": "grc",
+          "status": 403,
+          "detail": "no_product_roles"
+        }
+      ]
+    },
+    {
+      "name": "service_vm_to_scanner",
+      "description": "Сервисный токен (п. 2.2): aud — только scanner, sub вида svc:*.",
+      "token": "eyJhbGciOiJFZERTQSIsImtpZCI6IjIwMjYxMTA0LXZlYzAwMDAxIiwidHlwIjoiSldUIn0.eyJpc3MiOiJwbGF0Zm9ybSIsInN1YiI6InN2YzowYjVlN2EyYy05MWQ0LTRjM2YtYThlNi0yZjdiOWQxYzRlNTAiLCJ0eXAiOiJzZXJ2aWNlIiwiYXVkIjpbInNjYW5uZXIiXSwiY2xpZW50X2lkIjoidm0tdG8tc2Nhbm5lciIsInByZWZlcnJlZF91c2VybmFtZSI6InN2Yzp2bS10by1zY2FubmVyIiwibmFtZSI6Ilx1MDQyMVx1MDQzNVx1MDQ0MFx1MDQzMlx1MDQzOFx1MDQ0MTogXHUwNDIzXHUwNDQxXHUwNDQyXHUwNDQwXHUwNDMwXHUwNDNkXHUwNDM1XHUwNDNkXHUwNDM4XHUwNDM1IFx1MjE5MiBcdTA0MjFcdTA0M2FcdTA0MzBcdTA0M2RcdTA0MzVcdTA0NDAiLCJhdXRoX3NvdXJjZSI6ImxvY2FsIiwicHJvZHVjdHMiOnsic2Nhbm5lciI6WyJvcGVyYXRvciIsImhvc3RfY3JlZGVudGlhbHMiXX0sInByb2plY3RzIjpbIioiXSwiaWF0IjoxNzkzODA4MDAwLCJleHAiOjQxMDI0NDQ4MDAsImp0aSI6IjAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwNiJ9.kfP_-0nLfUqPh69rFs2iVFizOfGGTkDBufu-EnhzWKEr212JaldkXAT6hPYxAqydZQIz27qC8Mjf5JOJA6CjDg",
+      "checks": [
+        {
+          "product": "scanner",
+          "status": 200,
+          "roles": [
+            "operator",
+            "host_credentials"
+          ],
+          "typ": "service",
+          "project": "9a7c5e3b-1d2f-4b6a-8c0e-4f6a8b0c2d93"
+        },
+        {
+          "product": "vm",
+          "status": 401,
+          "detail": "invalid_token"
+        },
+        {
+          "product": "grc",
+          "status": 401,
+          "detail": "invalid_token"
+        }
+      ]
+    },
+    {
+      "name": "expired",
+      "description": "exp = iat + 900 в прошлом (больше допуска 60 с).",
+      "token": "eyJhbGciOiJFZERTQSIsImtpZCI6IjIwMjYxMTA0LXZlYzAwMDAxIiwidHlwIjoiSldUIn0.eyJpc3MiOiJwbGF0Zm9ybSIsInN1YiI6IjZmMWQyYzNiLTRhNTktNGU2Zi04YTdiLTljMGQxZTJmM2E0YiIsInR5cCI6InVzZXIiLCJhdWQiOlsic2Nhbm5lciIsInZtIiwiZ3JjIiwicGxhdGZvcm0iXSwicHJlZmVycmVkX3VzZXJuYW1lIjoiaXZhbm92IiwibmFtZSI6Ilx1MDQxOFx1MDQzMlx1MDQzMFx1MDQzZFx1MDQzZVx1MDQzMiBcdTA0MTguIFx1MDQxOC4iLCJhdXRoX3NvdXJjZSI6ImxvY2FsIiwicHJvZHVjdHMiOnsic2Nhbm5lciI6WyJvcGVyYXRvciIsImNyZWRfYXVkaXQiXSwidm0iOlsiZW5naW5lZXIiXX0sInByb2plY3RzIjpbIjNlMmE4YzFmLTViN2QtNGY5ZS1hMWMzLTZkOGIwZTJmNGE2MSJdLCJwbGF0Zm9ybV9hZG1pbiI6ZmFsc2UsImlhdCI6MTc5MzgwODAwMCwiZXhwIjoxNzkzODA4OTAwLCJqdGkiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDcifQ.pYAgwDoRencl3vREzF8jQI8VF8-h1bu_R7rv4RQjvaZFPnbpgbaMBGSCmFHsAfqEPmiDaMSVqa8OiErqCzlhBg",
+      "checks": [
+        {
+          "product": "scanner",
+          "status": 401,
+          "detail": "invalid_token"
+        },
+        {
+          "product": "vm",
+          "status": 401,
+          "detail": "invalid_token"
+        },
+        {
+          "product": "grc",
+          "status": 401,
+          "detail": "invalid_token"
+        }
+      ]
+    },
+    {
+      "name": "wrong_aud",
+      "description": "aud = [\"platform\"]: роли scanner есть, но своего id в aud нет — 401.",
+      "token": "eyJhbGciOiJFZERTQSIsImtpZCI6IjIwMjYxMTA0LXZlYzAwMDAxIiwidHlwIjoiSldUIn0.eyJpc3MiOiJwbGF0Zm9ybSIsInN1YiI6IjZmMWQyYzNiLTRhNTktNGU2Zi04YTdiLTljMGQxZTJmM2E0YiIsInR5cCI6InVzZXIiLCJhdWQiOlsicGxhdGZvcm0iXSwicHJlZmVycmVkX3VzZXJuYW1lIjoiaXZhbm92IiwibmFtZSI6Ilx1MDQxOFx1MDQzMlx1MDQzMFx1MDQzZFx1MDQzZVx1MDQzMiBcdTA0MTguIFx1MDQxOC4iLCJhdXRoX3NvdXJjZSI6ImxvY2FsIiwicHJvZHVjdHMiOnsic2Nhbm5lciI6WyJvcGVyYXRvciIsImNyZWRfYXVkaXQiXSwidm0iOlsiZW5naW5lZXIiXX0sInByb2plY3RzIjpbIjNlMmE4YzFmLTViN2QtNGY5ZS1hMWMzLTZkOGIwZTJmNGE2MSJdLCJwbGF0Zm9ybV9hZG1pbiI6ZmFsc2UsImlhdCI6MTc5MzgwODAwMCwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDgifQ.bi7AUJK3pBx-p1VamvzNQlw23-_ikUQtUO7GjM4abhtepkEzUKpSSHiNNoyMaffppjLEoxvq_ChYEE9ZdXnYAw",
+      "checks": [
+        {
+          "product": "scanner",
+          "status": 401,
+          "detail": "invalid_token"
+        },
+        {
+          "product": "vm",
+          "status": 401,
+          "detail": "invalid_token"
+        },
+        {
+          "product": "grc",
+          "status": 401,
+          "detail": "invalid_token"
+        }
+      ]
+    },
+    {
+      "name": "wrong_iss",
+      "description": "iss не \"platform\".",
+      "token": "eyJhbGciOiJFZERTQSIsImtpZCI6IjIwMjYxMTA0LXZlYzAwMDAxIiwidHlwIjoiSldUIn0.eyJpc3MiOiJzY2FubmVyIiwic3ViIjoiNmYxZDJjM2ItNGE1OS00ZTZmLThhN2ItOWMwZDFlMmYzYTRiIiwidHlwIjoidXNlciIsImF1ZCI6WyJzY2FubmVyIiwidm0iLCJncmMiLCJwbGF0Zm9ybSJdLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiJpdmFub3YiLCJuYW1lIjoiXHUwNDE4XHUwNDMyXHUwNDMwXHUwNDNkXHUwNDNlXHUwNDMyIFx1MDQxOC4gXHUwNDE4LiIsImF1dGhfc291cmNlIjoibG9jYWwiLCJwcm9kdWN0cyI6eyJzY2FubmVyIjpbIm9wZXJhdG9yIiwiY3JlZF9hdWRpdCJdLCJ2bSI6WyJlbmdpbmVlciJdfSwicHJvamVjdHMiOlsiM2UyYThjMWYtNWI3ZC00ZjllLWExYzMtNmQ4YjBlMmY0YTYxIl0sInBsYXRmb3JtX2FkbWluIjpmYWxzZSwiaWF0IjoxNzkzODA4MDAwLCJleHAiOjQxMDI0NDQ4MDAsImp0aSI6IjAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwOSJ9.vFriAAnMYBETxhBPhpNC2Gf3ZssxKmzsDJ35C93LOkaotDhRAP3dSHpTXDY31ch820LTaUARidoxd0vX_KRLDA",
+      "checks": [
+        {
+          "product": "scanner",
+          "status": 401,
+          "detail": "invalid_token"
+        },
+        {
+          "product": "vm",
+          "status": 401,
+          "detail": "invalid_token"
+        },
+        {
+          "product": "grc",
+          "status": 401,
+          "detail": "invalid_token"
+        }
+      ]
+    },
+    {
+      "name": "missing_exp",
+      "description": "Нет exp — токен без срока не принимать.",
+      "token": "eyJhbGciOiJFZERTQSIsImtpZCI6IjIwMjYxMTA0LXZlYzAwMDAxIiwidHlwIjoiSldUIn0.eyJpc3MiOiJwbGF0Zm9ybSIsInN1YiI6IjZmMWQyYzNiLTRhNTktNGU2Zi04YTdiLTljMGQxZTJmM2E0YiIsInR5cCI6InVzZXIiLCJhdWQiOlsic2Nhbm5lciIsInZtIiwiZ3JjIiwicGxhdGZvcm0iXSwicHJlZmVycmVkX3VzZXJuYW1lIjoiaXZhbm92IiwibmFtZSI6Ilx1MDQxOFx1MDQzMlx1MDQzMFx1MDQzZFx1MDQzZVx1MDQzMiBcdTA0MTguIFx1MDQxOC4iLCJhdXRoX3NvdXJjZSI6ImxvY2FsIiwicHJvZHVjdHMiOnsic2Nhbm5lciI6WyJvcGVyYXRvciIsImNyZWRfYXVkaXQiXSwidm0iOlsiZW5naW5lZXIiXX0sInByb2plY3RzIjpbIjNlMmE4YzFmLTViN2QtNGY5ZS1hMWMzLTZkOGIwZTJmNGE2MSJdLCJwbGF0Zm9ybV9hZG1pbiI6ZmFsc2UsImlhdCI6MTc5MzgwODAwMCwianRpIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDBhIn0.Xv-CeFLNQeu2AAbyoKgyyTm2lJlmzKBLLNT1KeKIUXlt3a0qiNHF_lFqmNVXLtIwIATH0vONB_yd8HjFcUZUCA",
+      "checks": [
+        {
+          "product": "scanner",
+          "status": 401,
+          "detail": "invalid_token"
+        },
+        {
+          "product": "vm",
+          "status": 401,
+          "detail": "invalid_token"
+        },
+        {
+          "product": "grc",
+          "status": 401,
+          "detail": "invalid_token"
+        }
+      ]
+    },
+    {
+      "name": "bad_signature",
+      "description": "Подписан чужим ключом с kid опубликованного ключа.",
+      "token": "eyJhbGciOiJFZERTQSIsImtpZCI6IjIwMjYxMTA0LXZlYzAwMDAxIiwidHlwIjoiSldUIn0.eyJpc3MiOiJwbGF0Zm9ybSIsInN1YiI6IjZmMWQyYzNiLTRhNTktNGU2Zi04YTdiLTljMGQxZTJmM2E0YiIsInR5cCI6InVzZXIiLCJhdWQiOlsic2Nhbm5lciIsInZtIiwiZ3JjIiwicGxhdGZvcm0iXSwicHJlZmVycmVkX3VzZXJuYW1lIjoiaXZhbm92IiwibmFtZSI6Ilx1MDQxOFx1MDQzMlx1MDQzMFx1MDQzZFx1MDQzZVx1MDQzMiBcdTA0MTguIFx1MDQxOC4iLCJhdXRoX3NvdXJjZSI6ImxvY2FsIiwicHJvZHVjdHMiOnsic2Nhbm5lciI6WyJvcGVyYXRvciIsImNyZWRfYXVkaXQiXSwidm0iOlsiZW5naW5lZXIiXX0sInByb2plY3RzIjpbIjNlMmE4YzFmLTViN2QtNGY5ZS1hMWMzLTZkOGIwZTJmNGE2MSJdLCJwbGF0Zm9ybV9hZG1pbiI6ZmFsc2UsImlhdCI6MTc5MzgwODAwMCwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMGIifQ.HoG3gstaC6j7XiakHjA-LEspnM9QljagbeygGg01MmO0rvSaZj7W_hM7sZXDzbgQ4up7A_lz1DNRQeY3XQbfBQ",
+      "checks": [
+        {
+          "product": "scanner",
+          "status": 401,
+          "detail": "invalid_token"
+        },
+        {
+          "product": "vm",
+          "status": 401,
+          "detail": "invalid_token"
+        },
+        {
+          "product": "grc",
+          "status": 401,
+          "detail": "invalid_token"
+        }
+      ]
+    },
+    {
+      "name": "tampered_payload",
+      "description": "Тело user_valid заменено (scanner: admin), подпись прежняя.",
+      "token": "eyJhbGciOiJFZERTQSIsImtpZCI6IjIwMjYxMTA0LXZlYzAwMDAxIiwidHlwIjoiSldUIn0.eyJpc3MiOiJwbGF0Zm9ybSIsInN1YiI6IjZmMWQyYzNiLTRhNTktNGU2Zi04YTdiLTljMGQxZTJmM2E0YiIsInR5cCI6InVzZXIiLCJhdWQiOlsic2Nhbm5lciIsInZtIiwiZ3JjIiwicGxhdGZvcm0iXSwicHJlZmVycmVkX3VzZXJuYW1lIjoiaXZhbm92IiwibmFtZSI6ItCY0LLQsNC90L7QsiDQmC4g0JguIiwiYXV0aF9zb3VyY2UiOiJsb2NhbCIsInByb2R1Y3RzIjp7InNjYW5uZXIiOlsiYWRtaW4iXSwidm0iOlsiZW5naW5lZXIiXX0sInByb2plY3RzIjpbIjNlMmE4YzFmLTViN2QtNGY5ZS1hMWMzLTZkOGIwZTJmNGE2MSJdLCJwbGF0Zm9ybV9hZG1pbiI6ZmFsc2UsImlhdCI6MTc5MzgwODAwMCwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDEifQ.rUbkHr4XkHT_tjkxxgXWLI4dgcQc15ibrdcd_OpWzJXaoGIZGzY4-Y4JrbrF8pXZvxUzjNMYxsUDqjhCWGC9Aw",
+      "checks": [
+        {
+          "product": "scanner",
+          "status": 401,
+          "detail": "invalid_token"
+        },
+        {
+          "product": "vm",
+          "status": 401,
+          "detail": "invalid_token"
+        },
+        {
+          "product": "grc",
+          "status": 401,
+          "detail": "invalid_token"
+        }
+      ]
+    },
+    {
+      "name": "unknown_kid",
+      "description": "kid нет в JWKS: продукт перечитывает JWKS (не чаще раза в 30 с) и отвечает 401.",
+      "token": "eyJhbGciOiJFZERTQSIsImtpZCI6InVua25vd24ta2lkIiwidHlwIjoiSldUIn0.eyJpc3MiOiJwbGF0Zm9ybSIsInN1YiI6IjZmMWQyYzNiLTRhNTktNGU2Zi04YTdiLTljMGQxZTJmM2E0YiIsInR5cCI6InVzZXIiLCJhdWQiOlsic2Nhbm5lciIsInZtIiwiZ3JjIiwicGxhdGZvcm0iXSwicHJlZmVycmVkX3VzZXJuYW1lIjoiaXZhbm92IiwibmFtZSI6Ilx1MDQxOFx1MDQzMlx1MDQzMFx1MDQzZFx1MDQzZVx1MDQzMiBcdTA0MTguIFx1MDQxOC4iLCJhdXRoX3NvdXJjZSI6ImxvY2FsIiwicHJvZHVjdHMiOnsic2Nhbm5lciI6WyJvcGVyYXRvciIsImNyZWRfYXVkaXQiXSwidm0iOlsiZW5naW5lZXIiXX0sInByb2plY3RzIjpbIjNlMmE4YzFmLTViN2QtNGY5ZS1hMWMzLTZkOGIwZTJmNGE2MSJdLCJwbGF0Zm9ybV9hZG1pbiI6ZmFsc2UsImlhdCI6MTc5MzgwODAwMCwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMGMifQ.HIPEImP_FZ0tGT_kzTc6NfrhZCTDlt6TCbzvUUiogUpERbtFcPL3FhVI9BhCIxcbPL7fpoDhBoiIz4GgK_-JAw",
+      "checks": [
+        {
+          "product": "scanner",
+          "status": 401,
+          "detail": "invalid_token"
+        },
+        {
+          "product": "vm",
+          "status": 401,
+          "detail": "invalid_token"
+        },
+        {
+          "product": "grc",
+          "status": 401,
+          "detail": "invalid_token"
+        }
+      ]
+    },
+    {
+      "name": "no_kid",
+      "description": "В заголовке нет kid (обязателен по п. 2.3).",
+      "token": "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJwbGF0Zm9ybSIsInN1YiI6IjZmMWQyYzNiLTRhNTktNGU2Zi04YTdiLTljMGQxZTJmM2E0YiIsInR5cCI6InVzZXIiLCJhdWQiOlsic2Nhbm5lciIsInZtIiwiZ3JjIiwicGxhdGZvcm0iXSwicHJlZmVycmVkX3VzZXJuYW1lIjoiaXZhbm92IiwibmFtZSI6Ilx1MDQxOFx1MDQzMlx1MDQzMFx1MDQzZFx1MDQzZVx1MDQzMiBcdTA0MTguIFx1MDQxOC4iLCJhdXRoX3NvdXJjZSI6ImxvY2FsIiwicHJvZHVjdHMiOnsic2Nhbm5lciI6WyJvcGVyYXRvciIsImNyZWRfYXVkaXQiXSwidm0iOlsiZW5naW5lZXIiXX0sInByb2plY3RzIjpbIjNlMmE4YzFmLTViN2QtNGY5ZS1hMWMzLTZkOGIwZTJmNGE2MSJdLCJwbGF0Zm9ybV9hZG1pbiI6ZmFsc2UsImlhdCI6MTc5MzgwODAwMCwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMGQifQ.2fru9InFkf56ICxN_nZz1gL4IXrlnmSaBNfV1kVd4WUj8hHIUClvU1qZdCf-vhQZDksBK5soW9pS4khnNIDACA",
+      "checks": [
+        {
+          "product": "scanner",
+          "status": 401,
+          "detail": "invalid_token"
+        },
+        {
+          "product": "vm",
+          "status": 401,
+          "detail": "invalid_token"
+        },
+        {
+          "product": "grc",
+          "status": 401,
+          "detail": "invalid_token"
+        }
+      ]
+    },
+    {
+      "name": "alg_none",
+      "description": "alg = none, подписи нет.",
+      "token": "eyJhbGciOiJub25lIiwidHlwIjoiSldUIiwia2lkIjoiMjAyNjExMDQtdmVjMDAwMDEifQ.eyJpc3MiOiJwbGF0Zm9ybSIsInN1YiI6IjZmMWQyYzNiLTRhNTktNGU2Zi04YTdiLTljMGQxZTJmM2E0YiIsInR5cCI6InVzZXIiLCJhdWQiOlsic2Nhbm5lciIsInZtIiwiZ3JjIiwicGxhdGZvcm0iXSwicHJlZmVycmVkX3VzZXJuYW1lIjoiaXZhbm92IiwibmFtZSI6Ilx1MDQxOFx1MDQzMlx1MDQzMFx1MDQzZFx1MDQzZVx1MDQzMiBcdTA0MTguIFx1MDQxOC4iLCJhdXRoX3NvdXJjZSI6ImxvY2FsIiwicHJvZHVjdHMiOnsic2Nhbm5lciI6WyJvcGVyYXRvciIsImNyZWRfYXVkaXQiXSwidm0iOlsiZW5naW5lZXIiXX0sInByb2plY3RzIjpbIjNlMmE4YzFmLTViN2QtNGY5ZS1hMWMzLTZkOGIwZTJmNGE2MSJdLCJwbGF0Zm9ybV9hZG1pbiI6ZmFsc2UsImlhdCI6MTc5MzgwODAwMCwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDEifQ.",
+      "checks": [
+        {
+          "product": "scanner",
+          "status": 401,
+          "detail": "invalid_token"
+        },
+        {
+          "product": "vm",
+          "status": 401,
+          "detail": "invalid_token"
+        },
+        {
+          "product": "grc",
+          "status": 401,
+          "detail": "invalid_token"
+        }
+      ]
+    },
+    {
+      "name": "alg_hs256_confusion",
+      "description": "alg = HS256, подписано HMAC с открытым ключом (x из JWKS) как секретом.",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjIwMjYxMTA0LXZlYzAwMDAxIn0.eyJpc3MiOiJwbGF0Zm9ybSIsInN1YiI6IjZmMWQyYzNiLTRhNTktNGU2Zi04YTdiLTljMGQxZTJmM2E0YiIsInR5cCI6InVzZXIiLCJhdWQiOlsic2Nhbm5lciIsInZtIiwiZ3JjIiwicGxhdGZvcm0iXSwicHJlZmVycmVkX3VzZXJuYW1lIjoiaXZhbm92IiwibmFtZSI6Ilx1MDQxOFx1MDQzMlx1MDQzMFx1MDQzZFx1MDQzZVx1MDQzMiBcdTA0MTguIFx1MDQxOC4iLCJhdXRoX3NvdXJjZSI6ImxvY2FsIiwicHJvZHVjdHMiOnsic2Nhbm5lciI6WyJvcGVyYXRvciIsImNyZWRfYXVkaXQiXSwidm0iOlsiZW5naW5lZXIiXX0sInByb2plY3RzIjpbIjNlMmE4YzFmLTViN2QtNGY5ZS1hMWMzLTZkOGIwZTJmNGE2MSJdLCJwbGF0Zm9ybV9hZG1pbiI6ZmFsc2UsImlhdCI6MTc5MzgwODAwMCwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDEifQ.kJWfXkAzd-OODx4W2tgHSKd7A1cUvylkTFjssZCqHKI",
+      "checks": [
+        {
+          "product": "scanner",
+          "status": 401,
+          "detail": "invalid_token"
+        },
+        {
+          "product": "vm",
+          "status": 401,
+          "detail": "invalid_token"
+        },
+        {
+          "product": "grc",
+          "status": 401,
+          "detail": "invalid_token"
+        }
+      ]
+    }
+  ]
+}

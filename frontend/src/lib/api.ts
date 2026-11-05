@@ -1,8 +1,10 @@
+import { PLATFORM, TOKEN_KEY, goToLogin, refreshToken } from "./platform";
+
 // Префикс API: в отдельном запуске «/api», в платформе «/api/grc».
 export const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "/api";
 
 // Токен — в sessionStorage под общим ключом платформы (контракт v1, п. 2).
-export const TOKEN_KEY = "platform.token";
+export { TOKEN_KEY };
 
 export function getToken(): string | null {
   try {
@@ -32,11 +34,22 @@ export class ApiError extends Error {
 
 /** Событие «сессия кончилась»: слушает AuthProvider и уводит на вход. */
 export const UNAUTHORIZED_EVENT = "grc:unauthorized";
+/** Режим платформы: у пользователя нет ролей в «Аттестации» (403 no_product_roles). */
+export const NO_ROLES_EVENT = "grc:no-product-roles";
+
+// Коды платформы (контракт v1.1, п. 2–3) — по-русски.
+const CODES: Record<string, string> = {
+  not_authenticated: "Требуется вход",
+  invalid_token: "Сессия истекла, войдите снова",
+  no_product_roles: "Нет доступа к «Аттестации»",
+  no_project_access: "Нет доступа к этому проекту",
+  project_archived: "Проект в архиве — только просмотр",
+};
 
 async function errorMessage(res: Response): Promise<string> {
   try {
     const body = (await res.json()) as { detail?: unknown };
-    if (typeof body.detail === "string") return body.detail;
+    if (typeof body.detail === "string") return CODES[body.detail] ?? body.detail;
     if (Array.isArray(body.detail)) return "Проверьте заполнение полей";
   } catch {
     // тело не JSON
@@ -50,7 +63,16 @@ export interface Page<T> {
   total: number;
 }
 
-export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+async function detailOf(res: Response): Promise<string | null> {
+  try {
+    const body = (await res.clone().json()) as { detail?: unknown };
+    return typeof body.detail === "string" ? body.detail : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function apiFetch(path: string, init: RequestInit = {}, retried = false): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
   if (init.body && typeof init.body === "string") headers.set("Content-Type", "application/json");
@@ -58,9 +80,19 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  if (res.status === 401 && PLATFORM) {
+    // Один тихий refresh на вкладку и повтор; не вышло — на вход оболочки.
+    if (!retried && (await refreshToken())) return apiFetch(path, init, true);
+    setToken(null);
+    goToLogin();
+    throw new ApiError(401, "Требуется вход");
+  }
   if (res.status === 401 && token) {
     setToken(null);
     window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+  }
+  if (res.status === 403 && PLATFORM && (await detailOf(res)) === "no_product_roles") {
+    window.dispatchEvent(new Event(NO_ROLES_EVENT));
   }
   if (!res.ok) throw new ApiError(res.status, await errorMessage(res));
   return res;
