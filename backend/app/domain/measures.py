@@ -144,6 +144,166 @@ def compute_stats(items: Sequence[Item], partial_weight: float = 0.5) -> Stats:
     return stats
 
 
+# ---------- Два процента и что их поднимет ----------
+#
+# Один и тот же набор мер даёт два числа:
+# - «по всем мерам» (Сводка «Аттестации»): неоценённые меры считаются как 0;
+# - «по оценённым» (Главная платформы, контракт v1.1, п. 10): организационные меры
+#   без оценки в знаменатель не входят — как в профилях «Сканера».
+# Разница между ними — ровно неоценённые организационные меры. Показываем оба
+# числа, причину разницы и действия, которые поднимут процент.
+
+
+def plural(n: int, one: str, few: str, many: str) -> str:
+    d, h = n % 10, n % 100
+    if d == 1 and h != 11:
+        return one
+    if 2 <= d <= 4 and not 12 <= h <= 14:
+        return few
+    return many
+
+
+def _pct(value: float) -> str:
+    # Целые проценты — как на Главной и в «Сводке».
+    return f"{round(value)} %"
+
+
+@dataclass(frozen=True)
+class Action:
+    # assess_manual | assess_auto | fix_failed | finish_partial
+    code: str
+    count: int
+    # Насколько вырастет процент по всем мерам, если эти меры будут реализованы (п. п.).
+    gain: float
+    label: str
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"code": self.code, "count": self.count, "gain": self.gain, "label": self.label}
+
+
+@dataclass(frozen=True)
+class Progress:
+    percent_all: float | None
+    percent_assessed: float | None
+    # Меры в знаменателе процента по всем мерам и по оценённым.
+    total: int
+    assessed_total: int
+    manual_unassessed: int
+    note: str | None
+    actions: tuple[Action, ...]
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "percent_all": self.percent_all,
+            "percent_assessed": self.percent_assessed,
+            "total": self.total,
+            "assessed_total": self.assessed_total,
+            "manual_unassessed": self.manual_unassessed,
+            "note": self.note,
+            "actions": [a.as_dict() for a in self.actions],
+        }
+
+
+def merge_stats(into: Stats, other: Stats) -> None:
+    """Складывает показатели (для процента проекта по нескольким объектам)."""
+    for name in ("total", "auto", "manual"):
+        a, b = getattr(into, name), getattr(other, name)
+        for f in (
+            "total",
+            "implemented",
+            "partial",
+            "not_implemented",
+            "unassessed",
+            "excluded",
+            "not_applicable",
+            "compensated",
+        ):
+            setattr(a, f, getattr(a, f) + getattr(b, f))
+        a.score += b.score
+
+
+# Формы слов для n = 1, 2–4, 5+.
+_WORDS = {
+    "org_acc": ("организационную меру", "организационные меры", "организационных мер"),
+    "failed_acc": ("нереализованную меру", "нереализованные меры", "нереализованных мер"),
+    "partial_acc": (
+        "частично реализованную меру",
+        "частично реализованные меры",
+        "частично реализованных мер",
+    ),
+    "measure_dat": ("мере", "мерам", "мерам"),
+    "org_wait": (
+        "организационная мера ждёт",
+        "организационные меры ждут",
+        "организационных мер ждут",
+    ),
+    "org_unassessed": (
+        "неоценённая организационная мера",
+        "неоценённые организационные меры",
+        "неоценённых организационных мер",
+    ),
+    "enters": ("входит", "входят", "входят"),
+}
+
+
+def _w(n: int, key: str) -> str:
+    return plural(n, *_WORDS[key])
+
+
+def progress(stats: Stats, partial_weight: float = 0.5) -> Progress:
+    t = stats.total
+    manual_un = stats.manual.unassessed
+    auto_un = stats.auto.unassessed
+    assessed_total = t.total - manual_un
+    p_all = round(t.score / t.total * 100, 1) if t.total else None
+    p_ass = round(t.score / assessed_total * 100, 1) if assessed_total else None
+
+    def gain(weight: float) -> float:
+        return round(weight / t.total * 100, 1) if t.total else 0.0
+
+    actions: list[Action] = []
+    if manual_un:
+        label = f"Оценить {manual_un} {_w(manual_un, 'org_acc')} (интервью, осмотр, документ)"
+        actions.append(Action("assess_manual", manual_un, gain(manual_un), label))
+    if t.not_implemented:
+        n = t.not_implemented
+        actions.append(Action("fix_failed", n, gain(n), f"Устранить {n} {_w(n, 'failed_acc')}"))
+    if t.partial:
+        n = t.partial
+        label = f"Довести до полной реализации {n} {_w(n, 'partial_acc')}"
+        actions.append(Action("finish_partial", n, gain(n * (1 - partial_weight)), label))
+    if auto_un:
+        label = (
+            f"Получить результаты проверок «Сканера» по {auto_un} {_w(auto_un, 'measure_dat')} "
+            "(импортировать прогон)"
+        )
+        actions.append(Action("assess_auto", auto_un, gain(auto_un), label))
+    actions.sort(key=lambda a: -a.gain)
+
+    note: str | None
+    if not t.total:
+        note = None
+    elif manual_un == 0:
+        note = (
+            "Все организационные меры оценены, поэтому проценты по всем мерам "
+            "и по оценённым совпадают."
+        )
+    elif assessed_total == 0:
+        note = (
+            f"Ни одна мера ещё не оценена: {manual_un} {_w(manual_un, 'org_wait')} "
+            "ручной оценки, процента по оценённым мерам пока нет."
+        )
+    else:
+        note = (
+            f"Главная платформы считает процент только по оценённым мерам ({_pct(p_ass or 0)}): "
+            f"{manual_un} {_w(manual_un, 'org_unassessed')} "
+            f"в расчёт не {_w(manual_un, 'enters')}. "
+            f"«Сводка» считает их нереализованными, поэтому по всем мерам — {_pct(p_all or 0)}. "
+            "Когда все организационные меры будут оценены, проценты совпадут."
+        )
+    return Progress(p_all, p_ass, t.total, assessed_total, manual_un, note, tuple(actions))
+
+
 # ---------- Базовый набор ----------
 
 

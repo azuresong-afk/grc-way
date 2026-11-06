@@ -10,7 +10,7 @@ import { formatDateTime, formatNumber } from "../lib/format";
 import { formatPercent, type StatsBucket } from "../lib/measures";
 import { KIND_LABELS } from "../lib/objects";
 import { useProject } from "../lib/project";
-import { STATE_NOTES, type ObjectSummary, type ProjectSummary } from "../lib/summary";
+import { STATE_NOTES, type ObjectSummary, type Progress, type ProjectSummary } from "../lib/summary";
 
 function plural(n: number, one: string, few: string, many: string): string {
   const d = n % 10;
@@ -141,6 +141,11 @@ function SummaryBody({ data }: { data: ProjectSummary }) {
               ? `авто ${formatPercent(k.stats.auto.percent)} · вручную ${formatPercent(k.stats.manual.percent)}`
               : "наборы мер ещё не сформированы"}
           </span>
+          {k.progress && (
+            <span className="kpi-delta summary-assessed" data-testid="percent-assessed">
+              по оценённым мерам, как на Главной: <strong>{formatPercent(k.progress.percent_assessed)}</strong>
+            </span>
+          )}
         </div>
         <div className="card kpi">
           <span className="kpi-label">Объекты</span>
@@ -182,6 +187,8 @@ function SummaryBody({ data }: { data: ProjectSummary }) {
         </div>
       </div>
 
+      {k.progress && <ProgressCard p={k.progress} />}
+
       <section className="card">
         <div className="card-head">
           <h2>Объекты проекта</h2>
@@ -205,6 +212,48 @@ function SummaryBody({ data }: { data: ProjectSummary }) {
         )}
       </section>
     </>
+  );
+}
+
+function formatGain(g: number): string {
+  if (g > 0 && g < 1) return "до +<1 п. п.";
+  return `до +${Math.round(g)} п. п.`;
+}
+
+/** Почему процент «Сводки» и Главной различается и что его поднимет. */
+function ProgressCard({ p }: { p: Progress }) {
+  const same = p.manual_unassessed === 0;
+  return (
+    <section className="card summary-progress" aria-label="Как поднять процент">
+      <div className="card-head">
+        <h2>Как поднять процент</h2>
+        <span className="muted small">
+          по всем мерам {formatPercent(p.percent_all)} · по оценённым {formatPercent(p.percent_assessed)}
+        </span>
+      </div>
+      <div className="card-pad summary-progress-body">
+        {p.note && (
+          <p className={`summary-progress-note${same ? " muted" : ""}`}>
+            {!same && <AlertTriangle size={14} />}
+            <span>{p.note}</span>
+          </p>
+        )}
+        {p.actions.length === 0 ? (
+          <p className="muted">Все меры реализованы — поднимать нечего.</p>
+        ) : (
+          <ol className="summary-actions">
+            {p.actions.map((a) => (
+              <li key={a.code}>
+                <span>{a.label}</span>
+                <span className="pill pill-muted" title="Рост процента по всем мерам, если меры будут реализованы">
+                  {formatGain(a.gain)}
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -293,6 +342,11 @@ function ObjectsTable({ rows }: { rows: ObjectSummary[] }) {
                     </td>
                     <td>
                       <PercentCell bucket={o.stats.total} />
+                      {o.progress && o.progress.manual_unassessed > 0 && (
+                        <div className="cell-sub" title={o.progress.note ?? undefined}>
+                          по оценённым {formatPercent(o.progress.percent_assessed)}
+                        </div>
+                      )}
                     </td>
                     <td className="num">{formatNumber(o.nonconformities)}</td>
                     <td className="summary-wait">

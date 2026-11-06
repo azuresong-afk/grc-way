@@ -2,6 +2,28 @@ import type { Kind, ObjectBrief } from "./objects";
 import type { Stats } from "./measures";
 import type { SziCounts } from "./szi";
 
+/** Действие, которое поднимет процент: gain — рост процента по всем мерам, п. п. */
+export interface ProgressAction {
+  code: "assess_manual" | "assess_auto" | "fix_failed" | "finish_partial";
+  count: number;
+  gain: number;
+  label: string;
+}
+
+/**
+ * Два процента реализации: по всем мерам (неоценённые = 0, как в «Сводке») и по
+ * оценённым (организационные меры без оценки не входят, как на Главной платформы).
+ */
+export interface Progress {
+  percent_all: number | null;
+  percent_assessed: number | null;
+  total: number;
+  assessed_total: number;
+  manual_unassessed: number;
+  note: string | null;
+  actions: ProgressAction[];
+}
+
 export interface ObjectSummary {
   id: string;
   name: string;
@@ -13,6 +35,7 @@ export interface ObjectSummary {
   class_unverified: boolean;
   state: "no_regime" | "no_class" | "not_built" | "built";
   stats: Stats | null;
+  progress: Progress | null;
   adaptation: { version: number; status: string } | null;
   snapshot: {
     id: string;
@@ -43,6 +66,7 @@ export interface ProjectSummary {
     hosts: number;
     objects_assessed: number;
     stats: Stats | null;
+    progress: Progress | null;
     nonconformities: number;
     manual_pending: number;
     to_confirm: number;
