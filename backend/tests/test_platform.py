@@ -365,6 +365,10 @@ def test_summary_contract(platform):
     assert body["data"] == {
         "systems": 0,
         "measures_percent": None,
+        "measures_percent_all": None,
+        "measures_unassessed_manual": 0,
+        "measures_note": None,
+        "measures_actions": [],
         "documents": {"ready": 0, "total": 0},
     }
 

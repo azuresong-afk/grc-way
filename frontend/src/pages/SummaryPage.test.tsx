@@ -43,6 +43,19 @@ const bucket = (over: Partial<Record<string, number>> = {}) => ({
   ...over,
 });
 
+const PROGRESS = {
+  percent_all: 47.6,
+  percent_assessed: 67.4,
+  total: 103,
+  assessed_total: 29,
+  manual_unassessed: 74,
+  note: "Главная платформы считает процент только по оценённым мерам (67,4 %): 74 неоценённые организационные меры в расчёт не входят.",
+  actions: [
+    { code: "assess_manual" as const, count: 74, gain: 71.8, label: "Оценить 74 организационные меры (интервью, осмотр, документ)" },
+    { code: "fix_failed" as const, count: 9, gain: 8.7, label: "Устранить 9 нереализованных мер" },
+  ],
+};
+
 const SUMMARY: ProjectSummary = {
   project_id: "p1",
   name: "Аттестация ГИС",
@@ -57,6 +70,7 @@ const SUMMARY: ProjectSummary = {
       auto: bucket({ percent: 64.2 }),
       manual: bucket({ percent: 1.3 }),
     },
+    progress: PROGRESS,
     nonconformities: 9,
     manual_pending: 74,
     to_confirm: 18,
@@ -82,6 +96,7 @@ const SUMMARY: ProjectSummary = {
         auto: bucket({ percent: 64.2 }),
         manual: bucket({ percent: 1.3 }),
       },
+      progress: PROGRESS,
       adaptation: { version: 1, status: "approved" },
       snapshot: {
         id: "s2",
@@ -112,6 +127,7 @@ const SUMMARY: ProjectSummary = {
       class_unverified: false,
       state: "no_class",
       stats: null,
+      progress: null,
       adaptation: null,
       snapshot: null,
       snapshots: 0,
@@ -169,6 +185,16 @@ it("сводка: показатели проекта, «требует свер
   expect(within(row).getByText("недействительны: 1").closest("a")).toHaveAttribute("href", "/objects/o1?tab=szi");
   expect(within(row).getByText("истекают: 1")).toBeInTheDocument();
   expect(screen.getByText("недействительны 1 · истекают за 90 дн. 1")).toBeInTheDocument();
+
+  // Оба процента, причина разницы и что сделать.
+  expect(screen.getByTestId("percent-assessed")).toHaveTextContent("по оценённым мерам, как на Главной: 67 %");
+  const how = screen.getByRole("region", { name: "Как поднять процент" });
+  expect(how).toHaveTextContent("по всем мерам 48 % · по оценённым 67 %");
+  expect(how).toHaveTextContent("74 неоценённые организационные меры в расчёт не входят");
+  const steps = within(how).getAllByRole("listitem");
+  expect(steps[0]).toHaveTextContent("Оценить 74 организационные меры (интервью, осмотр, документ)до +72 п. п.");
+  expect(steps[1]).toHaveTextContent("Устранить 9 нереализованных мердо +9 п. п.");
+  expect(within(row).getByText("по оценённым 67 %")).toBeInTheDocument();
 
   const pdn = screen.getByRole("link", { name: "ИСПДн «Бухгалтерия»" }).closest("tr")!;
   expect(within(pdn).getByText("Класс не утверждён")).toBeInTheDocument();

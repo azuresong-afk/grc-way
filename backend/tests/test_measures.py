@@ -8,7 +8,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.db.models import Adaptation, AuditRecord, ObjectMeasure
-from app.domain.measures import Current, Item, RefItem, compute_stats, plan
+from app.domain.measures import Current, Item, RefItem, compute_stats, plan, progress
 from app.refs.loader import load_reference
 
 REFERENCE = Path(__file__).resolve().parents[2] / "reference"
@@ -52,6 +52,45 @@ def test_compensated_measure_takes_worst_of_compensating():
     gone = Item("C", "auto", "implemented", "compensated", ("Z",))
     assert compute_stats([gone]).total.not_implemented == 1
     assert compute_stats([]).total.percent is None
+
+
+def test_progress_two_percents_and_actions():
+    items = [
+        Item("A1", "auto", "implemented"),
+        Item("A2", "auto", "implemented"),
+        Item("A3", "auto", "not_implemented"),
+        Item("A4", "mixed", "unassessed"),
+        Item("M1", "manual", "implemented"),
+        Item("M2", "manual", "partial"),
+        *(Item(f"U{i}", "manual", "unassessed") for i in range(4)),
+    ]
+    p = progress(compute_stats(items))
+    # 10 мер, 3,5 балла: по всем — 35 %; без 4 неоценённых организационных — 3,5 / 6.
+    assert (p.total, p.assessed_total, p.manual_unassessed) == (10, 6, 4)
+    assert p.percent_all == 35.0 and p.percent_assessed == 58.3
+    assert [a.code for a in p.actions] == [
+        "assess_manual",
+        "fix_failed",
+        "assess_auto",
+        "finish_partial",
+    ]
+    assert [a.gain for a in p.actions] == [40.0, 10.0, 10.0, 5.0]
+    assert p.actions[0].label.startswith("Оценить 4 организационные меры")
+    assert p.actions[1].label == "Устранить 1 нереализованную меру"
+    assert "58 %" in p.note and "35 %" in p.note and "4 неоценённые" in p.note
+
+    # Всё оценено — проценты совпадают, разницы нет.
+    done = progress(
+        compute_stats([Item("A", "auto", "implemented"), Item("M", "manual", "partial")])
+    )
+    assert done.percent_all == done.percent_assessed == 75.0
+    assert "совпадают" in done.note and [a.code for a in done.actions] == ["finish_partial"]
+
+    # Только неоценённые организационные — процента по оценённым нет.
+    none = progress(compute_stats([Item(f"U{i}", "manual", "unassessed") for i in range(5)]))
+    assert none.percent_all == 0.0 and none.percent_assessed is None
+    assert none.note.startswith("Ни одна мера ещё не оценена: 5 организационных мер ждут")
+    assert progress(compute_stats([])).note is None
 
 
 def test_plan_follows_levels():

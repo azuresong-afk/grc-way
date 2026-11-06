@@ -18,6 +18,7 @@ from __future__ import annotations
 import hmac
 import json
 import uuid
+from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
@@ -37,11 +38,13 @@ from app.db.models import (
     AssessedObject,
     GeneratedDocument,
     InboxEvent,
+    ObjectMeasure,
     OutboxEvent,
     Project,
     User,
     utcnow,
 )
+from app.domain.measures import Item, Progress, Stats, compute_stats, merge_stats, progress
 
 router = APIRouter(tags=["platform"])
 Viewer = Annotated[User, Depends(require(Perm.VIEW))]
@@ -56,10 +59,27 @@ class DocCounts(BaseModel):
     total: int
 
 
+class PlatformAction(BaseModel):
+    code: str
+    count: int
+    gain: float
+    label: str
+    link: str
+
+
 class PlatformSummaryData(BaseModel):
     systems: int
     # Доля реализованных мер по объектам проекта, 0–100; None — оценивать ещё нечего.
+    # Правило контракта v1.1, п. 10: организационные меры без оценки не входят.
     measures_percent: int | None
+    # Расширение grc (необязательные поля, оболочка без поддержки их не покажет):
+    # процент по всем мерам — как в «Сводке», где неоценённые считаются нереализованными;
+    measures_percent_all: int | None = None
+    # сколько организационных мер ещё не оценено (вся разница между двумя процентами);
+    measures_unassessed_manual: int = 0
+    # почему проценты различаются, и что их поднимет (до 4 действий, самое выгодное первым).
+    measures_note: str | None = None
+    measures_actions: list[PlatformAction] = []
     documents: DocCounts
 
 
@@ -93,6 +113,26 @@ def document_counts(session: Session, object_ids: list[uuid.UUID]) -> DocCounts:
     return DocCounts(ready=sum(1 for k in latest if k in approved), total=len(latest))
 
 
+def project_progress(
+    session: Session, objs: list[AssessedObject], partial_weight: float
+) -> Progress | None:
+    """Оба процента по объектам проекта — те же числа, что в «Сводке»."""
+    ids = [o.id for o in objs]
+    if not ids:
+        return None
+    by_obj: dict[uuid.UUID, list[Item]] = defaultdict(list)
+    for m in session.scalars(select(ObjectMeasure).where(ObjectMeasure.object_id.in_(ids))):
+        by_obj[m.object_id].append(
+            Item(m.measure_id, m.method, m.status, m.adaptation, tuple(m.compensating_ids or ()))
+        )
+    if not by_obj:
+        return None
+    total = Stats()
+    for items in by_obj.values():
+        merge_stats(total, compute_stats(items, partial_weight))
+    return progress(total, partial_weight)
+
+
 @router.get("/summary", response_model=PlatformSummaryOut)
 def platform_summary(
     user: Viewer, session: DbSession, project: Annotated[uuid.UUID, Query()]
@@ -110,6 +150,11 @@ def platform_summary(
     score = sum(x.score for x in progress.values())
     denominator = sum(x.denominator for x in progress.values())
     pid = str(p.platform_project_id or p.id)
+    both = project_progress(session, objs, s.partial_weight)
+    actions = [
+        PlatformAction(**a.as_dict(), link=f"{s.base_path.rstrip('/')}/summary?project={pid}")
+        for a in (both.actions if both else ())
+    ]
     return PlatformSummaryOut(
         product=s.platform_product_id,
         project_id=pid,
@@ -118,6 +163,12 @@ def platform_summary(
         data=PlatformSummaryData(
             systems=len(objs),
             measures_percent=round(score / denominator * 100) if denominator else None,
+            measures_percent_all=(
+                round(both.percent_all) if both and both.percent_all is not None else None
+            ),
+            measures_unassessed_manual=both.manual_unassessed if both else 0,
+            measures_note=both.note if both else None,
+            measures_actions=actions,
             documents=document_counts(session, [o.id for o in objs]),
         ),
     )

@@ -42,7 +42,7 @@ from app.db.models import (
     ScannerSnapshot,
     User,
 )
-from app.domain.measures import Bucket, Item, Stats, compute_stats, effective_status
+from app.domain.measures import Item, Stats, compute_stats, effective_status, merge_stats, progress
 from app.domain.szi import CertState
 
 router = APIRouter(tags=["summary"])
@@ -50,6 +50,33 @@ Viewer = Annotated[User, Depends(require(Perm.VIEW))]
 
 
 # ---------- Схемы ----------
+
+
+class ProgressAction(BaseModel):
+    # assess_manual | assess_auto | fix_failed | finish_partial
+    code: str
+    count: int
+    # Рост процента по всем мерам, если эти меры будут реализованы (п. п.).
+    gain: float
+    label: str
+
+
+class ProgressOut(BaseModel):
+    """Два процента реализации и что их поднимет (app/domain/measures.py, progress)."""
+
+    # По всем мерам: неоценённые считаются нереализованными (как в «Сводке»).
+    percent_all: float | None
+    # По оценённым: организационные меры без оценки не входят (как на Главной платформы).
+    percent_assessed: float | None
+    total: int
+    assessed_total: int
+    manual_unassessed: int
+    note: str | None
+    actions: list[ProgressAction]
+
+
+def progress_out(stats: Stats, partial_weight: float) -> ProgressOut:
+    return ProgressOut.model_validate(progress(stats, partial_weight).as_dict())
 
 
 class SnapshotRef(BaseModel):
@@ -81,6 +108,7 @@ class ObjectSummary(BaseModel):
     # no_regime | no_class | not_built | built — как у набора мер.
     state: str
     stats: StatsOut | None
+    progress: ProgressOut | None
     adaptation: AdaptationRef | None
     snapshot: SnapshotRef | None
     snapshots: int
@@ -104,6 +132,7 @@ class ProjectKpi(BaseModel):
     # Объекты с собранным набором мер — только они входят в процент проекта.
     objects_assessed: int
     stats: StatsOut | None
+    progress: ProgressOut | None
     nonconformities: int
     manual_pending: int
     to_confirm: int
@@ -145,21 +174,6 @@ class SearchOut(BaseModel):
 
 
 # ---------- Сводка ----------
-
-
-def _add(into: Bucket, b: Bucket) -> None:
-    for f in (
-        "total",
-        "implemented",
-        "partial",
-        "not_implemented",
-        "unassessed",
-        "excluded",
-        "not_applicable",
-        "compensated",
-    ):
-        setattr(into, f, getattr(into, f) + getattr(b, f))
-    into.score += b.score
 
 
 def _stats_out(s: Stats) -> StatsOut:
@@ -236,9 +250,7 @@ def project_summary(session: Session, project: Project, partial_weight: float) -
         by_id = {i.measure_id: i for i in items}
         stats = compute_stats(items, partial_weight) if ms else None
         if stats:
-            _add(total.total, stats.total)
-            _add(total.auto, stats.auto)
-            _add(total.manual, stats.manual)
+            merge_stats(total, stats)
         eff = [effective_status(i, by_id) for i in items]
         cls = classes.get(o.id)
         a = adaptations.get(o.id)
@@ -265,6 +277,7 @@ def project_summary(session: Session, project: Project, partial_weight: float) -
                 class_unverified=bool(crow and not crow.table_verified),
                 state=state,
                 stats=_stats_out(stats) if stats else None,
+                progress=progress_out(stats, partial_weight) if stats else None,
                 adaptation=AdaptationRef(version=a.version, status=a.status) if a else None,
                 snapshot=SnapshotRef(
                     id=cur.id,
@@ -326,6 +339,7 @@ def project_summary(session: Session, project: Project, partial_weight: float) -
             hosts=sum(r.host_count for r in rows),
             objects_assessed=len(built),
             stats=_stats_out(total) if built else None,
+            progress=progress_out(total, partial_weight) if built else None,
             nonconformities=sum(r.nonconformities for r in rows),
             manual_pending=sum(r.manual_pending for r in rows),
             to_confirm=sum(r.to_confirm for r in rows),

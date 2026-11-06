@@ -2228,6 +2228,52 @@ fieldset.field {
   font-size: 12px;
 }
 
+.summary-assessed strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.summary-pct + .cell-sub {
+  margin-top: 4px;
+  white-space: nowrap;
+}
+
+.summary-progress-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.summary-progress-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 880px;
+  line-height: 1.5;
+}
+
+.summary-progress-note svg {
+  flex: none;
+  margin-top: 3px;
+  color: var(--warn);
+}
+
+.summary-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.summary-actions li {
+  padding-left: 4px;
+}
+
+.summary-actions li > span:first-child {
+  margin-right: 8px;
+}
+
 @media (max-width: 1200px) {
   .summary-kpis {
     grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -106,6 +106,20 @@ def test_summary(client, demo_env):
     assert k["nonconformities"] == gis["nonconformities"]
     assert pdn["state"] == "no_class" and pdn["stats"] is None and pdn["host_count"] == 2
 
+    # Оба процента: «Сводка» — по всем мерам, Главная платформы — по оценённым.
+    pr = k["progress"]
+    assert pr == gis["progress"] and pr["percent_all"] == k["stats"]["total"]["percent"]
+    assert pr["manual_unassessed"] == gis["manual_pending"] > 0
+    assert pr["percent_assessed"] > pr["percent_all"] and "Главная платформы" in pr["note"]
+    assert pr["actions"][0]["code"] == "assess_manual"
+    home = client.get(f"/summary?project={r.project_id}", headers=h["demo-viewer"]).json()["data"]
+    assert home["measures_percent"] == round(pr["percent_assessed"])
+    assert home["measures_percent_all"] == round(pr["percent_all"])
+    assert home["measures_unassessed_manual"] == pr["manual_unassessed"]
+    assert home["measures_note"] == pr["note"]
+    assert [a["code"] for a in home["measures_actions"]] == [a["code"] for a in pr["actions"]]
+    assert home["measures_actions"][0]["link"] == f"/grc/summary?project={r.project_id}"
+
     # Несуществующий (или чужой) проект — 404.
     missing = client.get(f"/projects/{r.object_id}/summary", headers=h["demo-viewer"])
     assert missing.status_code == 404
